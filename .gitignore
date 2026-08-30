@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+generated/*
+!generated/.gitkeep
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env

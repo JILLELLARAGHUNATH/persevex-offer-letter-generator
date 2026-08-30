@@ -1,0 +1,263 @@
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f2f5f8;
+    color: #111827;
+}
+.app { max-width: 1250px; margin: 0 auto; padding: 22px; }
+header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: white;
+    border: 1px solid #d8dee7;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+}
+.brand { font-size: 25px; font-weight: 700; color: #17233b; }
+.tagline { font-size: 8px; letter-spacing: 1.5px; color: #697386; }
+header h1 {
+    font-size: 19px;
+    margin: 0;
+    border-left: 1px solid #d8dee7;
+    padding-left: 24px;
+}
+main { display: grid; grid-template-columns: 390px 1fr; gap: 18px; }
+.card {
+    background: white;
+    border: 1px solid #d8dee7;
+    border-radius: 12px;
+    padding: 18px;
+}
+h2 { font-size: 16px; margin: 0 0 14px; }
+.type-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.type-btn {
+    padding: 10px;
+    border: 1px solid #ccd4df;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.type-btn.active { border-color: #e9a51a; box-shadow: inset 0 0 0 1px #e9a51a; }
+label { display: block; font-size: 11px; font-weight: 600; margin: 11px 0 5px; }
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    font-size: 13px;
+}
+.two, .three { display: grid; gap: 8px; }
+.two { grid-template-columns: 1fr 1fr; }
+.three { grid-template-columns: repeat(3, 1fr); }
+#hoursSection {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid #f0c25a;
+    background: #fffaf0;
+    border-radius: 8px;
+}
+h3 { font-size: 12px; margin: 0; color: #a86a00; }
+.generate, .primary, .email, .secondary {
+    border: 0;
+    border-radius: 7px;
+    padding: 11px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-block;
+}
+.generate { width: 100%; margin-top: 16px; background: #111827; color: white; }
+.preview-card { min-height: 760px; display: flex; flex-direction: column; }
+.preview-head { display: flex; justify-content: space-between; align-items: center; }
+.secondary { background: #e8edf3; color: #111827; }
+#pdfPreview {
+    width: 100%;
+    flex: 1;
+    min-height: 650px;
+    border: 1px solid #d8dee7;
+    border-radius: 8px;
+    background: #e9eef4;
+}
+.actions { display: flex; gap: 10px; margin-top: 12px; }
+.primary { background: #111827; color: white; flex: 1; text-align: center; }
+.email { background: #f0b429; color: #111827; flex: 1; }
+button:disabled, .disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
+#message { margin-top: 10px; font-size: 12px; color: #475569; }
+@media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .preview-card { min-height: 600px; }
+}
+/* ==========================================================
+   IMPROVED FORM CONTROLS
+   ========================================================== */
+
+select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: white;
+    font-size: 13px;
+    outline: none;
+}
+
+select:focus {
+    border-color: #f2aa00;
+}
+
+input[readonly] {
+    background: #f5f7fa;
+    cursor: default;
+}
+
+.empty-preview {
+    min-height: 650px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 30px;
+    box-sizing: border-box;
+}
+
+.empty-preview[hidden] {
+    display: none;
+}
+
+.empty-icon {
+    width: 58px;
+    height: 58px;
+    border: 2px solid #cbd5e1;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 15px;
+}
+
+.empty-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 7px;
+}
+
+.empty-text {
+    font-size: 12px;
+    color: #64748b;
+    max-width: 300px;
+    line-height: 1.5;
+}
+
+.preview-container {
+    position: relative;
+    width: 100%;
+    min-height: 650px;
+    overflow: hidden;
+}
+
+#pdfPreview {
+    width: 100%;
+    height: 650px;
+    border: 0;
+    display: block;
+}
+
+/* ==========================================================
+   OFFER LETTER FORM IMPROVEMENTS
+   ========================================================== */
+
+select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    background: #ffffff;
+    font-size: 13px;
+    color: #111827;
+    outline: none;
+    cursor: pointer;
+}
+
+select:focus {
+    border-color: #f2aa00;
+}
+
+input[readonly] {
+    background: #f4f6f8;
+    cursor: default;
+}
+
+.hours-note {
+    font-size: 11px;
+    margin-top: 8px;
+    opacity: 0.7;
+}
+
+.preview-container {
+    position: relative;
+    width: 100%;
+    min-height: 650px;
+    overflow: hidden;
+    background: #e9eef4;
+}
+
+#pdfPreview {
+    width: 100%;
+    height: 650px;
+    border: 0;
+    display: block;
+}
+
+.empty-preview {
+    min-height: 650px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+    padding: 30px;
+}
+
+.empty-preview[hidden] {
+    display: none;
+}
+
+.empty-icon {
+    width: 58px;
+    height: 58px;
+    border: 2px solid #cbd5e1;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 15px;
+}
+
+.empty-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 7px;
+}
+
+.empty-text {
+    font-size: 12px;
+    color: #64748b;
+    max-width: 300px;
+    line-height: 1.5;
+}
