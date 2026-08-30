@@ -20,6 +20,28 @@
         href="/static/style.css"
     >
 
+    <style>
+        .logout-btn{
+            position:fixed;
+            top:24px;
+            right:30px;
+            z-index:99999;
+            display:block;
+            padding:9px 16px;
+            border-radius:8px;
+            background:#111;
+            color:#fff;
+            text-decoration:none;
+            font-size:14px;
+            font-weight:600;
+            line-height:20px;
+            cursor:pointer;
+        }
+        .logout-btn:hover{
+            opacity:.9;
+        }
+    </style>
+
 </head>
 
 
@@ -49,6 +71,8 @@
         <h1>
             OFFER LETTER GENERATOR
         </h1>
+
+        <a href="/logout" class="logout-btn">Logout</a>
 
     </header>
 
