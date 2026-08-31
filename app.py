@@ -71,7 +71,7 @@ FONT_DIR.mkdir(
 # ============================================================
 
 SENDER_EMAIL = "YOUR_GMAIL@gmail.com"
-SENDER_APP_PASSWORD = "YOUR_GMAIL_APP_PASSWORD"
+PERSEVEX_GMAIL_APP_PASSWORD = "YOUR_GMAIL_APP_PASSWORD"
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
