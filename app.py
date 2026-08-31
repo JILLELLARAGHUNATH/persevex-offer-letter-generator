@@ -70,8 +70,12 @@ FONT_DIR.mkdir(
 # EMAIL CONFIGURATION
 # ============================================================
 
-SENDER_EMAIL = "YOUR_GMAIL@gmail.com"
-PERSEVEX_GMAIL_APP_PASSWORD = "YOUR_GMAIL_APP_PASSWORD"
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "").strip()
+
+PERSEVEX_GMAIL_APP_PASSWORD = os.getenv(
+    "PERSEVEX_GMAIL_APP_PASSWORD",
+    ""
+).strip()
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
