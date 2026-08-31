@@ -2689,23 +2689,14 @@ def send_email():
         # ----------------------------------------------------
         # EMAIL CONFIGURATION
         # ----------------------------------------------------
-
-        if (
-            SENDER_EMAIL.startswith(
-                "YOUR_"
-            )
-            or
-            PERSEVEX_GMAIL_APP_PASSWORD.startswith(
-                "YOUR_"
-            )
-        ):
+        if not SENDER_EMAIL or not PERSEVEX_GMAIL_APP_PASSWORD:
 
             return jsonify({
                 "error": (
-                    "Email is not configured. "
-                    "Set SENDER_EMAIL and "
+                    "Email is not configured. Set "
+                    "SENDER_EMAIL and "
                     "PERSEVEX_GMAIL_APP_PASSWORD "
-                    "at the top of app.py."
+                    "in the Vercel Environment Variables."
                 )
             }), 400
 
