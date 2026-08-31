@@ -2691,7 +2691,7 @@ def send_email():
                 "YOUR_"
             )
             or
-            SENDER_APP_PASSWORD.startswith(
+            PERSEVEX_GMAIL_APP_PASSWORD.startswith(
                 "YOUR_"
             )
         ):
@@ -2700,7 +2700,7 @@ def send_email():
                 "error": (
                     "Email is not configured. "
                     "Set SENDER_EMAIL and "
-                    "SENDER_APP_PASSWORD "
+                    "PERSEVEX_GMAIL_APP_PASSWORD "
                     "at the top of app.py."
                 )
             }), 400
@@ -2756,7 +2756,7 @@ def send_email():
 
             smtp.login(
                 SENDER_EMAIL,
-                SENDER_APP_PASSWORD,
+                PERSEVEX_GMAIL_APP_PASSWORD,
             )
 
             smtp.send_message(
