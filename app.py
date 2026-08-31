@@ -1,8 +1,6 @@
 from pathlib import Path
 import re
 import smtplib
-import os
-import tempfile
 from datetime import datetime
 from email.message import EmailMessage
 
@@ -12,11 +10,7 @@ from flask import (
     request,
     jsonify,
     send_from_directory,
-    redirect,
-    url_for,
-    session,
 )
-import hmac
 
 import pymupdf
 
@@ -27,26 +21,6 @@ import pymupdf
 
 app = Flask(__name__)
 
-# ============================================================
-# LOGIN / SESSION CONFIGURATION
-# ============================================================
-# Set these in Vercel Environment Variables. For local testing,
-# you can set them in PowerShell before starting the app.
-LOGIN_USERNAME = os.getenv("PERSEVEX_LOGIN_USERNAME", "").strip()
-LOGIN_PASSWORD = os.getenv("PERSEVEX_LOGIN_PASSWORD", "").strip()
-SESSION_SECRET = os.getenv("PERSEVEX_SESSION_SECRET", "").strip()
-
-# A secret is required for secure sessions.
-if not SESSION_SECRET:
-    SESSION_SECRET = "local-development-secret-change-me"
-
-app.secret_key = SESSION_SECRET
-app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-# HTTPS is used on Vercel. Keep local HTTP development working too.
-app.config["SESSION_COOKIE_SECURE"] = False
-
-
 
 # ============================================================
 # DIRECTORIES
@@ -55,7 +29,7 @@ app.config["SESSION_COOKIE_SECURE"] = False
 BASE_DIR = Path(__file__).resolve().parent
 
 TEMPLATE_DIR = BASE_DIR / "pdf_templates"
-GENERATED_DIR = Path(tempfile.gettempdir()) / "persevex_generated"
+GENERATED_DIR = BASE_DIR / "generated"
 FONT_DIR = BASE_DIR / "static" / "fonts"
 
 GENERATED_DIR.mkdir(
@@ -72,8 +46,8 @@ FONT_DIR.mkdir(
 # EMAIL CONFIGURATION
 # ============================================================
 
-SENDER_EMAIL = os.getenv("SENDER_EMAIL", "").strip()
-SENDER_APP_PASSWORD = os.getenv("PERSEVEX_GMAIL_APP_PASSWORD", "").strip()
+SENDER_EMAIL = "YOUR_GMAIL@gmail.com"
+SENDER_APP_PASSWORD = "YOUR_GMAIL_APP_PASSWORD"
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
@@ -262,35 +236,100 @@ def extract_font(
 # ============================================================
 
 def find_rupee_font():
-    """Return a bundled font that supports the Indian Rupee symbol.
 
-    Vercel runs on Linux, so do not depend on C:\\Windows\\Fonts.
-    The project already contains NotoSans-Regular.ttf.
-    """
-    bundled = FONT_DIR / "NotoSans-Regular.ttf"
-    if bundled.exists():
-        try:
-            font = pymupdf.Font(fontfile=str(bundled))
-            if font.has_glyph(ord("₹")):
-                return str(bundled)
-        except Exception:
-            pass
+    windows_fonts = Path(
+        r"C:\Windows\Fonts"
+    )
 
-    candidates = [
-        FONT_DIR / "OpenSans-Regular.ttf",
-        FONT_DIR / "NotoSans-Regular.ttf",
+    if not windows_fonts.exists():
+
+        raise RuntimeError(
+            "Windows Fonts directory was not found."
+        )
+
+    # --------------------------------------------------------
+    # Prefer fonts that normally contain the Indian Rupee
+    # symbol.
+    # --------------------------------------------------------
+
+    preferred = [
+        "Nirmala.ttf",
+        "NirmalaUI.ttf",
+        "NirmalaUI-Regular.ttf",
+        "segoeui.ttf",
+        "arial.ttf",
+        "calibri.ttf",
     ]
-    for font_path in candidates:
+
+    for filename in preferred:
+
+        font_path = (
+            windows_fonts
+            /
+            filename
+        )
+
         if not font_path.exists():
             continue
+
         try:
-            font = pymupdf.Font(fontfile=str(font_path))
-            if font.has_glyph(ord("₹")):
-                return str(font_path)
+
+            font = pymupdf.Font(
+                fontfile=str(font_path)
+            )
+
+            # Check actual glyph support.
+            if font.has_glyph(
+                ord("₹")
+            ):
+
+                return str(
+                    font_path
+                )
+
         except Exception:
+
             continue
 
-    raise RuntimeError("No bundled font supporting the ₹ symbol was found.")
+    # --------------------------------------------------------
+    # Search every installed font as fallback.
+    # --------------------------------------------------------
+
+    for font_path in windows_fonts.iterdir():
+
+        if not font_path.is_file():
+            continue
+
+        if font_path.suffix.lower() not in (
+            ".ttf",
+            ".otf",
+            ".ttc",
+        ):
+            continue
+
+        try:
+
+            font = pymupdf.Font(
+                fontfile=str(font_path)
+            )
+
+            if font.has_glyph(
+                ord("₹")
+            ):
+
+                return str(
+                    font_path
+                )
+
+        except Exception:
+
+            continue
+
+    raise RuntimeError(
+        "No installed Windows font supporting "
+        "the ₹ symbol was found."
+    )
+
 
 # ============================================================
 # GET TEXT LINES
@@ -565,6 +604,141 @@ def replace_entire_line(
         color=color,
         overlay=True,
     )
+
+
+# ============================================================
+# REPLACE STUDENT NAME - KEEP ORIGINAL FONT SIZE
+# ============================================================
+
+def replace_student_name_line(
+    page,
+    line,
+    new_text,
+    font_file,
+):
+    """
+    Replace the student-name line without reducing the template font size.
+
+    Long names are wrapped onto the available space at the SAME font size.
+    This helper is used only for the student-name line, so no other PDF
+    formatting or replacement logic is changed.
+    """
+
+    rect = pymupdf.Rect(line["bbox"])
+    original_size = float(line["size"])
+    color = rgb_from_pdf_color(line["color"])
+
+    # Remove only the original template text line.
+    page.add_redact_annot(
+        rect,
+        fill=(1, 1, 1),
+    )
+    page.apply_redactions()
+
+    # Keep the original left position and font size. Use the page width so
+    # long names wrap instead of triggering the font-size reduction used by
+    # replace_entire_line().
+    right_margin = 30
+    available = pymupdf.Rect(
+        line["origin"][0],
+        rect.y0 - 1,
+        page.rect.width - right_margin,
+        rect.y0 + max(90, original_size * 4.5),
+    )
+
+    result = page.insert_textbox(
+        available,
+        new_text,
+        fontfile=font_file,
+        fontsize=original_size,
+        color=color,
+        align=pymupdf.TEXT_ALIGN_LEFT,
+        lineheight=1.0,
+        overlay=True,
+    )
+
+    if result < 0:
+        # Never shrink the name font. If an unusually long name needs more
+        # vertical room, continue with the same font size in a larger box.
+        available.y1 = page.rect.height - 30
+        page.insert_textbox(
+            available,
+            new_text,
+            fontfile=font_file,
+            fontsize=original_size,
+            color=color,
+            align=pymupdf.TEXT_ALIGN_LEFT,
+            lineheight=1.0,
+            overlay=True,
+        )
+
+
+# ============================================================
+# REPLACE WITH-HOURS OFFER LINE - KEEP ORIGINAL FONT SIZE
+# ============================================================
+
+def replace_hours_offer_line(
+    page,
+    line,
+    new_text,
+    font_file,
+):
+    """
+    Replace ONLY the WITH HOURS offer line without reducing its font size.
+
+    This function is intentionally limited to the line beginning
+    "Has been offered an internship...". All other replacement logic remains
+    unchanged.
+    """
+
+    rect = pymupdf.Rect(line["bbox"])
+    original_size = float(line["size"])
+    color = rgb_from_pdf_color(line["color"])
+
+    # Clear only the original offer line.
+    page.add_redact_annot(
+        rect,
+        fill=(1, 1, 1),
+    )
+    page.apply_redactions()
+
+    # Use the available page width and keep the exact original font size.
+    # The font size is never reduced.
+    text_rect = pymupdf.Rect(
+        line["origin"][0],
+        rect.y0 - 1,
+        page.rect.width - 24,
+        rect.y1 + max(8, original_size * 1.5),
+    )
+
+    result = page.insert_textbox(
+        text_rect,
+        new_text,
+        fontfile=font_file,
+        fontsize=original_size,
+        color=color,
+        align=pymupdf.TEXT_ALIGN_LEFT,
+        lineheight=1.0,
+        overlay=True,
+    )
+
+    # If the text needs slightly more vertical room, retry without changing
+    # the font size.
+    if result < 0:
+        text_rect.y1 = rect.y0 + max(
+            original_size * 3.0,
+            rect.height * 2.5,
+        )
+        page.insert_textbox(
+            text_rect,
+            new_text,
+            fontfile=font_file,
+            fontsize=original_size,
+            color=color,
+            align=pymupdf.TEXT_ALIGN_LEFT,
+            lineheight=1.0,
+            overlay=True,
+        )
 
 
 # ============================================================
@@ -1000,12 +1174,10 @@ def replace_stipend(
     stipend,
 ):
     """
-    Replace ONLY the numeric stipend amount.
+    WITH HOURS ONLY: change ONLY the stipend amount.
 
-    The template already contains the ₹ symbol in its own
-    NotoSans span. We deliberately KEEP that original ₹ glyph
-    instead of drawing a new one. This prevents PyMuPDF from
-    falling back to Helvetica and displaying a missing-glyph dot.
+    The existing sentence, paragraph layout, font, font size, spacing,
+    and original ₹ symbol remain untouched.
     """
 
     stipend = clean_stipend(stipend)
@@ -1013,214 +1185,158 @@ def replace_stipend(
     if not stipend:
         return
 
+    line = find_stipend_line(page)
+
+    # Keep the amount formatting clean while preserving the exact template text.
+    try:
+        formatted_amount = f"{int(float(stipend)):,}"
+    except (TypeError, ValueError):
+        formatted_amount = str(stipend)
+
     # --------------------------------------------------------
-    # Find the stipend line.
+    # Find the amount span on the ORIGINAL stipend line.
+    #
+    # The Persevex template may store ₹ in a different font span
+    # from the numeric amount. Therefore, replace only the number
+    # whenever possible and leave the original ₹ glyph untouched.
     # --------------------------------------------------------
 
-    stipend_line = None
+    amount_span = None
+    line_y = line["bbox"].y0
 
-    blocks = page.get_text("dict").get("blocks", [])
-
-    for block in blocks:
+    for block in page.get_text("dict").get("blocks", []):
         if block.get("type") != 0:
             continue
 
-        for line_data in block.get("lines", []):
-            spans = line_data.get("spans", [])
-            if not spans:
+        for pdf_line in block.get("lines", []):
+            if abs(pdf_line["bbox"][1] - line_y) > 2.0:
                 continue
 
-            line_text = "".join(
-                str(span.get("text", ""))
-                for span in spans
-            )
+            for span in pdf_line.get("spans", []):
+                span_text = str(span.get("text", "")).strip()
 
-            normalized = normalize_text(line_text)
-
-            if (
-                "stipend" in normalized
-                and "performance" in normalized
-            ):
-                stipend_line = line_data
-                break
-
-        if stipend_line is not None:
-            break
-
-    if stipend_line is None:
-        raise ValueError(
-            "Could not find the stipend line in the PDF template."
-        )
-
-    spans = stipend_line.get("spans", [])
-
-    # --------------------------------------------------------
-    # IMPORTANT FIX:
-    #
-    # Keep the original ₹ span untouched.
-    # Find only the numeric amount span and replace it.
-    #
-    # Template structure:
-    #   ... "to "       OpenSans-Regular
-    #   "₹"             NotoSans-Regular   <-- KEEP THIS
-    #   "15,000."       OpenSans-Regular   <-- REPLACE THIS
-    # --------------------------------------------------------
-
-    rupee_span = None
-    number_span = None
-
-    for index, span in enumerate(spans):
-        raw = str(span.get("text", ""))
-
-        if "₹" in raw:
-            rupee_span = span
-
-            # Handle the unlikely case where ₹ and the number
-            # are contained in the same span.
-            if re.search(r"\d", raw):
-                number_span = span
-                break
-
-            # Normally the numeric span is immediately after ₹.
-            for next_span in spans[index + 1:]:
-                next_raw = str(next_span.get("text", ""))
-                next_clean = normalize_text(next_raw)
-
-                if re.fullmatch(r"[\d,]+\.?", next_clean):
-                    number_span = next_span
+                # Preferred case: amount is its own span, for example
+                # "15,000." or "15000.".
+                if re.fullmatch(r"[\d,]+\.?", span_text):
+                    amount_span = span
                     break
 
-            break
+                # Fallback: ₹ and amount are stored together.
+                if "₹" in span_text and re.search(r"\d", span_text):
+                    amount_span = span
+                    break
 
-    # Fallback if the template has no separate ₹ span.
-    if number_span is None:
-        for span in spans:
-            raw = str(span.get("text", ""))
-            cleaned = normalize_text(raw)
-
-            if re.fullmatch(r"[\d,]+\.?", cleaned):
-                number_span = span
+            if amount_span is not None:
                 break
 
-    if number_span is None:
-        raise ValueError(
-            "Could not find the original stipend amount in the PDF template."
-        )
-
-    # --------------------------------------------------------
-    # Preserve the original numeric font, size and color.
-    # --------------------------------------------------------
-
-    original_size = float(
-        number_span.get(
-            "size",
-            12,
-        )
-    )
-
-    original_color = rgb_from_pdf_color(
-        number_span.get(
-            "color",
-            0,
-        )
-    )
-
-    try:
-        number_font = extract_font(
-            template,
-            "OpenSans-Regular",
-        )
-    except Exception:
-        number_font = None
-
-    # Use the actual font from the template whenever possible.
-    if number_font is None:
-        number_font = extract_font(
-            template,
-            "OpenSans-Regular",
-        )
-
-    number_font_obj = pymupdf.Font(
-        fontfile=number_font
-    )
-
-    new_number = stipend
-    new_numeric_text = f"{new_number}."
-
-    # --------------------------------------------------------
-    # Fit ONLY the numeric portion if a very long amount is used.
-    # The normal 13000 / 18000 / 25000 values stay at the original
-    # 12 pt template size.
-    # --------------------------------------------------------
-
-    number_rect = pymupdf.Rect(
-        number_span["bbox"]
-    )
-
-    fontsize = original_size
-
-    # There is no need to shrink for normal values. We only shrink
-    # if the replacement would extend beyond the PDF's right margin.
-    max_width = max(
-        number_rect.width,
-        page.rect.width - number_rect.x0 - 60,
-    )
-
-    while fontsize > 7:
-        width = number_font_obj.text_length(
-            new_numeric_text,
-            fontsize=fontsize,
-        )
-
-        if width <= max_width:
+        if amount_span is not None:
             break
 
-        fontsize -= 0.1
+    if amount_span is None:
+        raise ValueError(
+            "Could not locate the original stipend amount in the PDF template."
+        )
 
-    # --------------------------------------------------------
-    # Remove ONLY the old numeric amount.
-    #
-    # Do NOT redact the ₹ span. This is the key fix.
-    # --------------------------------------------------------
+    amount_rect = pymupdf.Rect(amount_span["bbox"])
+    amount_text = str(amount_span.get("text", ""))
 
-    redact_rect = pymupdf.Rect(
-        number_rect.x0 - 0.5,
-        number_rect.y0 - 0.5,
-        number_rect.x1 + 0.5,
-        number_rect.y1 + 0.5,
-    )
-
+    # Remove ONLY the original amount. Do not remove or redraw the
+    # surrounding stipend sentence.
     page.add_redact_annot(
-        redact_rect,
+        amount_rect,
         fill=(1, 1, 1),
     )
-
     page.apply_redactions()
 
     # --------------------------------------------------------
-    # Insert ONLY the new number.
-    #
-    # The original ₹ remains in the PDF exactly as designed.
+    # Normal template case:
+    # ₹ is already present in its original font, so redraw ONLY
+    # the number with the same typography as the original amount.
     # --------------------------------------------------------
 
+    if "₹" not in amount_text:
+
+        span_font_name = str(
+            amount_span.get("font", "")
+        )
+
+        try:
+            amount_font = extract_font(
+                template,
+                span_font_name,
+            )
+        except Exception:
+            amount_font = extract_font(
+                template,
+                "OpenSans-Regular",
+            )
+
+        page.insert_text(
+            amount_span["origin"],
+            formatted_amount + ".",
+            fontfile=amount_font,
+            fontsize=float(amount_span["size"]),
+            color=rgb_from_pdf_color(
+                amount_span["color"]
+            ),
+            overlay=True,
+        )
+
+        print(
+            "STIPEND: Amount updated. Original ₹ symbol and formatting preserved."
+        )
+        return
+
+    # --------------------------------------------------------
+    # Rare fallback:
+    # ₹ and the amount are stored in one span. Preserve the same
+    # font whenever it supports ₹; otherwise use the template's
+    # embedded NotoSans font for the combined replacement.
+    # --------------------------------------------------------
+
+    span_font_name = str(
+        amount_span.get("font", "")
+    )
+
+    try:
+        combined_font = extract_font(
+            template,
+            span_font_name,
+        )
+        test_font = pymupdf.Font(
+            fontfile=combined_font
+        )
+
+        if not test_font.has_glyph(
+            ord("₹")
+        ):
+            raise RuntimeError(
+                "Original amount font does not support ₹."
+            )
+
+    except Exception:
+
+        try:
+            combined_font = extract_font(
+                template,
+                "NotoSans-Regular",
+            )
+        except Exception:
+            combined_font = find_rupee_font()
+
     page.insert_text(
-        (
-            number_rect.x0,
-            number_span["origin"][1],
+        amount_span["origin"],
+        f"₹{formatted_amount}.",
+        fontfile=combined_font,
+        fontsize=float(amount_span["size"]),
+        color=rgb_from_pdf_color(
+            amount_span["color"]
         ),
-        new_numeric_text,
-        # IMPORTANT: give the embedded font an explicit custom name.
-        # Without this, some PyMuPDF builds fall back to Helvetica.
-        fontname="OpenSansCustom",
-        fontfile=number_font,
-        fontsize=fontsize,
-        color=original_color,
         overlay=True,
     )
 
     print(
-        "STIPEND: Numeric amount replaced successfully; "
-        "original ₹ symbol preserved."
+        "STIPEND: Amount updated with ₹ while preserving the original layout."
     )
 
 
@@ -1312,7 +1428,7 @@ def edit_with_hours(
             f"{data['student_name']}"
         )
 
-        replace_entire_line(
+        replace_student_name_line(
             page,
             line,
             new_text,
@@ -1336,7 +1452,7 @@ def edit_with_hours(
             f"{data['domain']} with Persevex LLP,"
         )
 
-        replace_entire_line(
+        replace_hours_offer_line(
             page,
             line,
             new_text,
@@ -1465,159 +1581,497 @@ def edit_with_hours(
 
 
 # ============================================================
-# WITHOUT-HOURS DURATION NUMBER REPLACEMENT
+# WITHOUT-HOURS ONLY HELPERS
+#
+# IMPORTANT:
+# These functions are intentionally separate from the WITH HOURS
+# logic. The WITH HOURS section above is not changed.
 # ============================================================
-# Preserve the original multi-line paragraph formatting.
-# Replace only the two numeric month values in the template.
 
-def replace_without_hours_duration_numbers(page, template, total_months):
-    """
-    Replace ONLY the two dynamic numeric month characters in the original
-    WITHOUT-HOURS template.
+def find_without_hours_duration_block(page):
+    """Find the original four-line training/internship paragraph."""
 
-    Important: do not redraw the paragraph.  The original template already
-    has the correct OpenSans font, size, baseline, spacing, and line wrapping.
-    We therefore locate the individual numeric characters from rawdict and
-    redraw each replacement at that character's exact original baseline.
-    """
+    lines = get_text_lines(page)
+    start = None
 
-    words = page.get_text("words")
-    words.sort(key=lambda item: (item[1], item[0]))
+    for line in lines:
+        if "the total duration of the program is" in normalize_text(line["text"]):
+            start = line
+            break
 
-    # In the supplied original template the editable values are:
-    #   "... program is 3 months ..."
-    #   "followed by 2 months of internship ..."
-    # The other "1" is the fixed training duration and must not be changed.
-    first_number = next(
-        (
-            w for w in words
-            if w[4].strip() == "3"
-            and 330 <= w[1] <= 370
-            and 250 <= w[0] <= 350
-        ),
-        None,
-    )
-
-    second_number = next(
-        (
-            w for w in words
-            if w[4].strip() == "2"
-            and 360 <= w[1] <= 390
-            and 100 <= w[0] <= 180
-        ),
-        None,
-    )
-
-    if first_number is None or second_number is None:
+    if start is None:
         raise ValueError(
-            "Could not locate the duration numbers in the WITHOUT HOURS template."
+            "Could not locate the without-hours duration paragraph."
         )
 
-    # Read the original characters, including their exact font, size,
-    # origin and bounding box.  This is what preserves the template format.
-    raw = page.get_text("rawdict")
-    targets = []
+    # Collect lines immediately below the start line with the same left edge.
+    candidates = [
+        line for line in lines
+        if line["bbox"].y0 >= start["bbox"].y0 - 0.5
+        and line["bbox"].y0 <= start["bbox"].y0 + 55
+        and abs(line["bbox"].x0 - start["bbox"].x0) < 2.0
+    ]
+    candidates.sort(key=lambda item: item["bbox"].y0)
 
-    for block in raw.get("blocks", []):
-        for line in block.get("lines", []):
-            for span in line.get("spans", []):
-                for ch in span.get("chars", []):
-                    text = ch.get("c", "")
-                    bbox = ch.get("bbox")
-                    if not bbox:
-                        continue
-
-                    if (
-                        first_number[0] - 0.5 <= bbox[0] <= first_number[2] + 0.5
-                        and first_number[1] - 0.5 <= bbox[1] <= first_number[3] + 0.5
-                        and text == "3"
-                    ):
-                        targets.append(
-                            (ch, str(total_months))
-                        )
-                        continue
-
-                    if (
-                        second_number[0] - 0.5 <= bbox[0] <= second_number[2] + 0.5
-                        and second_number[1] - 0.5 <= bbox[1] <= second_number[3] + 0.5
-                        and text == "2"
-                    ):
-                        targets.append(
-                            (ch, str(max(1, int(total_months) - 1)))
-                        )
-
-    if len(targets) != 2:
+    # The original template paragraph is exactly four visual lines.
+    if len(candidates) < 4:
         raise ValueError(
-            "Could not locate both editable duration characters in the WITHOUT HOURS template."
+            "Could not locate all four lines of the without-hours duration paragraph."
         )
 
-    # Remove only the two old digit glyphs. Everything around them remains
-    # untouched, including the original paragraph and its line formatting.
-    for ch, _ in targets:
+    return candidates[:4]
+
+
+def _replace_original_lines(page, lines, new_texts, font_file):
+    """Redraw existing lines at their original positions and typography."""
+
+    for line in lines:
         page.add_redact_annot(
-            pymupdf.Rect(ch["bbox"]),
+            pymupdf.Rect(line["bbox"]),
             fill=(1, 1, 1),
         )
 
     page.apply_redactions()
 
-    for ch, new_number in targets:
-        span_size = float(ch.get("size", 12.004523277282715))
-        origin = ch.get("origin")
-        font_name = ch.get("font", "OpenSans-Regular")
+    for line, text in zip(lines, new_texts):
+        page.insert_text(
+            line["origin"],
+            text,
+            fontfile=font_file,
+            fontsize=line["size"],
+            color=rgb_from_pdf_color(line["color"]),
+            overlay=True,
+        )
 
-        # Prefer the exact embedded template font. The file contains
-        # OpenSans-Regular, so this keeps the replacement visually identical.
-        font_file = extract_font(template, "OpenSans-Regular")
+
+def replace_without_hours_duration_values(page, template, total_months):
+    """
+    WITHOUT HOURS ONLY.
+
+    Preserve the original four-line paragraph exactly. Only the total-duration
+    and internship-duration values are changed. This avoids the extra spaces
+    caused by replacing individual words at different widths.
+    """
+
+    total_months = int(total_months)
+    internship_months = total_months - 1
+
+    total_unit = "month" if total_months == 1 else "months"
+    internship_unit = "month" if internship_months == 1 else "months"
+
+    lines = find_without_hours_duration_block(page)
+    regular_font = extract_font(template, "OpenSans-Regular")
+
+    original = [str(line["text"]) for line in lines]
+
+    # First line: replace only "3 months" while preserving every other word.
+    first_text = re.sub(
+        r"\b3\s+months\b",
+        f"{total_months} {total_unit}",
+        original[0],
+        count=1,
+    )
+
+    # Second line: replace only "2 months" while preserving every other word.
+    second_text = re.sub(
+        r"\b2\s+months\b",
+        f"{internship_months} {internship_unit}",
+        original[1],
+        count=1,
+    )
+
+    new_texts = [
+        first_text,
+        second_text,
+        original[2],
+        original[3],
+    ]
+
+    _replace_original_lines(
+        page,
+        lines,
+        new_texts,
+        regular_font,
+    )
+
+
+def find_without_hours_stipend_parts(page):
+    """Find the two visual parts of the wrapped stipend sentence."""
+
+    lines = get_text_lines(page)
+    previous = None
+    stipend = None
+
+    for line in lines:
+        text = normalize_text(line["text"])
+
+        if (
+            "conduct weekly check-ins" in text
+            and text.endswith("the")
+        ):
+            previous = line
+
+        if (
+            "internship offers a performance-based stipend" in text
+            or "internship offers a performance-based stipend up to" in text
+        ):
+            stipend = line
+
+    if previous is None or stipend is None:
+        raise ValueError(
+            "Could not locate the complete wrapped stipend sentence."
+        )
+
+    return previous, stipend
+
+
+def replace_without_hours_stipend_amount(page, template, stipend):
+    """WITHOUT HOURS ONLY: replace ONLY the original numeric stipend amount."""
+
+    stipend = clean_stipend(stipend)
+    _, stipend_line = find_without_hours_stipend_parts(page)
+
+    regular_font = extract_font(
+        template,
+        "OpenSans-Regular",
+    )
+
+    fontsize = stipend_line["size"]
+    color = rgb_from_pdf_color(stipend_line["color"])
+    formatted = f"{int(stipend):,}."
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    # The original Persevex template stores ₹ as NotoSans-Regular
+    # and the numeric amount as OpenSans-Regular. Therefore we find
+    # the NUMERIC SPAN, not the PDF word. This leaves the original
+    # ₹ glyph completely untouched.
+    # --------------------------------------------------------
+
+    amount_span = None
+
+    for block in page.get_text("dict").get("blocks", []):
+        if block.get("type") != 0:
+            continue
+
+        for pdf_line in block.get("lines", []):
+            if abs(pdf_line["bbox"][1] - stipend_line["bbox"].y0) > 1.0:
+                continue
+
+            for span in pdf_line.get("spans", []):
+                text = str(span.get("text", ""))
+
+                # Normal template: span is exactly "25,000.".
+                if re.fullmatch(r"[\d,]+\.?", text.strip()):
+                    amount_span = span
+                    break
+
+                # Fallback only if ₹ and number happen to be in one span.
+                if "₹" in text and re.search(r"\d", text):
+                    amount_span = span
+                    break
+
+            if amount_span is not None:
+                break
+
+        if amount_span is not None:
+            break
+
+    if amount_span is None:
+        raise ValueError(
+            "Could not locate the original stipend amount span."
+        )
+
+    amount_rect = pymupdf.Rect(
+        amount_span["bbox"]
+    )
+
+    page.add_redact_annot(
+        amount_rect,
+        fill=(1, 1, 1),
+    )
+    page.apply_redactions()
+
+    # Normal template: ₹ is already preserved as the original NotoSans
+    # glyph, so insert only the numeric amount in OpenSans.
+    if "₹" not in str(amount_span.get("text", "")):
 
         page.insert_text(
-            (origin[0], origin[1]),
-            new_number,
-            fontfile=font_file,
-            fontsize=span_size,
-            color=(0, 0, 0),
+            (
+                amount_span["origin"][0],
+                stipend_line["origin"][1],
+            ),
+            formatted,
+            fontfile=regular_font,
+            fontsize=fontsize,
+            color=color,
             overlay=True,
+        )
+
+        return
+
+    # Rare fallback: the original PDF combined ₹ and the amount into one
+    # span. Use the embedded NotoSans-Regular from the same template rather
+    # than a system font, so the PDF remains self-contained.
+    try:
+        rupee_font = extract_font(
+            template,
+            "NotoSans-Regular",
+        )
+    except Exception:
+        rupee_font = find_rupee_font()
+
+    page.insert_text(
+        (
+            amount_span["origin"][0],
+            stipend_line["origin"][1],
+        ),
+        f"₹{formatted}",
+        fontfile=rupee_font,
+        fontsize=fontsize,
+        color=color,
+        overlay=True,
+    )
+
+def remove_without_hours_stipend_sentence(page):
+    """WITHOUT HOURS ONLY: remove the complete wrapped stipend sentence."""
+
+    previous_line, stipend_line = find_without_hours_stipend_parts(page)
+    words = page.get_text("words")
+
+    trailing_the = None
+    for word in words:
+        if abs(word[1] - previous_line["bbox"].y0) <= 1.0:
+            if normalize_text(word[4]) == "the":
+                trailing_the = word
+
+    if trailing_the is None:
+        raise ValueError(
+            "Could not locate the trailing 'The' of the stipend sentence."
+        )
+
+    page.add_redact_annot(
+        pymupdf.Rect(
+            trailing_the[0],
+            trailing_the[1],
+            trailing_the[2],
+            trailing_the[3],
+        ),
+        fill=(1, 1, 1),
+    )
+
+    page.add_redact_annot(
+        pymupdf.Rect(stipend_line["bbox"]),
+        fill=(1, 1, 1),
+    )
+
+    page.apply_redactions()
+
+
+def find_without_hours_date_lines(page):
+    """Find the original two-line date paragraph."""
+
+    lines = get_text_lines(page)
+    first = None
+    second = None
+
+    for line in lines:
+        text = normalize_text(line["text"])
+
+        if "the duration of the internship program ranges from" in text:
+            first = line
+        elif "until the student completes the required number of internship hours" in text:
+            second = line
+
+    if first is None or second is None:
+        raise ValueError(
+            "Could not find the complete date paragraph."
+        )
+
+    return first, second
+
+
+def replace_without_hours_date_paragraph(
+    page,
+    template,
+    start_date,
+    end_date,
+    shift_up=0.0,
+):
+    """Replace only the dates and optionally move the original date paragraph."""
+
+    first, second = find_without_hours_date_lines(page)
+    regular_font = extract_font(template, "OpenSans-Regular")
+
+    original_first = str(first["text"])
+    original_second = str(second["text"])
+
+    # Replace the two original dates in ONE operation so the newly inserted
+    # start date cannot accidentally be matched again as the second date.
+    matches = list(
+        re.finditer(
+            r"\d{2}/\d{2}/\d{4}",
+            original_first,
+        )
+    )
+
+    if len(matches) < 2:
+        raise ValueError(
+            "Could not locate both dates in the original date line."
+        )
+
+    new_first = (
+        original_first[:matches[0].start()]
+        + start_date
+        + original_first[matches[0].end():matches[1].start()]
+        + end_date
+        + original_first[matches[1].end():]
+    )
+
+    # Remove the original paragraph before drawing the replacement.
+    page.add_redact_annot(
+        pymupdf.Rect(first["bbox"]),
+        fill=(1, 1, 1),
+    )
+    page.add_redact_annot(
+        pymupdf.Rect(second["bbox"]),
+        fill=(1, 1, 1),
+    )
+    page.apply_redactions()
+
+    page.insert_text(
+        (
+            first["origin"][0],
+            first["origin"][1] - shift_up,
+        ),
+        new_first,
+        fontfile=regular_font,
+        fontsize=first["size"],
+        color=rgb_from_pdf_color(first["color"]),
+        overlay=True,
+    )
+
+    page.insert_text(
+        (
+            second["origin"][0],
+            second["origin"][1] - shift_up,
+        ),
+        original_second,
+        fontfile=regular_font,
+        fontsize=second["size"],
+        color=rgb_from_pdf_color(second["color"]),
+        overlay=True,
+    )
+
+
+def replace_without_hours_date_paragraph_shifted(
+    page,
+    template,
+    start_date,
+    end_date,
+    shift_up,
+):
+    """Compatibility wrapper for the shifted date operation."""
+
+    replace_without_hours_date_paragraph(
+        page,
+        template,
+        start_date,
+        end_date,
+        shift_up=shift_up,
+    )
+
+
+def replace_without_hours_offer_paragraph(page, offer_line, new_text, font_file):
+    """
+    Replace ONLY the Dates-section offer paragraph.
+
+    The font size is taken from the normal body paragraph below it, never
+    reduced to fit the text. The text wraps naturally while keeping the same
+    font family, font size, spacing and left alignment for short and long
+    student/domain values.
+    """
+    lines = get_text_lines(page)
+
+    # Use the existing normal body paragraph as the formatting reference.
+    duration_line = None
+    for candidate in lines:
+        candidate_text = normalize_text(candidate["text"])
+        if "the total duration of the program is" in candidate_text:
+            duration_line = candidate
+            break
+
+    if duration_line is None:
+        raise ValueError("Could not locate the Dates-section body formatting reference.")
+
+    body_size = float(duration_line["size"])
+    color = rgb_from_pdf_color(duration_line["color"])
+
+    # Clear only the existing offer paragraph area: from the original
+    # 'Program in the field...' line up to the next body paragraph.
+    clear_top = pymupdf.Rect(offer_line["bbox"]).y0 - 2
+    clear_bottom = pymupdf.Rect(duration_line["bbox"]).y0 - 8
+    clear_rect = pymupdf.Rect(
+        offer_line["origin"][0] - 2,
+        clear_top,
+        page.rect.width - 24,
+        clear_bottom,
+    )
+
+    page.add_redact_annot(clear_rect, fill=(1, 1, 1))
+    page.apply_redactions()
+
+    text_box = pymupdf.Rect(
+        offer_line["origin"][0],
+        clear_top,
+        page.rect.width - 24,
+        clear_bottom,
+    )
+
+    result = page.insert_textbox(
+        text_box,
+        new_text,
+        fontfile=font_file,
+        fontsize=body_size,
+        color=color,
+        align=pymupdf.TEXT_ALIGN_LEFT,
+        lineheight=1.0,
+        overlay=True,
+    )
+
+    if result < 0:
+        raise ValueError(
+            "The Dates-section offer paragraph does not fit at the original "
+            "font size. The font was intentionally not reduced."
         )
 
 
 # ============================================================
 # WITHOUT HOURS
+#
+# IMPORTANT: WITH HOURS SECTION ABOVE IS LEFT UNCHANGED.
 # ============================================================
 
-def edit_without_hours(
-    data,
-):
+def edit_without_hours(data):
+    """Generate the WITHOUT HOURS letter only. WITH HOURS is untouched."""
 
-    template = (
-        TEMPLATE_DIR
-        /
-        "without_hours.pdf"
-    )
+    template = TEMPLATE_DIR / "without_hours.pdf"
 
     if not template.exists():
-
         raise FileNotFoundError(
             "WITHOUT HOURS PDF template not found:\n"
             f"{template}"
         )
 
-    doc = pymupdf.open(
-        template
-    )
+    doc = pymupdf.open(template)
 
     try:
-
         page = doc[0]
-
-        regular_font = extract_font(
-            template,
-            "OpenSans-Regular",
-        )
+        regular_font = extract_font(template, "OpenSans-Regular")
 
         # ----------------------------------------------------
-        # STUDENT NAME
+        # STUDENT NAME - original behavior
         # ----------------------------------------------------
-
         line = find_line_any(
             page,
             [
@@ -1626,22 +2080,20 @@ def edit_without_hours(
             ],
         )
 
-        new_text = (
-            "This letter is to confirm that Mr/Ms. "
-            f"{data['student_name']} has been offered a Training and Internship"
-        )
-
-        replace_entire_line(
+        # Keep the student-name line independent from the next paragraph.
+        # This prevents a long name from forcing the complete sentence into
+        # the same text box and changing the visual layout.
+        replace_student_name_line(
             page,
             line,
-            new_text,
+            "This letter is to confirm that Mr/Ms. "
+            f"{data['student_name']}",
             regular_font,
         )
 
         # ----------------------------------------------------
-        # DOMAIN
+        # DOMAIN - original behavior
         # ----------------------------------------------------
-
         line = find_line_any(
             page,
             [
@@ -1650,52 +2102,23 @@ def edit_without_hours(
             ],
         )
 
-        new_text = (
-            "Program in the field of "
-            f"{data['domain']} with Persevex, "
-            "under the supervision of Mr. Shanmukh"
-        )
-
-        replace_entire_line(
+        replace_without_hours_offer_paragraph(
             page,
             line,
-            new_text,
+            "Has been offered a Training and Internship Program in the field of "
+            f"{data['domain']} with Persevex, under the supervision of "
+            "Mr. Shanmukh Shekar K C.",
             regular_font,
         )
 
         # ----------------------------------------------------
-        # TRAINING + INTERNSHIP
+        # DURATION - ONLY VALUES ARE CHANGED.
         # ----------------------------------------------------
-
         total_months = int(
-            str(
-                data["duration"]
-            ).split()[0]
+            str(data["duration"]).split()[0]
         )
 
-        internship_months = (
-            total_months - 1
-        )
-
-        if internship_months == 1:
-
-            internship_text = "1 month"
-
-        else:
-
-            internship_text = (
-                f"{internship_months} months"
-            )
-
-        month_word = (
-            "month"
-            if total_months == 1
-            else "months"
-        )
-
-        # Preserve the original four-line paragraph formatting.
-        # Only replace the two numeric month values.
-        replace_without_hours_duration_numbers(
+        replace_without_hours_duration_values(
             page,
             template,
             total_months,
@@ -1704,45 +2127,63 @@ def edit_without_hours(
         # ----------------------------------------------------
         # STIPEND
         # ----------------------------------------------------
-
         stipend = clean_stipend(
-            data.get(
-                "stipend",
-                "",
-            )
+            data.get("stipend", "")
         )
 
         if stipend:
-
-            replace_stipend(
+            # Change ONLY the original amount. Keep the original ₹.
+            replace_without_hours_stipend_amount(
                 page,
                 template,
                 stipend,
             )
 
-        else:
-
-            remove_stipend_sentence(
-                page
+            # Dates stay exactly in their original position.
+            replace_without_hours_date_paragraph(
+                page,
+                template,
+                data["start_date"],
+                data["end_date"],
+                shift_up=0,
             )
 
-        # ----------------------------------------------------
-        # DATES
-        # ----------------------------------------------------
+        else:
+            # Remove the entire wrapped stipend sentence, including the
+            # trailing "The" on the preceding line.
+            previous_line, stipend_line = find_without_hours_stipend_parts(page)
 
-        replace_date_line(
-            page,
-            template,
-            data["start_date"],
-            data["end_date"],
-        )
+            # Date paragraph is currently below TWO removed visual lines:
+            #   1) the trailing "The"
+            #   2) the stipend sentence line
+            # Move the date paragraph to the old stipend-line position.
+            date_first, date_second = find_without_hours_date_lines(page)
+
+            # Keep a small blank space between the paragraph above and
+            # the date paragraph when no stipend is entered.
+            # Only the vertical position is adjusted; all existing fonts,
+            # sizes, formatting and other sections remain unchanged.
+            desired_gap = 10
+            shift_up = (
+                date_first["origin"][1]
+                - stipend_line["origin"][1]
+                - desired_gap
+            )
+
+            remove_without_hours_stipend_sentence(page)
+
+            replace_without_hours_date_paragraph(
+                page,
+                template,
+                data["start_date"],
+                data["end_date"],
+                shift_up=shift_up,
+            )
 
         return doc
 
     except Exception:
-
         doc.close()
-
         raise
 
 
@@ -1801,67 +2242,6 @@ def generate_pdf(
         doc.close()
 
     return filename
-
-
-# ============================================================
-# LOGIN PROTECTION
-# ============================================================
-
-@app.before_request
-def require_login():
-    """Require authentication for the application routes."""
-
-    allowed_endpoints = {
-        "login",
-        "static",
-    }
-
-    if request.endpoint in allowed_endpoints:
-        return None
-
-    if session.get("authenticated") is True:
-        return None
-
-    # API requests should receive JSON instead of an HTML redirect.
-    if request.path.startswith("/generate") or request.path.startswith("/send-email"):
-        return jsonify({
-            "error": "Login required. Please log in first."
-        }), 401
-
-    return redirect(url_for("login"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if session.get("authenticated") is True:
-        return redirect(url_for("index"))
-
-    error = None
-
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-
-        if not LOGIN_USERNAME or not LOGIN_PASSWORD:
-            error = "Login is not configured. Set the login environment variables."
-        elif (
-            hmac.compare_digest(username, LOGIN_USERNAME)
-            and hmac.compare_digest(password, LOGIN_PASSWORD)
-        ):
-            session.clear()
-            session["authenticated"] = True
-            session["username"] = LOGIN_USERNAME
-            return redirect(url_for("index"))
-        else:
-            error = "Invalid username or password."
-
-    return render_template("login.html", error=error)
-
-
-@app.get("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
 
 
 # ============================================================
@@ -2224,14 +2604,22 @@ def send_email():
         # EMAIL CONFIGURATION
         # ----------------------------------------------------
 
-        if not SENDER_EMAIL or not SENDER_APP_PASSWORD:
+        if (
+            SENDER_EMAIL.startswith(
+                "YOUR_"
+            )
+            or
+            SENDER_APP_PASSWORD.startswith(
+                "YOUR_"
+            )
+        ):
 
             return jsonify({
                 "error": (
-                    "Email is not configured. Set "
-                    "SENDER_EMAIL and "
-                    "PERSEVEX_GMAIL_APP_PASSWORD "
-                    "in the Vercel Environment Variables."
+                    "Email is not configured. "
+                    "Set SENDER_EMAIL and "
+                    "SENDER_APP_PASSWORD "
+                    "at the top of app.py."
                 )
             }), 400
 
