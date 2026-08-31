@@ -1,4 +1,6 @@
 import tempfile
+import os
+import hmac
 from pathlib import Path
 import re
 import smtplib
@@ -11,6 +13,9 @@ from flask import (
     request,
     jsonify,
     send_from_directory,
+    redirect,
+    url_for,
+    session,
 )
 
 import pymupdf
@@ -21,6 +26,22 @@ import pymupdf
 # ============================================================
 
 app = Flask(__name__)
+
+
+# ============================================================
+# LOGIN / SESSION CONFIGURATION
+# ============================================================
+LOGIN_USERNAME = os.getenv("PERSEVEX_LOGIN_USERNAME", "").strip()
+LOGIN_PASSWORD = os.getenv("PERSEVEX_LOGIN_PASSWORD", "").strip()
+SESSION_SECRET = os.getenv("PERSEVEX_SESSION_SECRET", "").strip()
+
+if not SESSION_SECRET:
+    SESSION_SECRET = "local-development-secret-change-me"
+
+app.secret_key = SESSION_SECRET
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = False
 
 
 # ============================================================
@@ -2245,6 +2266,64 @@ def generate_pdf(
         doc.close()
 
     return filename
+
+
+# ============================================================
+# LOGIN PROTECTION
+# ============================================================
+
+@app.before_request
+def require_login():
+    allowed_endpoints = {
+        "login",
+        "static",
+    }
+
+    if request.endpoint in allowed_endpoints:
+        return None
+
+    if session.get("authenticated") is True:
+        return None
+
+    if request.path.startswith("/generate") or request.path.startswith("/send-email"):
+        return jsonify({
+            "error": "Login required. Please log in first."
+        }), 401
+
+    return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("authenticated") is True:
+        return redirect(url_for("index"))
+
+    error = None
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if not LOGIN_USERNAME or not LOGIN_PASSWORD:
+            error = "Login is not configured. Set the login environment variables."
+        elif (
+            hmac.compare_digest(username, LOGIN_USERNAME)
+            and hmac.compare_digest(password, LOGIN_PASSWORD)
+        ):
+            session.clear()
+            session["authenticated"] = True
+            session["username"] = LOGIN_USERNAME
+            return redirect(url_for("index"))
+        else:
+            error = "Invalid username or password."
+
+    return render_template("login.html", error=error)
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # ============================================================
