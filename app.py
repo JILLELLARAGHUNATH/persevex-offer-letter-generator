@@ -1,3 +1,4 @@
+import tempfile
 from pathlib import Path
 import re
 import smtplib
@@ -29,10 +30,13 @@ app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 
 TEMPLATE_DIR = BASE_DIR / "pdf_templates"
-GENERATED_DIR = BASE_DIR / "generated"
-FONT_DIR = BASE_DIR / "static" / "fonts"
+
+# Vercel allows writing only inside the temporary directory.
+GENERATED_DIR = Path(tempfile.gettempdir()) / "persevex_generated"
+FONT_DIR = Path(tempfile.gettempdir()) / "persevex_fonts"
 
 GENERATED_DIR.mkdir(
+    parents=True,
     exist_ok=True
 )
 
@@ -40,7 +44,6 @@ FONT_DIR.mkdir(
     parents=True,
     exist_ok=True
 )
-
 
 # ============================================================
 # EMAIL CONFIGURATION
