@@ -6,6 +6,7 @@ import re
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
+import imaplib
 
 from flask import (
     Flask,
@@ -72,13 +73,13 @@ FONT_DIR.mkdir(
 
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", "").strip()
 
-PERSEVEX_GMAIL_APP_PASSWORD = os.getenv(
-    "PERSEVEX_GMAIL_APP_PASSWORD",
-    ""
-).strip()
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD","").strip()
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_HOST = "smtpout.secureserver.net"
+SMTP_PORT = 465
+
+IMAP_HOST = "imap.secureserver.net"
+IMAP_SENT_FOLDER = "Sent"
 
 
 # ============================================================
@@ -2689,13 +2690,13 @@ def send_email():
         # ----------------------------------------------------
         # EMAIL CONFIGURATION
         # ----------------------------------------------------
-        if not SENDER_EMAIL or not PERSEVEX_GMAIL_APP_PASSWORD:
+        if not SENDER_EMAIL or not SENDER_PASSWORD:
 
             return jsonify({
                 "error": (
                     "Email is not configured. Set "
                     "SENDER_EMAIL and "
-                    "PERSEVEX_GMAIL_APP_PASSWORD "
+                    "SENDER_PASSWORD "
                     "in the Vercel Environment Variables."
                 )
             }), 400
@@ -2715,16 +2716,68 @@ def send_email():
         )
 
         message["Subject"] = (
-            "Internship Acceptance Letter - Persevex"
+            "Internship Acceptance Letter"
         )
 
+        # Plain-text fallback
         message.set_content(
-            f"Dear {student_name},\n\n"
-            "Please find attached your "
-            "Internship Acceptance Letter "
-            "from Persevex.\n\n"
-            "Best regards,\n"
-            "Persevex"
+            f"""Dear {student_name},
+
+        Warm greetings from Persevex LLP!
+
+        We are delighted to inform you that your Internship Acceptance Letter has been attached with this email. Please review the document carefully and feel free to reach out if you need any clarification.
+
+        We are truly excited to welcome you onboard at Persevex and look forward to your active contribution and learning journey with us. Your enthusiasm and dedication will play a key role in shaping meaningful experiences throughout this internship.
+
+        Kindly acknowledge the receipt of this email and confirm your acceptance at your earliest convenience.
+
+        Wishing you a wonderful start with us!
+
+        Warm regards,
+        Team Persevex"""
+        )
+
+        # HTML formatted email
+        message.add_alternative(
+            f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
+
+        <p>Dear {student_name},</p>
+
+        <p>Warm greetings from Persevex LLP!</p>
+
+        <p>
+        We are delighted to inform you that your
+        <strong>Internship Acceptance Letter</strong>
+        has been attached with this email. Please review the document carefully
+        and feel free to reach out if you need any clarification.
+        </p>
+
+        <p>
+        We are truly excited to welcome you onboard at Persevex and look forward
+        to your active contribution and learning journey with us. Your enthusiasm
+        and dedication will play a key role in shaping meaningful experiences
+        throughout this internship.
+        </p>
+
+        <p>
+        Kindly acknowledge the receipt of this email and confirm your acceptance
+        at your earliest convenience.
+        </p>
+
+        <p>Wishing you a wonderful start with us!</p>
+
+        <p>
+        Warm regards,<br>
+        <strong>Team Persevex</strong>
+        </p>
+
+        </body>
+        </html>
+        """,
+            subtype="html"
         )
 
         # ----------------------------------------------------
@@ -2742,21 +2795,47 @@ def send_email():
         # SEND
         # ----------------------------------------------------
 
-        with smtplib.SMTP(
+        with smtplib.SMTP_SSL(
             SMTP_HOST,
             SMTP_PORT,
         ) as smtp:
 
-            smtp.starttls()
-
             smtp.login(
                 SENDER_EMAIL,
-                PERSEVEX_GMAIL_APP_PASSWORD,
+                SENDER_PASSWORD,
             )
 
             smtp.send_message(
                 message
             )
+
+
+# ----------------------------------------------------
+# SAVE COPY TO SENT FOLDER
+# ----------------------------------------------------
+
+        with imaplib.IMAP4_SSL(
+            IMAP_HOST
+        ) as imap:
+
+            imap.login(
+                SENDER_EMAIL,
+                SENDER_PASSWORD,
+            )
+
+            status, response = imap.append(
+                IMAP_SENT_FOLDER,
+                r"\Seen",
+                None,
+                message.as_bytes(),
+            )
+
+            if status != "OK":
+                print(
+                    "WARNING: Email sent successfully, "
+                    "but could not save copy to Sent folder:",
+                    response,
+                )
 
         return jsonify({
             "success": True,
