@@ -2708,7 +2708,7 @@ def send_email():
         message = EmailMessage()
 
         message["From"] = (
-            SENDER_EMAIL
+            f"Persevex <{SENDER_EMAIL}>"
         )
 
         message["To"] = (
