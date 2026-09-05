@@ -5,7 +5,7 @@ body {
     background: #f2f5f8;
     color: #111827;
 }
-.app { max-width: 1250px; margin: 0 auto; padding: 22px; }
+.app { width:100%; max-width: 1600px; margin: 0 auto; padding: 22px; }
 header {
     display: flex;
     align-items: center;
@@ -260,4 +260,72 @@ input[readonly] {
     color: #64748b;
     max-width: 300px;
     line-height: 1.5;
+}
+
+/* ==========================================================
+   HEADER ACTION BUTTONS
+   ========================================================== */
+
+.header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+
+.logout-btn,
+.history-btn {
+    display: inline-block;
+
+    padding: 9px 16px;
+
+    border-radius: 8px;
+
+    color: #ffffff;
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    line-height: 20px;
+
+    cursor: pointer;
+
+    transition: opacity 0.2s ease;
+}
+
+
+.logout-btn {
+    background: #111827;
+}
+
+
+.history-btn {
+    background: #2563eb;
+}
+
+
+.logout-btn:hover,
+.history-btn:hover {
+    opacity: 0.85;
+}
+
+
+/* Mobile responsive */
+
+@media (max-width: 600px) {
+
+    header {
+        flex-wrap: wrap;
+    }
+
+    .header-actions {
+        width: 100%;
+        margin-left: 0;
+        justify-content: flex-end;
+    }
+
 }

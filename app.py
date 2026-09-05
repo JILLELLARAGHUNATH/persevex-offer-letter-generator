@@ -4,10 +4,13 @@ import hmac
 from pathlib import Path
 import re
 import smtplib
-from datetime import datetime
+from datetime import datetime,timezone
 from email.message import EmailMessage
 import imaplib
 
+from dotenv import load_dotenv
+from supabase import create_client, Client
+from flask import Flask, render_template, request, jsonify
 from flask import (
     Flask,
     render_template,
@@ -27,6 +30,18 @@ import pymupdf
 # ============================================================
 
 app = Flask(__name__)
+
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError(
+        "SUPABASE_URL and SUPABASE_KEY must be configured."
+    )
+
+supabase: Client = create_client(SUPABASE_URL,SUPABASE_KEY)
 
 
 # ============================================================
@@ -79,6 +94,7 @@ SMTP_HOST = "smtpout.secureserver.net"
 SMTP_PORT = 465
 
 IMAP_HOST = "imap.secureserver.net"
+IMAP_PORT = 993
 IMAP_SENT_FOLDER = "Sent"
 
 
@@ -2626,6 +2642,82 @@ def generated(
         as_attachment=False,
     )
 
+# ============================================================
+# EMAIL HISTORY HELPERS
+# ============================================================
+
+def get_previous_email_record(email):
+
+    try:
+
+        response = (
+            supabase
+            .table("email_history")
+            .select("*")
+            .eq(
+                "student_email",
+                email
+            )
+            .order(
+                "created_at",
+                desc=True
+            )
+            .limit(1)
+            .execute()
+        )
+
+        if response.data:
+
+            return response.data[0]
+
+        return None
+
+    except Exception as exc:
+
+        print(
+            "DUPLICATE EMAIL CHECK ERROR:",
+            repr(exc)
+        )
+
+        return None
+
+# ============================================================
+# EMAIL HISTORY HELPERS
+# ============================================================
+
+def get_previous_email_record(email):
+
+    try:
+
+        response = (
+            supabase
+            .table("email_history")
+            .select("*")
+            .eq(
+                "student_email",
+                email.lower()
+            )
+            .order(
+                "created_at",
+                desc=True
+            )
+            .limit(1)
+            .execute()
+        )
+
+        if response.data:
+            return response.data[0]
+
+        return None
+
+    except Exception as exc:
+
+        print(
+            "DUPLICATE EMAIL CHECK ERROR:",
+            repr(exc)
+        )
+
+        return None
 
 # ============================================================
 # SEND EMAIL
@@ -2634,149 +2726,220 @@ def generated(
 @app.post("/send-email")
 def send_email():
 
+    data = request.get_json(force=True) or {}
+
+    # --------------------------------------------------------
+    # GET DATA
+    # --------------------------------------------------------
+
+    filename = data.get("filename") or ""
+
+    recipient = (
+        data.get("student_email") or ""
+    ).strip().lower()
+
+    student_name = (
+        data.get("student_name") or "Student"
+    ).strip()
+
+    send_again = (
+        data.get("send_again") is True
+    )
+
+    # --------------------------------------------------------
+    # HELPER FUNCTION
+    # --------------------------------------------------------
+
+    def build_history_data(
+        status,
+        sent_at=None,
+        send_count=0,
+        error_message=None
+    ):
+
+        safe_filename = (
+            Path(filename).name
+            if filename
+            else None
+        )
+
+        offer_letter_id = (
+            data.get("offer_letter_id")
+            or (
+                Path(safe_filename).stem
+                if safe_filename
+                else None
+            )
+        )
+
+        return {
+            "student_name": student_name,
+            "student_email": recipient,
+            "phone_number": data.get("phone_number"),
+            "college_name": data.get("college_name"),
+
+            "internship_domain": (
+                data.get("internship_domain")
+                or data.get("domain")
+            ),
+
+            "internship_duration": (
+                data.get("internship_duration")
+                or data.get("duration")
+            ),
+
+            "start_date": data.get("start_date"),
+            "end_date": data.get("end_date"),
+
+            "offer_letter_type": (
+                data.get("offer_letter_type")
+                or data.get("letter_type")
+            ),
+
+            "email_status": status,
+            "sent_at": sent_at,
+            "offer_letter_id": offer_letter_id,
+            "pdf_filename": safe_filename,
+            "send_count": send_count,
+            "error_message": error_message
+        }
+
+    # --------------------------------------------------------
+    # VALIDATION
+    # --------------------------------------------------------
+
+    if not filename:
+        return jsonify({
+            "success": False,
+            "error": "Generated PDF is required."
+        }), 400
+
+    if not recipient:
+        return jsonify({
+            "success": False,
+            "error": "Student email is required."
+        }), 400
+
+    # --------------------------------------------------------
+    # SAFE FILENAME
+    # --------------------------------------------------------
+
+    filename = Path(filename).name
+
+    pdf_path = GENERATED_DIR / filename
+
+    if not pdf_path.exists():
+        return jsonify({
+            "success": False,
+            "error": "Generated PDF not found. Please generate the letter again."
+        }), 404
+
+    # --------------------------------------------------------
+    # CHECK PREVIOUS EMAIL
+    # --------------------------------------------------------
+
+    previous_record = get_previous_email_record(recipient)
+
+    # --------------------------------------------------------
+    # DUPLICATE CHECK
+    # --------------------------------------------------------
+
+    if previous_record and not send_again:
+        return jsonify({
+            "success": False,
+            "duplicate": True,
+            "message": "An offer letter record already exists for this email address.",
+            "previous_record": previous_record
+        }), 409
+
+    # --------------------------------------------------------
+    # EMAIL CONFIGURATION
+    # --------------------------------------------------------
+
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        return jsonify({
+            "success": False,
+            "error": "Email is not configured."
+        }), 500
+
+    # ========================================================
+    # PREPARE EMAIL
+    # ========================================================
+
     try:
-
-        data = request.get_json(
-            force=True
-        )
-
-        filename = data.get(
-            "filename"
-        )
-
-        recipient = data.get(
-            "student_email"
-        )
-
-        student_name = data.get(
-            "student_name",
-            "Student",
-        )
-
-        if not filename:
-
-            return jsonify({
-                "error": (
-                    "Generated PDF is required."
-                )
-            }), 400
-
-        if not recipient:
-
-            return jsonify({
-                "error": (
-                    "Student email is required."
-                )
-            }), 400
-
-        filename = Path(
-            filename
-        ).name
-
-        pdf_path = (
-            GENERATED_DIR
-            /
-            filename
-        )
-
-        if not pdf_path.exists():
-
-            return jsonify({
-                "error": (
-                    "Generated PDF not found."
-                )
-            }), 404
-
-        # ----------------------------------------------------
-        # EMAIL CONFIGURATION
-        # ----------------------------------------------------
-        if not SENDER_EMAIL or not SENDER_PASSWORD:
-
-            return jsonify({
-                "error": (
-                    "Email is not configured. Set "
-                    "SENDER_EMAIL and "
-                    "SENDER_PASSWORD "
-                    "in the Vercel Environment Variables."
-                )
-            }), 400
-
-        # ----------------------------------------------------
-        # EMAIL
-        # ----------------------------------------------------
 
         message = EmailMessage()
 
-        message["From"] = (
-            f"Persevex <{SENDER_EMAIL}>"
-        )
+        message["From"] = f"Persevex <{SENDER_EMAIL}>"
 
-        message["To"] = (
-            recipient
-        )
+        message["To"] = recipient
 
-        message["Subject"] = (
-            "Internship Acceptance Letter"
-        )
+        message["Subject"] = "Internship Acceptance Letter"
 
-        # Plain-text fallback
+        # ----------------------------------------------------
+        # PLAIN TEXT EMAIL
+        # ----------------------------------------------------
+
         message.set_content(
-            f"""Dear {student_name},
+f"""Dear {student_name},
 
-        Warm greetings from Persevex LLP!
+Warm greetings from Persevex LLP!
 
-        We are delighted to inform you that your Internship Acceptance Letter has been attached with this email. Please review the document carefully and feel free to reach out if you need any clarification.
+We are delighted to inform you that your Internship Acceptance Letter has been attached with this email. Please review the document carefully and feel free to reach out if you need any clarification.
 
-        We are truly excited to welcome you onboard at Persevex and look forward to your active contribution and learning journey with us. Your enthusiasm and dedication will play a key role in shaping meaningful experiences throughout this internship.
+We are truly excited to welcome you onboard at Persevex and look forward to your active contribution and learning journey with us. Your enthusiasm and dedication will play a key role in shaping meaningful experiences throughout this internship.
 
-        Kindly acknowledge the receipt of this email and confirm your acceptance at your earliest convenience.
+Kindly acknowledge the receipt of this email and confirm your acceptance at your earliest convenience.
 
-        Wishing you a wonderful start with us!
+Wishing you a wonderful start with us!
 
-        Warm regards,
-        Team Persevex"""
+Warm regards,
+Team Persevex"""
         )
 
-        # HTML formatted email
+        # ----------------------------------------------------
+        # HTML EMAIL
+        # ----------------------------------------------------
+
         message.add_alternative(
-            f"""
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
+f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
 
-        <p>Dear {student_name},</p>
+<p>Dear {student_name},</p>
 
-        <p>Warm greetings from Persevex LLP!</p>
+<p>Warm greetings from Persevex LLP!</p>
 
-        <p>
-        We are delighted to inform you that your
-        <strong>Internship Acceptance Letter</strong>
-        has been attached with this email. Please review the document carefully
-        and feel free to reach out if you need any clarification.
-        </p>
+<p>
+We are delighted to inform you that your
+<strong>Internship Acceptance Letter</strong>
+has been attached with this email. Please review the document carefully
+and feel free to reach out if you need any clarification.
+</p>
 
-        <p>
-        We are truly excited to welcome you onboard at Persevex and look forward
-        to your active contribution and learning journey with us. Your enthusiasm
-        and dedication will play a key role in shaping meaningful experiences
-        throughout this internship.
-        </p>
+<p>
+We are truly excited to welcome you onboard at Persevex and look forward
+to your active contribution and learning journey with us. Your enthusiasm
+and dedication will play a key role in shaping meaningful experiences
+throughout this internship.
+</p>
 
-        <p>
-        Kindly acknowledge the receipt of this email and confirm your acceptance
-        at your earliest convenience.
-        </p>
+<p>
+Kindly acknowledge the receipt of this email and confirm your acceptance
+at your earliest convenience.
+</p>
 
-        <p>Wishing you a wonderful start with us!</p>
+<p>Wishing you a wonderful start with us!</p>
 
-        <p>
-        Warm regards,<br>
-        <strong>Team Persevex</strong>
-        </p>
+<p>
+Warm regards,<br>
+<strong>Team Persevex</strong>
+</p>
 
-        </body>
-        </html>
-        """,
+</body>
+</html>
+""",
             subtype="html"
         )
 
@@ -2788,77 +2951,770 @@ def send_email():
             pdf_path.read_bytes(),
             maintype="application",
             subtype="pdf",
-            filename=pdf_path.name,
+            filename=filename
         )
 
-        # ----------------------------------------------------
-        # SEND
-        # ----------------------------------------------------
+    except Exception as exc:
+
+        print("EMAIL PREPARATION ERROR:", repr(exc))
+
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "email_status": "failed"
+        }), 500
+
+    # ========================================================
+    # SEND EMAIL USING SMTP
+    # ========================================================
+
+    try:
+
+        print("========================================")
+        print("CONNECTING TO SMTP")
+        print("FROM:", SENDER_EMAIL)
+        print("TO:", recipient)
+        print("========================================")
 
         with smtplib.SMTP_SSL(
             SMTP_HOST,
             SMTP_PORT,
+            timeout=30
         ) as smtp:
 
             smtp.login(
                 SENDER_EMAIL,
-                SENDER_PASSWORD,
+                SENDER_PASSWORD
             )
 
-            smtp.send_message(
-                message
+            smtp.send_message(message)
+
+        print("SMTP EMAIL SENT SUCCESSFULLY")
+
+    except Exception as exc:
+
+        error_message = str(exc)
+
+        print("========================================")
+        print("SMTP EMAIL FAILED")
+        print("Error:", repr(exc))
+        print("========================================")
+
+        # ----------------------------------------------------
+        # SAVE FAILED HISTORY
+        # ----------------------------------------------------
+
+        try:
+
+            if previous_record:
+
+                previous_id = previous_record.get("id")
+
+                previous_send_count = int(
+                    previous_record.get("send_count") or 0
+                )
+
+                failed_history_data = build_history_data(
+                    status="failed",
+                    sent_at=None,
+                    send_count=previous_send_count + 1,
+                    error_message=error_message
+                )
+
+                supabase.table(
+                    "email_history"
+                ).update(
+                    failed_history_data
+                ).eq(
+                    "id",
+                    previous_id
+                ).execute()
+
+            else:
+
+                failed_history_data = build_history_data(
+                    status="failed",
+                    sent_at=None,
+                    send_count=1,
+                    error_message=error_message
+                )
+
+                supabase.table(
+                    "email_history"
+                ).insert(
+                    failed_history_data
+                ).execute()
+
+        except Exception as supabase_error:
+
+            print(
+                "FAILED HISTORY SAVE ERROR:",
+                repr(supabase_error)
             )
 
+        return jsonify({
+            "success": False,
+            "error": error_message,
+            "email_status": "failed"
+        }), 500
 
-# ----------------------------------------------------
-# SAVE COPY TO SENT FOLDER
-# ----------------------------------------------------
+    # ========================================================
+    # EMAIL SENT SUCCESSFULLY
+    # ========================================================
+
+    sent_time = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    # --------------------------------------------------------
+    # SAVE SENT EMAIL TO IMAP SENT FOLDER
+    # --------------------------------------------------------
+
+    try:
 
         with imaplib.IMAP4_SSL(
-            IMAP_HOST
+            IMAP_HOST,
+            993
         ) as imap:
 
             imap.login(
                 SENDER_EMAIL,
-                SENDER_PASSWORD,
+                SENDER_PASSWORD
             )
 
-            status, response = imap.append(
+            result = imap.append(
                 IMAP_SENT_FOLDER,
-                r"\Seen",
+                "\\Seen",
                 None,
-                message.as_bytes(),
+                message.as_bytes()
             )
 
-            if status != "OK":
-                print(
-                    "WARNING: Email sent successfully, "
-                    "but could not save copy to Sent folder:",
-                    response,
-                )
+            print(
+                "EMAIL SAVED TO SENT FOLDER:",
+                result
+            )
+
+    except Exception as imap_error:
+
+        # Email was already sent successfully.
+        # Do not mark the entire request as failed.
+        print(
+            "WARNING: Could not save email to Sent folder:",
+            repr(imap_error)
+        )
+
+    # --------------------------------------------------------
+    # RESEND EMAIL
+    # --------------------------------------------------------
+
+    if previous_record and send_again:
+
+        try:
+
+            previous_id = previous_record.get("id")
+
+            previous_send_count = int(
+                previous_record.get("send_count") or 0
+            )
+
+            update_data = build_history_data(
+                status="sent",
+                sent_at=sent_time,
+                send_count=previous_send_count + 1,
+                error_message=None
+            )
+
+            supabase.table(
+                "email_history"
+            ).update(
+                update_data
+            ).eq(
+                "id",
+                previous_id
+            ).execute()
+
+            print(
+                "EMAIL RESEND HISTORY UPDATED SUCCESSFULLY"
+            )
+
+        except Exception as supabase_error:
+
+            print(
+                "SUPABASE RESEND UPDATE ERROR:",
+                repr(supabase_error)
+            )
 
         return jsonify({
             "success": True,
-            "message": (
-                "Email sent successfully."
-            ),
+            "resent": True,
+            "message": "Email sent again successfully."
         })
+
+    # --------------------------------------------------------
+    # NEW EMAIL - SAVE HISTORY
+    # --------------------------------------------------------
+
+    try:
+
+        sent_history_data = build_history_data(
+            status="sent",
+            sent_at=sent_time,
+            send_count=1,
+            error_message=None
+        )
+
+        supabase.table(
+            "email_history"
+        ).insert(
+            sent_history_data
+        ).execute()
+
+        print(
+            "EMAIL HISTORY SAVED SUCCESSFULLY"
+        )
+
+    except Exception as supabase_error:
+
+        print(
+            "SUPABASE HISTORY SAVE ERROR:",
+            repr(supabase_error)
+        )
+
+    # ========================================================
+    # SUCCESS RESPONSE
+    # ========================================================
+
+    return jsonify({
+        "success": True,
+        "message": "Email sent successfully."
+    })
+# ============================================================
+# EMAIL HISTORY
+# ============================================================
+
+@app.get("/history")
+def history():
+
+    try:
+
+        # ----------------------------------------------------
+        # GET FILTER VALUES
+        # ----------------------------------------------------
+
+        search = (
+
+            request.args.get(
+                "search",
+                ""
+            )
+
+            or
+
+            ""
+
+        ).strip()
+
+
+        date_filter = (
+
+            request.args.get(
+                "date",
+                ""
+            )
+
+            or
+
+            ""
+
+        ).strip()
+
+
+        status_filter = (
+
+            request.args.get(
+                "status",
+                ""
+            )
+
+            or
+
+            ""
+
+        ).strip().lower()
+
+
+        # ----------------------------------------------------
+        # PAGE
+        # ----------------------------------------------------
+
+        try:
+
+            page = int(
+
+                request.args.get(
+
+                    "page",
+
+                    1
+
+                )
+
+            )
+
+        except (
+
+            TypeError,
+
+            ValueError
+
+        ):
+
+            page = 1
+
+
+        if page < 1:
+
+            page = 1
+
+
+        PER_PAGE = 10
+
+
+        # ----------------------------------------------------
+        # GET RECORDS FROM SUPABASE
+        # ----------------------------------------------------
+
+        response = (
+
+            supabase
+
+            .table(
+                "email_history"
+            )
+
+            .select(
+                "*"
+            )
+
+            .order(
+
+                "created_at",
+
+                desc=True
+
+            )
+
+            .execute()
+
+        )
+
+
+        records = (
+
+            response.data
+
+            or
+
+            []
+
+        )
+
+
+        # ----------------------------------------------------
+        # SEARCH BY STUDENT NAME OR EMAIL
+        # ----------------------------------------------------
+
+        if search:
+
+
+            search_lower = (
+
+                search.lower()
+
+            )
+
+
+            records = [
+
+
+                record
+
+                for record in records
+
+
+                if (
+
+                    search_lower
+
+                    in
+
+                    str(
+
+                        record.get(
+                            "student_name"
+                        )
+
+                        or
+
+                        ""
+
+                    ).lower()
+
+                    or
+
+                    search_lower
+
+                    in
+
+                    str(
+
+                        record.get(
+                            "student_email"
+                        )
+
+                        or
+
+                        ""
+
+                    ).lower()
+
+                )
+
+            ]
+
+
+        # ----------------------------------------------------
+        # FILTER BY DATE
+        # ----------------------------------------------------
+
+        if date_filter:
+
+
+            records = [
+
+
+                record
+
+                for record in records
+
+
+                if (
+
+                    str(
+
+                        record.get(
+                            "created_at"
+                        )
+
+                        or
+
+                        ""
+
+                    ).startswith(
+
+                        date_filter
+
+                    )
+
+                    or
+
+                    str(
+
+                        record.get(
+                            "sent_at"
+                        )
+
+                        or
+
+                        ""
+
+                    ).startswith(
+
+                        date_filter
+
+                    )
+
+                )
+
+            ]
+
+
+        # ----------------------------------------------------
+        # FILTER BY STATUS
+        # ----------------------------------------------------
+
+        if status_filter:
+
+
+            records = [
+
+
+                record
+
+                for record in records
+
+
+                if (
+
+                    str(
+
+                        record.get(
+                            "email_status"
+                        )
+
+                        or
+
+                        ""
+
+                    ).lower()
+
+                    ==
+
+                    status_filter
+
+                )
+
+            ]
+
+
+        # ----------------------------------------------------
+        # PAGINATION
+        # ----------------------------------------------------
+
+        total_records = (
+
+            len(
+                records
+            )
+
+        )
+
+
+        total_pages = max(
+
+            1,
+
+            (
+
+                total_records
+
+                +
+
+                PER_PAGE
+
+                -
+
+                1
+
+            )
+
+            //
+
+            PER_PAGE
+
+        )
+
+
+        if page > total_pages:
+
+            page = total_pages
+
+
+        start_index = (
+
+            page
+
+            -
+
+            1
+
+        ) * PER_PAGE
+
+
+        end_index = (
+
+            start_index
+
+            +
+
+            PER_PAGE
+
+        )
+
+
+        history_records = (
+
+            records[
+
+                start_index:end_index
+
+            ]
+
+        )
+
+
+        return render_template(
+
+
+            "history.html",
+
+
+            history_records=
+                history_records,
+
+
+            search=
+                search,
+
+
+            date_filter=
+                date_filter,
+
+
+            status_filter=
+                status_filter,
+
+
+            page=
+                page,
+
+
+            total_pages=
+                total_pages,
+
+
+            total_records=
+                total_records,
+
+
+            error=
+                None
+
+        )
+
 
     except Exception as exc:
 
-        print(
-            "EMAIL ERROR:"
-        )
 
         print(
-            repr(exc)
+
+            "HISTORY ERROR:",
+
+            repr(
+                exc
+            )
+
         )
+
+
+        return render_template(
+
+
+            "history.html",
+
+
+            history_records=
+                [],
+
+
+            search=
+                "",
+
+
+            date_filter=
+                "",
+
+
+            status_filter=
+                "",
+
+
+            page=
+                1,
+
+
+            total_pages=
+                1,
+
+
+            total_records=
+                0,
+
+
+            error=
+
+                str(
+                    exc
+                )
+
+        )
+
+
+# ============================================================
+# DELETE HISTORY RECORD
+# ============================================================
+
+@app.delete("/history/<int:record_id>")
+def delete_history_record(
+
+    record_id
+
+):
+
+    try:
+
+
+        supabase.table(
+
+            "email_history"
+
+        ).delete().eq(
+
+            "id",
+
+            record_id
+
+        ).execute()
+
 
         return jsonify({
-            "error": str(exc)
+
+
+            "success":
+                True,
+
+
+            "message":
+
+                "History record deleted successfully."
+
+        })
+
+
+    except Exception as exc:
+
+
+        print(
+
+            "DELETE HISTORY ERROR:",
+
+            repr(
+                exc
+            )
+
+        )
+
+
+        return jsonify({
+
+
+            "error":
+
+                str(
+                    exc
+                )
+
         }), 500
-
-
 # ============================================================
 # START SERVER
 # ============================================================

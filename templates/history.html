@@ -1,0 +1,1955 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Email History | Persevex</title>
+
+    <link
+        rel="icon"
+        type="image/png"
+        href="/static/persevex-icon.png"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/static/style.css"
+    >
+
+
+    <style>
+
+        /* =====================================================
+           PAGE
+           ===================================================== */
+
+        .history-main {
+            display: block !important;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .history-main .card {
+            width: 100%;
+            padding: 24px;
+        }
+
+
+        /* =====================================================
+           HEADER BUTTONS
+           ===================================================== */
+
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        .history-btn {
+            background: #2563b8;
+            color: white;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .logout-btn {
+            background: #172033;
+            color: white;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+
+        /* =====================================================
+           TITLE
+           ===================================================== */
+
+        .history-title {
+            font-size: 22px;
+            margin: 0 0 20px;
+        }
+
+
+        /* =====================================================
+           FILTERS
+           ===================================================== */
+
+        .history-filters {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr auto auto;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .history-filters input,
+        .history-filters select {
+
+            width: 100%;
+
+            padding: 11px 12px;
+
+            border:
+                1px solid #cbd5e1;
+
+            border-radius: 8px;
+
+            font-size: 14px;
+
+            background: white;
+
+        }
+
+
+        .filter-btn {
+
+            border: none;
+
+            background: #172033;
+
+            color: white;
+
+            padding: 11px 20px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+        }
+
+
+        .clear-btn {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            text-decoration: none;
+
+            background: #e8edf3;
+
+            color: #172033;
+
+            padding: 11px 16px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+
+        }
+
+
+        /* =====================================================
+           TABLE
+           ===================================================== */
+
+        .history-table-wrapper {
+
+            width: 100%;
+
+            overflow-x: auto;
+
+            border:
+                1px solid #d8dee7;
+
+            border-radius: 10px;
+
+        }
+
+
+        .history-table {
+
+            width: 100%;
+
+            min-width: 1200px;
+
+            border-collapse: collapse;
+
+        }
+
+
+        .history-table th {
+
+            background: #f1f5f9;
+
+            color: #334155;
+
+            text-align: left;
+
+            padding: 14px;
+
+            border-bottom:
+                2px solid #d8dee7;
+
+            white-space: nowrap;
+
+            font-size: 13px;
+
+        }
+
+
+        .history-table td {
+
+            padding: 14px;
+
+            border-bottom:
+                1px solid #e2e8f0;
+
+            white-space: nowrap;
+
+            font-size: 14px;
+
+        }
+
+
+        .history-table tbody tr {
+
+            transition:
+                opacity 0.2s ease,
+                background 0.2s ease;
+
+        }
+
+
+        .history-table tr:hover {
+
+            background: #f8fafc;
+
+        }
+
+
+        /* =====================================================
+           STATUS
+           ===================================================== */
+
+        .status-sent {
+
+            display: inline-block;
+
+            background: #dcfce7;
+
+            color: #166534;
+
+            padding: 6px 12px;
+
+            border-radius: 20px;
+
+            font-size: 11px;
+
+            font-weight: 700;
+
+        }
+
+
+        .status-failed {
+
+            display: inline-block;
+
+            background: #fee2e2;
+
+            color: #991b1b;
+
+            padding: 6px 12px;
+
+            border-radius: 20px;
+
+            font-size: 11px;
+
+            font-weight: 700;
+
+        }
+
+
+        /* =====================================================
+           DELETE ICON BUTTON
+           ===================================================== */
+
+        .delete-btn {
+
+            width: 38px;
+
+            height: 38px;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            border: none;
+
+            background: #fee2e2;
+
+            color: #dc2626;
+
+            border-radius: 8px;
+
+            cursor: pointer;
+
+            transition:
+                all 0.2s ease;
+
+        }
+
+
+        .delete-btn:hover {
+
+            background: #dc2626;
+
+            color: white;
+
+            transform:
+                translateY(-1px);
+
+        }
+
+
+        .delete-btn:disabled {
+
+            opacity: 0.5;
+
+            cursor: not-allowed;
+
+            transform: none;
+
+        }
+
+
+        .delete-btn svg {
+
+            width: 18px;
+
+            height: 18px;
+
+        }
+
+
+        /* =====================================================
+           SENT DATE
+           ===================================================== */
+
+        .sent-date {
+
+            display: flex;
+
+            flex-direction: column;
+
+            gap: 3px;
+
+        }
+
+
+        .sent-date-day {
+
+            font-weight: 600;
+
+            color: #334155;
+
+        }
+
+
+        .sent-date-time {
+
+            font-size: 12px;
+
+            color: #64748b;
+
+        }
+
+
+        /* =====================================================
+           PAGINATION
+           ===================================================== */
+
+        .pagination {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            gap: 15px;
+
+            margin-top: 20px;
+
+            flex-wrap: wrap;
+
+        }
+
+
+        .pagination-info {
+
+            font-size: 13px;
+
+            color: #64748b;
+
+        }
+
+
+        .pagination-buttons {
+
+            display: flex;
+
+            gap: 8px;
+
+            flex-wrap: wrap;
+
+        }
+
+
+        .page-btn {
+
+            text-decoration: none;
+
+            padding: 9px 14px;
+
+            border-radius: 7px;
+
+            background: #e8edf3;
+
+            color: #172033;
+
+            font-size: 13px;
+
+            font-weight: 700;
+
+        }
+
+
+        .page-btn.active {
+
+            background: #172033;
+
+            color: white;
+
+        }
+
+
+        .page-btn.disabled {
+
+            opacity: 0.4;
+
+            pointer-events: none;
+
+        }
+
+
+        /* =====================================================
+           EMPTY HISTORY
+           ===================================================== */
+
+        .empty-history {
+
+            text-align: center;
+
+            padding: 80px 20px;
+
+            color: #64748b;
+
+        }
+
+
+        .empty-history h3 {
+
+            color: #334155;
+
+            margin-bottom: 8px;
+
+        }
+
+
+        /* =====================================================
+           ERROR
+           ===================================================== */
+
+        .error-message {
+
+            padding: 14px;
+
+            background: #fee2e2;
+
+            color: #991b1b;
+
+            border-radius: 8px;
+
+            margin-bottom: 18px;
+
+        }
+
+
+        /* =====================================================
+           SUCCESS MESSAGE
+           ===================================================== */
+
+        .history-toast {
+
+            position: fixed;
+
+            top: 25px;
+
+            right: 25px;
+
+            background: #172033;
+
+            color: white;
+
+            padding: 14px 20px;
+
+            border-radius: 10px;
+
+            box-shadow:
+                0 10px 30px
+                rgba(0, 0, 0, 0.2);
+
+            z-index: 10000;
+
+            opacity: 0;
+
+            transform:
+                translateY(-20px);
+
+            pointer-events: none;
+
+            transition:
+                all 0.25s ease;
+
+        }
+
+
+        .history-toast.show {
+
+            opacity: 1;
+
+            transform:
+                translateY(0);
+
+        }
+
+
+        .history-toast.success {
+
+            background: #166534;
+
+        }
+
+
+        .history-toast.error {
+
+            background: #b91c1c;
+
+        }
+
+
+        /* =====================================================
+           DELETE CONFIRMATION MODAL
+           ===================================================== */
+
+        .delete-modal {
+
+            position: fixed;
+
+            inset: 0;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background:
+                rgba(15, 23, 42, 0.55);
+
+            z-index: 9999;
+
+            padding: 20px;
+
+        }
+
+
+        .delete-modal[hidden] {
+
+            display: none;
+
+        }
+
+
+        .delete-modal-box {
+
+            width: 100%;
+
+            max-width: 420px;
+
+            background: white;
+
+            border-radius: 16px;
+
+            padding: 30px;
+
+            text-align: center;
+
+            box-shadow:
+                0 25px 70px
+                rgba(0, 0, 0, 0.25);
+
+        }
+
+
+        .delete-modal-icon {
+
+            width: 58px;
+
+            height: 58px;
+
+            margin:
+                0 auto 18px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: #fee2e2;
+
+            color: #dc2626;
+
+            border-radius: 50%;
+
+        }
+
+
+        .delete-modal-icon svg {
+
+            width: 26px;
+
+            height: 26px;
+
+        }
+
+
+        .delete-modal-box h3 {
+
+            margin: 0 0 10px;
+
+            color: #172033;
+
+            font-size: 21px;
+
+        }
+
+
+        .delete-modal-box p {
+
+            margin: 0;
+
+            color: #64748b;
+
+            line-height: 1.6;
+
+        }
+
+
+        .delete-modal-actions {
+
+            display: flex;
+
+            justify-content: center;
+
+            gap: 12px;
+
+            margin-top: 25px;
+
+        }
+
+
+        .modal-cancel-btn {
+
+            border: none;
+
+            background: #e8edf3;
+
+            color: #172033;
+
+            padding: 11px 20px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+        }
+
+
+        .modal-delete-btn {
+
+            border: none;
+
+            background: #dc2626;
+
+            color: white;
+
+            padding: 11px 20px;
+
+            border-radius: 8px;
+
+            font-weight: 700;
+
+            cursor: pointer;
+
+        }
+
+
+        .modal-delete-btn:disabled {
+
+            opacity: 0.7;
+
+            cursor: not-allowed;
+
+        }
+
+
+        /* =====================================================
+           RESPONSIVE
+           ===================================================== */
+
+        @media (max-width: 1000px) {
+
+            .history-filters {
+
+                grid-template-columns:
+                    1fr 1fr;
+
+            }
+
+        }
+
+
+        @media (max-width: 600px) {
+
+            header {
+
+                flex-wrap: wrap;
+
+            }
+
+
+            .header-actions {
+
+                width: 100%;
+
+            }
+
+
+            .history-filters {
+
+                grid-template-columns:
+                    1fr;
+
+            }
+
+
+            .history-main .card {
+
+                padding: 14px;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <header>
+
+        <div>
+
+            <div class="brand">
+                persevex
+            </div>
+
+            <div class="tagline">
+                LEARN, GROW, SUCCEED
+            </div>
+
+        </div>
+
+
+        <h1>
+            EMAIL HISTORY
+        </h1>
+
+
+        <div class="header-actions">
+
+            <a
+                href="/"
+                class="history-btn"
+            >
+                Back to Generator
+            </a>
+
+
+            <a
+                href="/logout"
+                class="logout-btn"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </header>
+
+
+    <!-- =====================================================
+         MAIN
+         ===================================================== -->
+
+    <main class="history-main">
+
+        <section class="card">
+
+
+            <h2 class="history-title">
+                Sent Offer Letters
+            </h2>
+
+
+            {% if error %}
+
+                <div class="error-message">
+
+                    {{ error }}
+
+                </div>
+
+            {% endif %}
+
+
+            <!-- =================================================
+                 SEARCH + FILTERS
+                 ================================================= -->
+
+            <form
+                method="GET"
+                action="/history"
+                class="history-filters"
+            >
+
+
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search student name or email..."
+                    value="{{ search or '' }}"
+                >
+
+
+                <input
+                    type="date"
+                    name="date"
+                    value="{{ date_filter or '' }}"
+                >
+
+
+                <select name="status">
+
+
+                    <option value="">
+
+                        All Status
+
+                    </option>
+
+
+                    <option
+                        value="sent"
+                        {% if status_filter == "sent" %}
+                            selected
+                        {% endif %}
+                    >
+
+                        Sent
+
+                    </option>
+
+
+                    <option
+                        value="failed"
+                        {% if status_filter == "failed" %}
+                            selected
+                        {% endif %}
+                    >
+
+                        Failed
+
+                    </option>
+
+
+                </select>
+
+
+                <button
+                    type="submit"
+                    class="filter-btn"
+                >
+
+                    Search
+
+                </button>
+
+
+                <a
+                    href="/history"
+                    class="clear-btn"
+                >
+
+                    Clear
+
+                </a>
+
+
+            </form>
+
+
+            <!-- =================================================
+                 TABLE AREA
+                 ================================================= -->
+
+            <div id="historyContent">
+
+
+                {% if history_records %}
+
+
+                    <div
+                        id="tableContainer"
+                        class="history-table-wrapper"
+                    >
+
+
+                        <table class="history-table">
+
+
+                            <thead>
+
+
+                                <tr>
+
+                                    <th>
+                                        Student Name
+                                    </th>
+
+                                    <th>
+                                        Email
+                                    </th>
+
+                                    <th>
+                                        Domain
+                                    </th>
+
+                                    <th>
+                                        Duration
+                                    </th>
+
+                                    <th>
+                                        Letter Type
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Sent Date & Time
+                                    </th>
+
+                                    <th>
+                                        Send Count
+                                    </th>
+
+                                    <th>
+                                        Offer Letter ID
+                                    </th>
+
+                                    <th>
+                                        Action
+                                    </th>
+
+                                </tr>
+
+
+                            </thead>
+
+
+                            <tbody
+                                id="historyTableBody"
+                            >
+
+
+                                {% for record in history_records %}
+
+
+                                    <tr
+                                        id="record-{{ record.id }}"
+                                        data-record-id="{{ record.id }}"
+                                    >
+
+
+                                        <td>
+
+                                            {{ record.student_name or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.student_email or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.internship_domain or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.internship_duration or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.offer_letter_type or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+
+                                            {% if record.email_status == "sent" %}
+
+
+                                                <span
+                                                    class="status-sent"
+                                                >
+
+                                                    SENT
+
+                                                </span>
+
+
+                                            {% else %}
+
+
+                                                <span
+                                                    class="status-failed"
+                                                >
+
+                                                    FAILED
+
+                                                </span>
+
+
+                                            {% endif %}
+
+
+                                        </td>
+
+
+                                        <td>
+
+
+                                            <div
+                                                class="sent-date"
+                                                data-timestamp="{{ record.sent_at or record.created_at or '' }}"
+                                            >
+
+
+                                                <span
+                                                    class="sent-date-day"
+                                                >
+
+                                                    {{ record.sent_at or record.created_at or "-" }}
+
+                                                </span>
+
+
+                                            </div>
+
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.send_count or 0 }}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {{ record.offer_letter_id or "-" }}
+
+                                        </td>
+
+
+                                        <td>
+
+
+                                            <button
+
+                                                type="button"
+
+                                                class="delete-btn"
+
+                                                title="Delete Record"
+
+                                                aria-label="Delete Record"
+
+                                                data-record-id="{{ record.id }}"
+
+                                                onclick="openDeleteModal(this.dataset.recordId)"
+
+                                            >
+
+
+                                                <!-- TRASH ICON -->
+
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                >
+
+                                                    <path
+                                                        d="M3 6h18"
+                                                    />
+
+                                                    <path
+                                                        d="M8 6V4h8v2"
+                                                    />
+
+                                                    <path
+                                                        d="M19 6l-1 14H6L5 6"
+                                                    />
+
+                                                    <path
+                                                        d="M10 11v6"
+                                                    />
+
+                                                    <path
+                                                        d="M14 11v6"
+                                                    />
+
+                                                </svg>
+
+
+                                            </button>
+
+
+                                        </td>
+
+
+                                    </tr>
+
+
+                                {% endfor %}
+
+
+                            </tbody>
+
+
+                        </table>
+
+
+                    </div>
+
+
+                    <!-- =========================================
+                         PAGINATION
+                         ========================================= -->
+
+                    <div
+                        class="pagination"
+                        id="paginationContainer"
+                    >
+
+
+                        <div
+                            class="pagination-info"
+                            id="paginationInfo"
+                        >
+
+
+                            Total Records:
+
+                            <span id="totalRecords">
+
+                                {{ total_records }}
+
+                            </span>
+
+
+                            |
+
+                            Page
+
+                            {{ page }}
+
+                            of
+
+                            {{ total_pages }}
+
+
+                        </div>
+
+
+                        <div class="pagination-buttons">
+
+
+                            {% if page > 1 %}
+
+
+                                <a
+                                    class="page-btn"
+                                    href="/history?page={{ page - 1 }}&search={{ search }}&date={{ date_filter }}&status={{ status_filter }}"
+                                >
+
+                                    Previous
+
+                                </a>
+
+
+                            {% else %}
+
+
+                                <span
+                                    class="page-btn disabled"
+                                >
+
+                                    Previous
+
+                                </span>
+
+
+                            {% endif %}
+
+
+                            {% for page_number in range(1, total_pages + 1) %}
+
+
+                                {% if page_number <= 5 %}
+
+
+                                    <a
+                                        class="page-btn {% if page_number == page %}active{% endif %}"
+                                        href="/history?page={{ page_number }}&search={{ search }}&date={{ date_filter }}&status={{ status_filter }}"
+                                    >
+
+                                        {{ page_number }}
+
+                                    </a>
+
+
+                                {% endif %}
+
+
+                            {% endfor %}
+
+
+                            {% if page < total_pages %}
+
+
+                                <a
+                                    class="page-btn"
+                                    href="/history?page={{ page + 1 }}&search={{ search }}&date={{ date_filter }}&status={{ status_filter }}"
+                                >
+
+                                    Next
+
+                                </a>
+
+
+                            {% else %}
+
+
+                                <span
+                                    class="page-btn disabled"
+                                >
+
+                                    Next
+
+                                </span>
+
+
+                            {% endif %}
+
+
+                        </div>
+
+
+                    </div>
+
+
+                {% else %}
+
+
+                    <div
+                        class="empty-history"
+                        id="emptyHistory"
+                    >
+
+
+                        <h3>
+
+                            No Email History Found
+
+                        </h3>
+
+
+                        <p>
+
+                            No records match your search or filters.
+
+                        </p>
+
+
+                    </div>
+
+
+                {% endif %}
+
+
+            </div>
+
+
+        </section>
+
+
+    </main>
+
+
+</div>
+
+
+<!-- =========================================================
+     DELETE CONFIRMATION MODAL
+     ========================================================= -->
+
+<div
+    id="deleteModal"
+    class="delete-modal"
+    hidden
+>
+
+
+    <div
+        class="delete-modal-box"
+    >
+
+
+        <div
+            class="delete-modal-icon"
+        >
+
+
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+            >
+
+                <path d="M3 6h18"/>
+
+                <path d="M8 6V4h8v2"/>
+
+                <path d="M19 6l-1 14H6L5 6"/>
+
+                <path d="M10 11v6"/>
+
+                <path d="M14 11v6"/>
+
+            </svg>
+
+
+        </div>
+
+
+        <h3>
+
+            Delete History Record?
+
+        </h3>
+
+
+        <p>
+
+            This email history record will be permanently deleted.
+
+        </p>
+
+
+        <div
+            class="delete-modal-actions"
+        >
+
+
+            <button
+                type="button"
+                id="cancelDeleteBtn"
+                class="modal-cancel-btn"
+            >
+
+                Cancel
+
+            </button>
+
+
+            <button
+                type="button"
+                id="confirmDeleteBtn"
+                class="modal-delete-btn"
+            >
+
+                Delete
+
+            </button>
+
+
+        </div>
+
+
+    </div>
+
+
+</div>
+
+
+<!-- =========================================================
+     TOAST
+     ========================================================= -->
+
+<div
+    id="historyToast"
+    class="history-toast"
+>
+</div>
+
+
+<script>
+
+/* ==========================================================
+   VARIABLES
+   ========================================================== */
+
+let selectedRecordId = null;
+
+const deleteModal =
+    document.getElementById("deleteModal");
+
+const confirmDeleteBtn =
+    document.getElementById("confirmDeleteBtn");
+
+const cancelDeleteBtn =
+    document.getElementById("cancelDeleteBtn");
+
+const historyToast =
+    document.getElementById("historyToast");
+
+
+/* ==========================================================
+   SHOW TOAST
+   ========================================================== */
+
+function showToast(text, type = "success") {
+
+    historyToast.textContent = text;
+
+    historyToast.className =
+        "history-toast " + type;
+
+    historyToast.classList.add("show");
+
+
+    setTimeout(function() {
+
+        historyToast.classList.remove("show");
+
+    }, 3000);
+
+}
+
+
+/* ==========================================================
+   FORMAT DATE AND TIME
+   ========================================================== */
+
+function formatHistoryDates() {
+
+    const dateElements =
+        document.querySelectorAll(".sent-date");
+
+
+    dateElements.forEach(function(element) {
+
+        const timestamp =
+            element.dataset.timestamp;
+
+
+        if (!timestamp) {
+
+            return;
+
+        }
+
+
+        try {
+
+            const date =
+                new Date(timestamp);
+
+
+            if (isNaN(date.getTime())) {
+
+                return;
+
+            }
+
+
+            const formattedDate =
+                date.toLocaleDateString(
+                    "en-IN",
+                    {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric"
+                    }
+                );
+
+
+            const formattedTime =
+                date.toLocaleTimeString(
+                    "en-IN",
+                    {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                        hour12: true
+                    }
+                );
+
+
+            element.innerHTML = `
+
+                <span class="sent-date-day">
+                    ${formattedDate}
+                </span>
+
+                <span class="sent-date-time">
+                    ${formattedTime}
+                </span>
+
+            `;
+
+        }
+        catch (error) {
+
+            console.error(
+                "Date formatting error:",
+                error
+            );
+
+        }
+
+    });
+
+}
+
+
+/* ==========================================================
+   OPEN DELETE MODAL
+   ========================================================== */
+
+function openDeleteModal(recordId) {
+
+    selectedRecordId = recordId;
+
+    deleteModal.hidden = false;
+
+}
+
+
+/* ==========================================================
+   CLOSE DELETE MODAL
+   ========================================================== */
+
+function closeDeleteModal() {
+
+    deleteModal.hidden = true;
+
+    selectedRecordId = null;
+
+}
+
+
+/* ==========================================================
+   CANCEL DELETE
+   ========================================================== */
+
+cancelDeleteBtn.addEventListener(
+    "click",
+    function() {
+
+        closeDeleteModal();
+
+    }
+);
+
+
+/* ==========================================================
+   CLOSE MODAL WHEN CLICKING OUTSIDE
+   ========================================================== */
+
+deleteModal.addEventListener(
+    "click",
+    function(event) {
+
+        if (event.target === deleteModal) {
+
+            closeDeleteModal();
+
+        }
+
+    }
+);
+
+
+/* ==========================================================
+   DELETE RECORD
+   ========================================================== */
+
+confirmDeleteBtn.addEventListener(
+    "click",
+    async function() {
+
+        if (!selectedRecordId) {
+
+            return;
+
+        }
+
+
+        const recordId =
+            selectedRecordId;
+
+
+        confirmDeleteBtn.disabled = true;
+
+        confirmDeleteBtn.textContent =
+            "Deleting...";
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `/history/${recordId}`,
+                    {
+                        method: "DELETE",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        }
+                    }
+                );
+
+
+            let result = {};
+
+
+            try {
+
+                result =
+                    await response.json();
+
+            }
+            catch (error) {
+
+                result = {};
+
+            }
+
+
+            if (!response.ok) {
+
+                throw new Error(
+
+                    result.error ||
+
+                    result.message ||
+
+                    "Unable to delete record."
+
+                );
+
+            }
+
+
+            /* ==========================================
+               FIND THE ROW
+               ========================================== */
+
+            const row =
+                document.getElementById(
+                    `record-${recordId}`
+                );
+
+
+            /* ==========================================
+               CLOSE MODAL FIRST
+               ========================================== */
+
+            closeDeleteModal();
+
+
+            /* ==========================================
+               REMOVE ROW IMMEDIATELY
+               ========================================== */
+
+            if (row) {
+
+                row.style.opacity = "0";
+
+                row.style.transform =
+                    "translateX(20px)";
+
+
+                setTimeout(function() {
+
+                    row.remove();
+
+
+                    updateHistoryUI();
+
+                }, 250);
+
+            }
+
+
+            /* ==========================================
+               SUCCESS MESSAGE
+               ========================================== */
+
+            showToast(
+                "History record deleted successfully.",
+                "success"
+            );
+
+
+        }
+        catch (error) {
+
+            console.error(error);
+
+
+            showToast(
+
+                error.message ||
+
+                "Unable to delete record.",
+
+                "error"
+
+            );
+
+        }
+        finally {
+
+            confirmDeleteBtn.disabled = false;
+
+            confirmDeleteBtn.textContent =
+                "Delete";
+
+        }
+
+    }
+);
+
+
+/* ==========================================================
+   UPDATE UI WITHOUT PAGE REFRESH
+   ========================================================== */
+
+function updateHistoryUI() {
+
+    const tableBody =
+        document.getElementById(
+            "historyTableBody"
+        );
+
+
+    if (!tableBody) {
+
+        return;
+
+    }
+
+
+    const remainingRows =
+        tableBody.querySelectorAll("tr");
+
+
+    /* ==========================================
+       UPDATE TOTAL RECORD COUNT
+       ========================================== */
+
+    const totalRecordsElement =
+        document.getElementById(
+            "totalRecords"
+        );
+
+
+    if (totalRecordsElement) {
+
+        let currentTotal =
+            parseInt(
+                totalRecordsElement.textContent
+            );
+
+
+        if (
+            Number.isFinite(currentTotal)
+            &&
+            currentTotal > 0
+        ) {
+
+            currentTotal--;
+
+            totalRecordsElement.textContent =
+                currentTotal;
+
+        }
+
+    }
+
+
+    /* ==========================================
+       IF NO RECORDS REMAIN
+       ========================================== */
+
+    if (remainingRows.length === 0) {
+
+        const historyContent =
+            document.getElementById(
+                "historyContent"
+            );
+
+
+        if (historyContent) {
+
+            historyContent.innerHTML = `
+
+                <div
+                    class="empty-history"
+                    id="emptyHistory"
+                >
+
+                    <h3>
+                        No Email History Found
+                    </h3>
+
+                    <p>
+                        No records match your search or filters.
+                    </p>
+
+                </div>
+
+            `;
+
+        }
+
+    }
+
+}
+
+
+/* ==========================================================
+   ESC KEY CLOSE MODAL
+   ========================================================== */
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (
+            event.key === "Escape"
+            &&
+            !deleteModal.hidden
+        ) {
+
+            closeDeleteModal();
+
+        }
+
+    }
+);
+
+
+/* ==========================================================
+   INITIAL DATE FORMATTING
+   ========================================================== */
+
+formatHistoryDates();
+
+</script>
+
+</body>
+
+</html>

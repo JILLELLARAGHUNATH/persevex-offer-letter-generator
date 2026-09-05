@@ -1,5 +1,4 @@
 <!doctype html>
-
 <html lang="en">
 
 <head>
@@ -11,41 +10,246 @@
         content="width=device-width, initial-scale=1"
     >
 
-    <title>
-        Persevex Offer Letter Generator
-    </title>
-    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <title>Persevex Offer Letter Generator</title>
+
+    <link
+        rel="icon"
+        type="image/png"
+        href="/static/persevex-icon.png"
+    >
+
     <link
         rel="stylesheet"
         href="/static/style.css"
     >
 
-    <style>
-        .logout-btn{
-            position:fixed;
-            top:24px;
-            right:30px;
-            z-index:99999;
-            display:block;
-            padding:9px 16px;
-            border-radius:8px;
-            background:#111;
-            color:#fff;
-            text-decoration:none;
-            font-size:14px;
-            font-weight:600;
-            line-height:20px;
-            cursor:pointer;
-        }
-        .logout-btn:hover{
-            opacity:.9;
-        }
-    </style>
+
+<style>
+
+/* ==========================================================
+   RESEND MODAL OVERLAY
+   ========================================================== */
+
+.resend-modal {
+
+    position: fixed;
+
+    inset: 0;
+
+    width: 100%;
+
+    height: 100%;
+
+    background: rgba(0, 0, 0, 0.55);
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    z-index: 99999;
+
+    padding: 20px;
+
+    box-sizing: border-box;
+
+}
+
+
+.resend-modal[hidden] {
+
+    display: none !important;
+
+}
+
+
+/* ==========================================================
+   MODAL BOX
+   ========================================================== */
+
+.resend-modal-box {
+
+    width: 100%;
+
+    max-width: 520px;
+
+    background: #ffffff;
+
+    border-radius: 16px;
+
+    padding: 32px;
+
+    box-sizing: border-box;
+
+    box-shadow:
+        0 25px 70px
+        rgba(0, 0, 0, 0.30);
+
+    text-align: center;
+
+    animation: modalAppear 0.2s ease-out;
+
+}
+
+
+@keyframes modalAppear {
+
+    from {
+
+        opacity: 0;
+
+        transform: scale(0.95);
+
+    }
+
+    to {
+
+        opacity: 1;
+
+        transform: scale(1);
+
+    }
+
+}
+
+
+.resend-modal-box h3 {
+
+    margin: 0 0 18px;
+
+    font-size: 22px;
+
+    color: #172033;
+
+}
+
+
+.resend-modal-box p {
+
+    color: #475569;
+
+    line-height: 1.6;
+
+    margin: 12px 0;
+
+}
+
+
+/* ==========================================================
+   EMAIL DISPLAY
+   ========================================================== */
+
+.duplicate-email {
+
+    margin: 20px 0;
+
+    padding: 14px 18px;
+
+    background: #f1f5f9;
+
+    border: 1px solid #dbe3ee;
+
+    border-radius: 9px;
+
+    color: #2563b8;
+
+    font-weight: 700;
+
+    word-break: break-word;
+
+}
+
+
+/* ==========================================================
+   MODAL BUTTONS
+   ========================================================== */
+
+.resend-modal-actions {
+
+    display: flex;
+
+    justify-content: center;
+
+    gap: 14px;
+
+    margin-top: 28px;
+
+}
+
+
+.modal-cancel-btn {
+
+    border: none;
+
+    padding: 12px 25px;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+
+    background: #e2e8f0;
+
+    color: #172033;
+
+    font-weight: 700;
+
+    font-size: 14px;
+
+}
+
+
+.modal-cancel-btn:hover {
+
+    background: #cbd5e1;
+
+}
+
+
+.modal-confirm-btn {
+
+    border: none;
+
+    padding: 12px 25px;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+
+    background: #2563b8;
+
+    color: white;
+
+    font-weight: 700;
+
+    font-size: 14px;
+
+}
+
+
+.modal-confirm-btn:hover {
+
+    background: #1d4ed8;
+
+}
+
+
+.modal-confirm-btn:disabled,
+.modal-cancel-btn:disabled {
+
+    opacity: 0.65;
+
+    cursor: not-allowed;
+
+}
+
+</style>
 
 </head>
 
 
 <body>
+
 
 <div class="app">
 
@@ -55,6 +259,7 @@
          ===================================================== -->
 
     <header>
+
 
         <div>
 
@@ -68,11 +273,31 @@
 
         </div>
 
+
         <h1>
             OFFER LETTER GENERATOR
         </h1>
 
-        <a href="/logout" class="logout-btn">Logout</a>
+
+        <div class="header-actions">
+
+            <a
+                href="/history"
+                class="history-btn"
+            >
+                History
+            </a>
+
+
+            <a
+                href="/logout"
+                class="logout-btn"
+            >
+                Logout
+            </a>
+
+        </div>
+
 
     </header>
 
@@ -98,6 +323,7 @@
 
             <div class="type-buttons">
 
+
                 <button
                     type="button"
                     class="type-btn active"
@@ -115,6 +341,7 @@
                     2. Dates
                 </button>
 
+
             </div>
 
 
@@ -131,13 +358,12 @@
                 >
 
 
-                <!-- =================================================
-                     STUDENT NAME
-                     ================================================= -->
+                <!-- STUDENT NAME -->
 
                 <label for="student_name">
                     Student Name
                 </label>
+
 
                 <input
                     id="student_name"
@@ -149,13 +375,12 @@
                 >
 
 
-                <!-- =================================================
-                     STUDENT EMAIL
-                     ================================================= -->
+                <!-- STUDENT EMAIL -->
 
                 <label for="student_email">
                     Student Email
                 </label>
+
 
                 <input
                     id="student_email"
@@ -167,13 +392,12 @@
                 >
 
 
-                <!-- =================================================
-                     DOMAIN
-                     ================================================= -->
+                <!-- DOMAIN -->
 
                 <label for="domain">
                     Domain
                 </label>
+
 
                 <input
                     id="domain"
@@ -185,13 +409,12 @@
                 >
 
 
-                <!-- =================================================
-                     DURATION DROPDOWN
-                     ================================================= -->
+                <!-- DURATION -->
 
                 <label for="duration">
                     Months of Duration
                 </label>
+
 
                 <select
                     id="duration"
@@ -221,9 +444,7 @@
                 </select>
 
 
-                <!-- =================================================
-                     DATES
-                     ================================================= -->
+                <!-- DATES -->
 
                 <div class="two">
 
@@ -233,6 +454,7 @@
                         <label for="start_date">
                             Start Date
                         </label>
+
 
                         <input
                             id="start_date"
@@ -249,6 +471,7 @@
                             End Date
                         </label>
 
+
                         <input
                             id="end_date"
                             type="date"
@@ -261,9 +484,7 @@
                 </div>
 
 
-                <!-- =================================================
-                     STIPEND
-                     ================================================= -->
+                <!-- STIPEND -->
 
                 <label for="stipend">
 
@@ -271,8 +492,8 @@
 
                     <span
                         style="
-                        font-weight:400;
-                        opacity:.65;
+                            font-weight: 400;
+                            opacity: .65;
                         "
                     >
                         (Optional)
@@ -291,13 +512,10 @@
                 >
 
 
-                <!-- =================================================
-                     HOURS
-                     ================================================= -->
+                <!-- HOURS -->
 
-                <div
-                    id="hoursSection"
-                >
+                <div id="hoursSection">
+
 
                     <h3>
                         Hours
@@ -313,6 +531,7 @@
                                 Weeks
                             </label>
 
+
                             <input
                                 id="weeks"
                                 type="text"
@@ -327,6 +546,7 @@
                             <label for="hours_per_week">
                                 Hours / Week
                             </label>
+
 
                             <input
                                 id="hours_per_week"
@@ -345,6 +565,7 @@
                                 Total Hours
                             </label>
 
+
                             <input
                                 id="total_hours"
                                 type="text"
@@ -357,20 +578,18 @@
                     </div>
 
 
-                    <div
-                        class="hours-note"
-                    >
+                    <div class="hours-note">
+
                         Weeks and total hours are calculated
                         automatically.
+
                     </div>
 
 
                 </div>
 
 
-                <!-- =================================================
-                     GENERATE
-                     ================================================= -->
+                <!-- GENERATE -->
 
                 <button
                     class="generate"
@@ -394,15 +613,14 @@
 
 
         <!-- =================================================
-             RIGHT PDF PREVIEW
+             RIGHT PREVIEW
              ================================================= -->
 
-        <section
-            class="card preview-card"
-        >
+        <section class="card preview-card">
 
 
             <div class="preview-head">
+
 
                 <h2>
                     PDF Preview
@@ -418,12 +636,11 @@
                     Edit
                 </button>
 
+
             </div>
 
 
-            <div
-                class="preview-container"
-            >
+            <div class="preview-container">
 
 
                 <div
@@ -431,18 +648,24 @@
                     class="empty-preview"
                 >
 
+
                     <div class="empty-icon">
                         PDF
                     </div>
+
 
                     <div class="empty-title">
                         No letter generated
                     </div>
 
+
                     <div class="empty-text">
+
                         Enter the student details and
                         click Generate Letter.
+
                     </div>
+
 
                 </div>
 
@@ -488,6 +711,77 @@
 
     </main>
 
+
+</div>
+
+
+<!-- =========================================================
+     RESEND CONFIRMATION MODAL
+     ========================================================= -->
+
+<div
+    id="resendModal"
+    class="resend-modal"
+    hidden
+>
+
+
+    <div
+        class="resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resendModalTitle"
+    >
+
+
+        <h3 id="resendModalTitle">
+            Offer Letter Already Sent
+        </h3>
+
+
+        <p>
+            An offer letter has already been sent to:
+        </p>
+
+
+        <div
+            id="duplicateEmail"
+            class="duplicate-email"
+        ></div>
+
+
+        <p>
+            Do you want to send the email again?
+        </p>
+
+
+        <div class="resend-modal-actions">
+
+
+            <button
+                type="button"
+                id="cancelResendBtn"
+                class="modal-cancel-btn"
+            >
+                Cancel
+            </button>
+
+
+            <button
+                type="button"
+                id="confirmResendBtn"
+                class="modal-confirm-btn"
+            >
+                Send Again
+            </button>
+
+
+        </div>
+
+
+    </div>
+
+
 </div>
 
 
@@ -503,79 +797,79 @@
    ========================================================== */
 
 const form =
-    document.getElementById(
-        "letterForm"
-    );
+    document.getElementById("letterForm");
+
 
 const typeButtons =
-    document.querySelectorAll(
-        ".type-btn"
-    );
+    document.querySelectorAll(".type-btn");
+
 
 const letterType =
-    document.getElementById(
-        "letter_type"
-    );
+    document.getElementById("letter_type");
+
 
 const duration =
-    document.getElementById(
-        "duration"
-    );
+    document.getElementById("duration");
+
 
 const hoursSection =
-    document.getElementById(
-        "hoursSection"
-    );
+    document.getElementById("hoursSection");
+
 
 const weeks =
-    document.getElementById(
-        "weeks"
-    );
+    document.getElementById("weeks");
+
 
 const hoursPerWeek =
-    document.getElementById(
-        "hours_per_week"
-    );
+    document.getElementById("hours_per_week");
+
 
 const totalHours =
-    document.getElementById(
-        "total_hours"
-    );
+    document.getElementById("total_hours");
+
 
 const preview =
-    document.getElementById(
-        "pdfPreview"
-    );
+    document.getElementById("pdfPreview");
+
 
 const emptyPreview =
-    document.getElementById(
-        "emptyPreview"
-    );
+    document.getElementById("emptyPreview");
+
 
 const downloadBtn =
-    document.getElementById(
-        "downloadBtn"
-    );
+    document.getElementById("downloadBtn");
+
 
 const sendBtn =
-    document.getElementById(
-        "sendBtn"
-    );
+    document.getElementById("sendBtn");
+
 
 const editBtn =
-    document.getElementById(
-        "editBtn"
-    );
+    document.getElementById("editBtn");
+
 
 const generateBtn =
-    document.getElementById(
-        "generateBtn"
-    );
+    document.getElementById("generateBtn");
+
 
 const message =
-    document.getElementById(
-        "message"
-    );
+    document.getElementById("message");
+
+
+const resendModal =
+    document.getElementById("resendModal");
+
+
+const duplicateEmail =
+    document.getElementById("duplicateEmail");
+
+
+const confirmResendBtn =
+    document.getElementById("confirmResendBtn");
+
+
+const cancelResendBtn =
+    document.getElementById("cancelResendBtn");
 
 
 /* ==========================================================
@@ -588,17 +882,17 @@ let generated = false;
 
 let formChanged = false;
 
+let sendingEmail = false;
+
 
 /* ==========================================================
-   WEEKS
+   GET WEEKS
    ========================================================== */
 
 function getWeeks() {
 
     const months =
-        parseInt(
-            duration.value
-        );
+        parseInt(duration.value);
 
     return months * 4;
 
@@ -612,8 +906,7 @@ function getWeeks() {
 function updateHours() {
 
     if (
-        letterType.value
-        !==
+        letterType.value !==
         "with_hours"
     ) {
 
@@ -631,9 +924,7 @@ function updateHours() {
 
 
     const hours =
-        parseInt(
-            hoursPerWeek.value
-        );
+        parseInt(hoursPerWeek.value);
 
 
     if (
@@ -643,15 +934,12 @@ function updateHours() {
     ) {
 
         totalHours.value =
-            calculatedWeeks
-            *
-            hours;
+            calculatedWeeks * hours;
 
     }
     else {
 
-        totalHours.value =
-            "";
+        totalHours.value = "";
 
     }
 
@@ -659,12 +947,12 @@ function updateHours() {
 
 
 /* ==========================================================
-   DURATION
+   DURATION CHANGE
    ========================================================== */
 
 duration.addEventListener(
     "change",
-    function() {
+    function () {
 
         updateHours();
 
@@ -675,12 +963,12 @@ duration.addEventListener(
 
 
 /* ==========================================================
-   HOURS PER WEEK
+   HOURS CHANGE
    ========================================================== */
 
 hoursPerWeek.addEventListener(
     "input",
-    function() {
+    function () {
 
         updateHours();
 
@@ -696,18 +984,20 @@ hoursPerWeek.addEventListener(
 
 function setType(type) {
 
+
     letterType.value =
         type;
 
 
     typeButtons.forEach(
-        function(button) {
+        function (button) {
 
             button.classList.toggle(
+
                 "active",
-                button.dataset.type
-                ===
-                type
+
+                button.dataset.type === type
+
             );
 
         }
@@ -741,15 +1031,16 @@ function setType(type) {
 
 
 /* ==========================================================
-   TYPE BUTTONS
+   TYPE BUTTON EVENTS
    ========================================================== */
 
 typeButtons.forEach(
-    function(button) {
+    function (button) {
+
 
         button.addEventListener(
             "click",
-            function() {
+            function () {
 
                 setType(
                     button.dataset.type
@@ -757,6 +1048,7 @@ typeButtons.forEach(
 
             }
         );
+
 
     }
 );
@@ -767,6 +1059,7 @@ typeButtons.forEach(
    ========================================================== */
 
 function markFormChanged() {
+
 
     if (!generated) {
 
@@ -786,22 +1079,20 @@ function markFormChanged() {
         true;
 
 
-    /*
-        Remove old PDF from browser memory
-        immediately when editing.
-    */
-
     preview.src =
         "about:blank";
 
+
     preview.hidden =
         true;
+
 
     emptyPreview.hidden =
         false;
 
 
     disableDownload();
+
 
     sendBtn.disabled =
         true;
@@ -814,12 +1105,12 @@ function markFormChanged() {
 
 
 /* ==========================================================
-   FORM INPUT
+   FORM INPUT EVENTS
    ========================================================== */
 
 form.addEventListener(
     "input",
-    function() {
+    function () {
 
         markFormChanged();
 
@@ -829,7 +1120,7 @@ form.addEventListener(
 
 form.addEventListener(
     "change",
-    function() {
+    function () {
 
         markFormChanged();
 
@@ -838,70 +1129,70 @@ form.addEventListener(
 
 
 /* ==========================================================
-   COLLECT DATA
+   COLLECT FORM DATA
    ========================================================== */
 
 function collectFormData() {
 
+
     return {
+
 
         letter_type:
             letterType.value,
 
+
         student_name:
             document
-                .getElementById(
-                    "student_name"
-                )
+                .getElementById("student_name")
                 .value
                 .trim(),
+
 
         student_email:
             document
-                .getElementById(
-                    "student_email"
-                )
+                .getElementById("student_email")
                 .value
                 .trim(),
 
+
         domain:
             document
-                .getElementById(
-                    "domain"
-                )
+                .getElementById("domain")
                 .value
                 .trim(),
+
 
         duration:
             duration.value,
 
+
         start_date:
             document
-                .getElementById(
-                    "start_date"
-                )
+                .getElementById("start_date")
                 .value,
+
 
         end_date:
             document
-                .getElementById(
-                    "end_date"
-                )
+                .getElementById("end_date")
                 .value,
+
 
         stipend:
             document
-                .getElementById(
-                    "stipend"
-                )
+                .getElementById("stipend")
                 .value
                 .trim(),
+
 
         weeks:
             weeks.value,
 
+
         hours_per_week:
             hoursPerWeek.value,
+
 
         total_hours:
             totalHours.value
@@ -917,17 +1208,16 @@ function collectFormData() {
 
 function disableDownload() {
 
-    downloadBtn.removeAttribute(
-        "href"
-    );
 
-    downloadBtn.removeAttribute(
-        "download"
-    );
+    downloadBtn.removeAttribute("href");
+
+    downloadBtn.removeAttribute("download");
+
 
     downloadBtn.classList.add(
         "disabled"
     );
+
 
     downloadBtn.setAttribute(
         "aria-disabled",
@@ -942,15 +1232,19 @@ function enableDownload(
     filename
 ) {
 
+
     downloadBtn.href =
         url;
+
 
     downloadBtn.download =
         filename;
 
+
     downloadBtn.classList.remove(
         "disabled"
     );
+
 
     downloadBtn.setAttribute(
         "aria-disabled",
@@ -966,7 +1260,8 @@ function enableDownload(
 
 form.addEventListener(
     "submit",
-    async function(event) {
+    async function (event) {
+
 
         event.preventDefault();
 
@@ -986,6 +1281,7 @@ form.addEventListener(
         generateBtn.disabled =
             true;
 
+
         generateBtn.textContent =
             "Generating...";
 
@@ -1000,22 +1296,28 @@ form.addEventListener(
 
         try {
 
+
             const response =
                 await fetch(
+
                     "/generate",
+
                     {
+
                         method: "POST",
 
                         headers: {
+
                             "Content-Type":
                                 "application/json"
+
                         },
 
                         body:
-                            JSON.stringify(
-                                data
-                            )
+                            JSON.stringify(data)
+
                     }
+
                 );
 
 
@@ -1026,9 +1328,11 @@ form.addEventListener(
             if (!response.ok) {
 
                 throw new Error(
+
                     result.error
                     ||
                     "Generation failed."
+
                 );
 
             }
@@ -1041,38 +1345,44 @@ form.addEventListener(
             generated =
                 true;
 
+
             formChanged =
                 false;
 
 
-            /*
-                Load PDF only after
-                Generate is clicked.
-            */
-
             emptyPreview.hidden =
                 true;
+
 
             preview.hidden =
                 false;
 
 
             preview.src =
+
                 result.url
+
                 +
+
                 "?t="
+
                 +
+
                 Date.now();
 
 
             enableDownload(
+
                 result.url,
+
                 result.filename
+
             );
 
 
             sendBtn.disabled =
                 false;
+
 
             editBtn.disabled =
                 false;
@@ -1085,56 +1395,67 @@ form.addEventListener(
         }
         catch (error) {
 
-            console.error(
-                error
-            );
+
+            console.error(error);
 
 
             message.textContent =
+
                 error.message
+
                 ||
+
                 "Generation failed.";
 
 
             sendBtn.disabled =
                 true;
 
+
             disableDownload();
+
 
         }
         finally {
 
+
             generateBtn.disabled =
                 false;
+
 
             generateBtn.textContent =
                 "Generate Letter";
 
         }
 
+
     }
 );
 
 
 /* ==========================================================
-   EDIT
+   EDIT BUTTON
    ========================================================== */
 
 editBtn.addEventListener(
     "click",
-    function() {
+    function () {
+
 
         preview.src =
             "about:blank";
 
+
         preview.hidden =
             true;
+
 
         emptyPreview.hidden =
             false;
 
 
         disableDownload();
+
 
         sendBtn.disabled =
             true;
@@ -1149,24 +1470,371 @@ editBtn.addEventListener(
 
 
         document
-            .getElementById(
-                "student_name"
-            )
+            .getElementById("student_name")
             .focus();
+
 
     }
 );
 
 
 /* ==========================================================
-   SEND EMAIL
+   OPEN RESEND MODAL
+   ========================================================== */
+
+function openResendModal(email) {
+
+
+    duplicateEmail.textContent =
+        email;
+
+
+    resendModal.hidden =
+        false;
+
+
+    document.body.style.overflow =
+        "hidden";
+
+
+    confirmResendBtn.focus();
+
+}
+
+
+/* ==========================================================
+   CLOSE RESEND MODAL
+   ========================================================== */
+
+function closeResendModal() {
+
+
+    resendModal.hidden =
+        true;
+
+
+    document.body.style.overflow =
+        "";
+
+
+}
+
+
+/* ==========================================================
+   SEND EMAIL FUNCTION
+   ========================================================== */
+
+async function sendEmail(sendAgain = false) {
+
+
+    if (sendingEmail) {
+
+        return;
+
+    }
+
+
+    sendingEmail =
+        true;
+
+
+    sendBtn.disabled =
+        true;
+
+
+    confirmResendBtn.disabled =
+        true;
+
+
+    cancelResendBtn.disabled =
+        true;
+
+
+    const studentEmail =
+        document
+            .getElementById("student_email")
+            .value
+            .trim();
+
+
+    const studentName =
+        document
+            .getElementById("student_name")
+            .value
+            .trim();
+
+
+    message.textContent =
+
+        sendAgain
+
+            ?
+
+            "Sending email again..."
+
+            :
+
+            "Sending email...";
+
+
+    try {
+
+
+        const response =
+            await fetch(
+
+                "/send-email",
+
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json"
+
+                    },
+
+                    body:
+
+                        JSON.stringify({
+
+                            filename:
+                                currentFilename,
+
+
+                            student_email:
+                                studentEmail,
+
+
+                            student_name:
+                                studentName,
+
+
+                            domain:
+
+                                document
+                                    .getElementById("domain")
+                                    .value
+                                    .trim(),
+
+
+                            duration:
+
+                                document
+                                    .getElementById("duration")
+                                    .value,
+
+
+                            start_date:
+
+                                document
+                                    .getElementById("start_date")
+                                    .value,
+
+
+                            end_date:
+
+                                document
+                                    .getElementById("end_date")
+                                    .value,
+
+
+                            stipend:
+
+                                document
+                                    .getElementById("stipend")
+                                    .value
+                                    .trim(),
+
+
+                            letter_type:
+                                letterType.value,
+
+
+                            weeks:
+                                weeks.value,
+
+
+                            hours_per_week:
+                                hoursPerWeek.value,
+
+
+                            total_hours:
+                                totalHours.value,
+
+
+                            send_again:
+                                sendAgain
+
+                        })
+
+                }
+
+            );
+
+
+        const result =
+            await response.json();
+
+
+        /* ==============================================
+           DUPLICATE EMAIL
+           ============================================== */
+
+        if (
+
+            response.status === 409
+
+            &&
+
+            result.duplicate
+
+        ) {
+
+
+            sendingEmail =
+                false;
+
+
+            sendBtn.disabled =
+                false;
+
+
+            confirmResendBtn.disabled =
+                false;
+
+
+            cancelResendBtn.disabled =
+                false;
+
+
+            openResendModal(
+                studentEmail
+            );
+
+
+            return;
+
+        }
+
+
+        /* ==============================================
+           ERROR
+           ============================================== */
+
+        if (!response.ok) {
+
+
+            throw new Error(
+
+                result.error
+
+                ||
+
+                result.message
+
+                ||
+
+                "Email failed."
+
+            );
+
+        }
+
+
+        /* ==============================================
+           SUCCESS
+           ============================================== */
+
+        closeResendModal();
+
+
+        /*
+           Notify other pages that the
+           email history has changed.
+        */
+
+        localStorage.setItem(
+
+            "persevex_history_updated",
+
+            Date.now().toString()
+
+        );
+
+
+        if (result.resent) {
+
+
+            message.textContent =
+                "Email sent again successfully.";
+
+
+        }
+        else {
+
+
+            message.textContent =
+                "Email sent successfully.";
+
+
+        }
+
+
+    }
+    catch (error) {
+
+
+        console.error(error);
+
+
+        message.textContent =
+
+            error.message
+
+            ||
+
+            "Email failed.";
+
+
+    }
+    finally {
+
+
+        sendingEmail =
+            false;
+
+
+        sendBtn.disabled =
+            false;
+
+
+        confirmResendBtn.disabled =
+            false;
+
+
+        cancelResendBtn.disabled =
+            false;
+
+
+    }
+
+}
+
+
+/* ==========================================================
+   SEND BUTTON
    ========================================================== */
 
 sendBtn.addEventListener(
     "click",
-    async function() {
+    async function () {
+
 
         if (!currentFilename) {
+
 
             message.textContent =
                 "Generate the letter first.";
@@ -1178,23 +1846,13 @@ sendBtn.addEventListener(
 
         const studentEmail =
             document
-                .getElementById(
-                    "student_email"
-                )
-                .value
-                .trim();
-
-
-        const studentName =
-            document
-                .getElementById(
-                    "student_name"
-                )
+                .getElementById("student_email")
                 .value
                 .trim();
 
 
         if (!studentEmail) {
+
 
             message.textContent =
                 "Please enter the student's email.";
@@ -1204,82 +1862,106 @@ sendBtn.addEventListener(
         }
 
 
-        sendBtn.disabled =
-            true;
+        await sendEmail(false);
+
+
+    }
+);
+
+
+/* ==========================================================
+   MODAL SEND AGAIN BUTTON
+   ========================================================== */
+
+confirmResendBtn.addEventListener(
+    "click",
+    async function () {
+
+
+        await sendEmail(true);
+
+
+    }
+);
+
+
+/* ==========================================================
+   MODAL CANCEL BUTTON
+   ========================================================== */
+
+cancelResendBtn.addEventListener(
+    "click",
+    function () {
+
+
+        closeResendModal();
 
 
         message.textContent =
-            "Sending email...";
+            "Email sending cancelled.";
 
 
-        try {
-
-            const response =
-                await fetch(
-                    "/send-email",
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                        body:
-                            JSON.stringify({
-
-                                filename:
-                                    currentFilename,
-
-                                student_email:
-                                    studentEmail,
-
-                                student_name:
-                                    studentName
-
-                            })
-                    }
-                );
+    }
+);
 
 
-            const result =
-                await response.json();
+/* ==========================================================
+   CLOSE MODAL WHEN CLICKING OUTSIDE
+   ========================================================== */
+
+resendModal.addEventListener(
+    "click",
+    function (event) {
 
 
-            if (!response.ok) {
+        if (
 
-                throw new Error(
-                    result.error
-                    ||
-                    "Email failed."
-                );
+            event.target === resendModal
 
-            }
+        ) {
+
+
+            closeResendModal();
 
 
             message.textContent =
-                "Email sent successfully.";
+                "Email sending cancelled.";
 
         }
-        catch (error) {
 
-            console.error(
-                error
-            );
+
+    }
+);
+
+
+/* ==========================================================
+   ESCAPE KEY CLOSE
+   ========================================================== */
+
+document.addEventListener(
+    "keydown",
+    function (event) {
+
+
+        if (
+
+            event.key === "Escape"
+
+            &&
+
+            !resendModal.hidden
+
+        ) {
+
+
+            closeResendModal();
 
 
             message.textContent =
-                error.message
-                ||
-                "Email failed.";
+                "Email sending cancelled.";
 
         }
-        finally {
 
-            sendBtn.disabled =
-                false;
-
-        }
 
     }
 );
@@ -1297,8 +1979,10 @@ setType(
 preview.src =
     "about:blank";
 
+
 preview.hidden =
     true;
+
 
 emptyPreview.hidden =
     false;
@@ -1306,8 +1990,10 @@ emptyPreview.hidden =
 
 disableDownload();
 
+
 sendBtn.disabled =
     true;
+
 
 editBtn.disabled =
     true;
@@ -1316,11 +2002,17 @@ editBtn.disabled =
 generated =
     false;
 
+
 formChanged =
     false;
 
 
+sendingEmail =
+    false;
+
+
 updateHours();
+
 
 </script>
 
