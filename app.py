@@ -3317,7 +3317,7 @@ def history():
             page = 1
 
 
-        PER_PAGE = 10
+        PER_PAGE = 25
 
 
         # ----------------------------------------------------
@@ -3518,7 +3518,7 @@ def history():
 
 
         # ----------------------------------------------------
-        # PAGINATION
+        # GLOBAL FILTERED STATISTICS (BEFORE PAGINATION)
         # ----------------------------------------------------
 
         total_records = (
@@ -3529,6 +3529,58 @@ def history():
 
         )
 
+
+        total_sent = sum(
+
+            1
+
+            for record in records
+
+            if str(
+                record.get(
+                    "email_status"
+                )
+
+                or
+
+                ""
+
+            ).strip().lower()
+
+            ==
+
+            "sent"
+
+        )
+
+
+        total_failed = sum(
+
+            1
+
+            for record in records
+
+            if str(
+                record.get(
+                    "email_status"
+                )
+
+                or
+
+                ""
+
+            ).strip().lower()
+
+            ==
+
+            "failed"
+
+        )
+
+
+        # ----------------------------------------------------
+        # PAGINATION
+        # ----------------------------------------------------
 
         total_pages = max(
 
@@ -3627,6 +3679,14 @@ def history():
                 total_records,
 
 
+            total_sent=
+                total_sent,
+
+
+            total_failed=
+                total_failed,
+
+
             error=
                 None
 
@@ -3678,6 +3738,14 @@ def history():
 
 
             total_records=
+                0,
+
+
+            total_sent=
+                0,
+
+
+            total_failed=
                 0,
 
 

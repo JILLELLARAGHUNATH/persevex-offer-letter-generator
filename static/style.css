@@ -1695,16 +1695,31 @@ button:disabled,
     animation: historyRowFadeIn 0.35s ease forwards;
 }
 
-.history-table tbody tr:nth-child(1) { animation-delay: 0.03s; }
-.history-table tbody tr:nth-child(2) { animation-delay: 0.06s; }
-.history-table tbody tr:nth-child(3) { animation-delay: 0.09s; }
-.history-table tbody tr:nth-child(4) { animation-delay: 0.12s; }
-.history-table tbody tr:nth-child(5) { animation-delay: 0.15s; }
-.history-table tbody tr:nth-child(6) { animation-delay: 0.18s; }
-.history-table tbody tr:nth-child(7) { animation-delay: 0.21s; }
-.history-table tbody tr:nth-child(8) { animation-delay: 0.24s; }
-.history-table tbody tr:nth-child(9) { animation-delay: 0.27s; }
-.history-table tbody tr:nth-child(10) { animation-delay: 0.30s; }
+.history-table tbody tr:nth-child(1) { animation-delay: 0.02s; }
+.history-table tbody tr:nth-child(2) { animation-delay: 0.04s; }
+.history-table tbody tr:nth-child(3) { animation-delay: 0.06s; }
+.history-table tbody tr:nth-child(4) { animation-delay: 0.08s; }
+.history-table tbody tr:nth-child(5) { animation-delay: 0.10s; }
+.history-table tbody tr:nth-child(6) { animation-delay: 0.12s; }
+.history-table tbody tr:nth-child(7) { animation-delay: 0.14s; }
+.history-table tbody tr:nth-child(8) { animation-delay: 0.16s; }
+.history-table tbody tr:nth-child(9) { animation-delay: 0.18s; }
+.history-table tbody tr:nth-child(10) { animation-delay: 0.20s; }
+.history-table tbody tr:nth-child(11) { animation-delay: 0.22s; }
+.history-table tbody tr:nth-child(12) { animation-delay: 0.24s; }
+.history-table tbody tr:nth-child(13) { animation-delay: 0.26s; }
+.history-table tbody tr:nth-child(14) { animation-delay: 0.28s; }
+.history-table tbody tr:nth-child(15) { animation-delay: 0.30s; }
+.history-table tbody tr:nth-child(16) { animation-delay: 0.32s; }
+.history-table tbody tr:nth-child(17) { animation-delay: 0.34s; }
+.history-table tbody tr:nth-child(18) { animation-delay: 0.36s; }
+.history-table tbody tr:nth-child(19) { animation-delay: 0.38s; }
+.history-table tbody tr:nth-child(20) { animation-delay: 0.40s; }
+.history-table tbody tr:nth-child(21) { animation-delay: 0.42s; }
+.history-table tbody tr:nth-child(22) { animation-delay: 0.44s; }
+.history-table tbody tr:nth-child(23) { animation-delay: 0.46s; }
+.history-table tbody tr:nth-child(24) { animation-delay: 0.48s; }
+.history-table tbody tr:nth-child(25) { animation-delay: 0.50s; }
 
 @keyframes historyRowFadeIn {
     from {

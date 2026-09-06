@@ -73,18 +73,6 @@
             <!-- =================================================
                  DASHBOARD SUMMARY METRICS
                  ================================================= -->
-            {% set total_sent = namespace(count=0) %}
-            {% set total_failed = namespace(count=0) %}
-            {% if history_records %}
-                {% for r in history_records %}
-                    {% if r.email_status == 'sent' %}
-                        {% set total_sent.count = total_sent.count + 1 %}
-                    {% else %}
-                        {% set total_failed.count = total_failed.count + 1 %}
-                    {% endif %}
-                {% endfor %}
-            {% endif %}
-
             <div class="history-summary-grid">
                 <div class="summary-stat-card stat-total">
                     <div class="stat-icon-wrapper">
@@ -111,7 +99,7 @@
                     </div>
                     <div class="stat-info">
                         <span class="stat-label">Successfully Sent</span>
-                        <span class="stat-value" id="summarySentRecords">{{ total_sent.count }}</span>
+                        <span class="stat-value" id="summarySentRecords">{{ total_sent or 0 }}</span>
                     </div>
                 </div>
 
@@ -125,7 +113,7 @@
                     </div>
                     <div class="stat-info">
                         <span class="stat-label">Failed Emails</span>
-                        <span class="stat-value" id="summaryFailedRecords">{{ total_failed.count }}</span>
+                        <span class="stat-value" id="summaryFailedRecords">{{ total_failed or 0 }}</span>
                     </div>
                 </div>
 
@@ -375,7 +363,7 @@
                         >
                             Showing
                             <strong>
-                                {{ ((page - 1) * 10) + 1 if total_records > 0 else 0 }}–{{ [page * 10, total_records]|min }}
+                                {{ ((page - 1) * 25) + 1 if total_records > 0 else 0 }}–{{ [page * 25, total_records]|min }}
                             </strong>
                             of
                             <strong id="totalRecords">{{ total_records }}</strong> records
