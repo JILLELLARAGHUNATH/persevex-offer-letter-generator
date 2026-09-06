@@ -2,280 +2,57 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Persevex Offer Letter Generator</title>
-    <link
-        rel="icon"
-        type="image/png"
-        href="/static/persevex-icon.png"
-    >
-    <link
-        rel="stylesheet"
-        href="/static/style.css"
-    >
-<style>
-
-/* ==========================================================
-   RESEND MODAL OVERLAY
-   ========================================================== */
-
-.resend-modal {
-
-    position: fixed;
-
-    inset: 0;
-
-    width: 100%;
-
-    height: 100%;
-
-    background: rgba(0, 0, 0, 0.55);
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    z-index: 99999;
-
-    padding: 20px;
-
-    box-sizing: border-box;
-
-}
-
-
-.resend-modal[hidden] {
-
-    display: none !important;
-
-}
-/* ==========================================================
-   MODAL BOX
-   ========================================================== */
-
-.resend-modal-box {
-
-    width: 100%;
-
-    max-width: 520px;
-
-    background: #ffffff;
-
-    border-radius: 16px;
-
-    padding: 32px;
-
-    box-sizing: border-box;
-
-    box-shadow:
-        0 25px 70px
-        rgba(0, 0, 0, 0.30);
-
-    text-align: center;
-
-    animation: modalAppear 0.2s ease-out;
-
-}
-@keyframes modalAppear {
-
-    from {
-
-        opacity: 0;
-
-        transform: scale(0.95);
-
-    }
-
-    to {
-
-        opacity: 1;
-
-        transform: scale(1);
-
-    }
-
-}
-
-
-.resend-modal-box h3 {
-
-    margin: 0 0 18px;
-
-    font-size: 22px;
-
-    color: #172033;
-
-}
-
-
-.resend-modal-box p {
-
-    color: #475569;
-
-    line-height: 1.6;
-
-    margin: 12px 0;
-
-}
-
-
-/* ==========================================================
-   EMAIL DISPLAY
-   ========================================================== */
-
-.duplicate-email {
-
-    margin: 20px 0;
-
-    padding: 14px 18px;
-
-    background: #f1f5f9;
-
-    border: 1px solid #dbe3ee;
-
-    border-radius: 9px;
-
-    color: #2563b8;
-
-    font-weight: 700;
-
-    word-break: break-word;
-
-}
-
-
-/* ==========================================================
-   MODAL BUTTONS
-   ========================================================== */
-
-.resend-modal-actions {
-
-    display: flex;
-
-    justify-content: center;
-
-    gap: 14px;
-
-    margin-top: 28px;
-
-}
-
-
-.modal-cancel-btn {
-
-    border: none;
-
-    padding: 12px 25px;
-
-    border-radius: 8px;
-
-    cursor: pointer;
-
-    background: #e2e8f0;
-
-    color: #172033;
-
-    font-weight: 700;
-
-    font-size: 14px;
-
-}
-
-
-.modal-cancel-btn:hover {
-
-    background: #cbd5e1;
-
-}
-
-
-.modal-confirm-btn {
-
-    border: none;
-
-    padding: 12px 25px;
-
-    border-radius: 8px;
-
-    cursor: pointer;
-
-    background: #2563b8;
-
-    color: white;
-
-    font-weight: 700;
-
-    font-size: 14px;
-
-}
-
-
-.modal-confirm-btn:hover {
-
-    background: #1d4ed8;
-
-}
-
-
-.modal-confirm-btn:disabled,
-.modal-cancel-btn:disabled {
-
-    opacity: 0.65;
-
-    cursor: not-allowed;
-
-}
-
-</style>
-
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
-
-
 <body>
 
-
 <div class="app">
-
 
     <!-- =====================================================
          HEADER
          ===================================================== -->
-
     <header>
-        <div>
-
-            <div class="brand">
-                persevex LLP
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
             </div>
-
-            <div class="tagline">
-                LEARN, GROW, SUCCEED
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
             </div>
-
         </div>
 
-
         <h1>
-            OFFER LETTER GENERATOR
+            OFFER LETTER <span class="highlight">GENERATOR</span>
         </h1>
 
-
         <div class="header-stats" aria-label="Email delivery summary">
-            <div class="header-stat success-stat">
-                <span class="header-stat-icon">✓</span>
+            <div class="header-stat success-stat" title="Total Successful Email Deliveries">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
                 <span>
                     Success:
                     <strong id="successCount">{{ success_count }}</strong>
                 </span>
             </div>
 
-            <div class="header-stat failed-stat">
-                <span class="header-stat-icon">✕</span>
+            <div class="header-stat failed-stat" title="Total Failed Email Attempts">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
                 <span>
                     Failed:
                     <strong id="failedCount">{{ failed_count }}</strong>
@@ -284,274 +61,212 @@
         </div>
 
         <div class="header-actions">
-
-            <a
-                href="/history"
-                class="history-btn"
-            >
-                History
+            <a href="/history" class="history-btn" title="View Email Dispatch History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
             </a>
 
-
-            <a
-                href="/logout"
-                class="logout-btn"
-            >
-                Logout
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
             </a>
-
         </div>
-
-
     </header>
 
-
     <!-- =====================================================
-         MAIN
+         MAIN WORKSPACE
          ===================================================== -->
-
     <main>
 
-
         <!-- =================================================
-             LEFT FORM
+             LEFT FORM SECTION
              ================================================= -->
-
-        <section class="card">
-
-
-            <h2>
-                Select Letter Type
-            </h2>
-
+        <section class="card form-card-animate">
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    Select Letter Type
+                </h2>
+                <span class="section-tag">Step 1</span>
+            </div>
 
             <div class="type-buttons">
-
-
                 <button
                     type="button"
                     class="type-btn active"
                     data-type="with_hours"
                 >
-                    1. Hours
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>1. Hours</span>
                 </button>
-
 
                 <button
                     type="button"
                     class="type-btn"
                     data-type="without_hours"
                 >
-                    2. Dates
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span>2. Dates</span>
                 </button>
-
-
             </div>
 
-
-            <form
-                id="letterForm"
-                autocomplete="off"
-            >
-
-
+            <form id="letterForm" autocomplete="off">
                 <input
                     type="hidden"
                     id="letter_type"
                     value="with_hours"
                 >
 
-
                 <!-- STUDENT NAME -->
-
-                <label for="student_name">
-                    Student Name
-                </label>
-
-
-                <input
-                    id="student_name"
-                    type="text"
-                    required
-                    placeholder="e.g. Snehil Das"
-                    autocomplete="off"
-                    spellcheck="false"
-                >
-
-
-                <!-- STUDENT EMAIL -->
-
-                <label for="student_email">
-                    Student Email
-                </label>
-
-
-                <input
-                    id="student_email"
-                    type="email"
-                    required
-                    placeholder="student@example.com"
-                    autocomplete="off"
-                    spellcheck="false"
-                >
-
-
-                <!-- DOMAIN -->
-
-                <label for="domain">
-                    Domain
-                </label>
-
-
-                <input
-                    id="domain"
-                    type="text"
-                    required
-                    placeholder="e.g. Data Analytics"
-                    autocomplete="off"
-                    spellcheck="false"
-                >
-
-
-                <!-- DURATION -->
-
-                <label for="duration">
-                    Months of Duration
-                </label>
-
-
-                <select
-                    id="duration"
-                    required
-                >
-
-                    <option value="2 months">
-                        2 months
-                    </option>
-
-                    <option value="3 months">
-                        3 months
-                    </option>
-
-                    <option value="4 months">
-                        4 months
-                    </option>
-
-                    <option value="5 months">
-                        5 months
-                    </option>
-
-                    <option value="6 months">
-                        6 months
-                    </option>
-
-                </select>
-
-
-                <!-- DATES -->
-
-                <div class="two">
-
-
-                    <div>
-
-                        <label for="start_date">
-                            Start Date
-                        </label>
-
-
-                        <input
-                            id="start_date"
-                            type="date"
-                            required
-                        >
-
-                    </div>
-
-
-                    <div>
-
-                        <label for="end_date">
-                            End Date
-                        </label>
-
-
-                        <input
-                            id="end_date"
-                            type="date"
-                            required
-                        >
-
-                    </div>
-
-
+                <div class="form-group">
+                    <label for="student_name">
+                        Student Name
+                    </label>
+                    <input
+                        id="student_name"
+                        type="text"
+                        required
+                        placeholder="e.g. Snehil Das"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
                 </div>
 
-
-                <!-- STIPEND -->
-
-                <label for="stipend">
-
-                    Stipend
-
-                    <span
-                        style="
-                            font-weight: 400;
-                            opacity: .65;
-                        "
+                <!-- STUDENT EMAIL -->
+                <div class="form-group">
+                    <label for="student_email">
+                        Student Email
+                    </label>
+                    <input
+                        id="student_email"
+                        type="email"
+                        required
+                        placeholder="student@example.com"
+                        autocomplete="off"
+                        spellcheck="false"
                     >
-                        (Optional)
-                    </span>
+                </div>
 
-                </label>
+                <!-- DOMAIN -->
+                <div class="form-group">
+                    <label for="domain">
+                        Domain
+                    </label>
+                    <input
+                        id="domain"
+                        type="text"
+                        required
+                        placeholder="e.g. Data Analytics"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
 
+                <!-- DURATION -->
+                <div class="form-group">
+                    <label for="duration">
+                        Months of Duration
+                    </label>
+                    <select id="duration" required>
+                        <option value="2 months">2 months</option>
+                        <option value="3 months">3 months</option>
+                        <option value="4 months">4 months</option>
+                        <option value="5 months">5 months</option>
+                        <option value="6 months">6 months</option>
+                    </select>
+                </div>
 
-                <input
-                    id="stipend"
-                    type="text"
-                    inputmode="numeric"
-                    placeholder="e.g. 18000"
-                    autocomplete="off"
-                    spellcheck="false"
-                >
-
-
-                <!-- HOURS -->
-
-                <div id="hoursSection">
-
-
-                    <h3>
-                        Hours
-                    </h3>
-
-
-                    <div class="three">
-
+                <!-- DATES -->
+                <div class="form-group">
+                    <div class="two">
+                        <div>
+                            <label for="start_date">
+                                Start Date
+                            </label>
+                            <input
+                                id="start_date"
+                                type="date"
+                                required
+                            >
+                        </div>
 
                         <div>
+                            <label for="end_date">
+                                End Date
+                            </label>
+                            <input
+                                id="end_date"
+                                type="date"
+                                required
+                            >
+                        </div>
+                    </div>
+                </div>
 
+                <!-- STIPEND -->
+                <div class="form-group">
+                    <label for="stipend">
+                        Stipend
+                        <span class="label-hint">(Optional)</span>
+                    </label>
+                    <input
+                        id="stipend"
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="e.g. 18000"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <!-- HOURS SECTION -->
+                <div id="hoursSection">
+                    <div class="hours-header">
+                        <h3>
+                            <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            Hours Calculation
+                        </h3>
+                    </div>
+
+                    <div class="three">
+                        <div>
                             <label for="weeks">
                                 Weeks
                             </label>
-
-
                             <input
                                 id="weeks"
                                 type="text"
                                 readonly
                             >
-
                         </div>
 
-
                         <div>
-
                             <label for="hours_per_week">
                                 Hours / Week
                             </label>
-
-
                             <input
                                 id="hours_per_week"
                                 type="number"
@@ -559,77 +274,61 @@
                                 step="1"
                                 placeholder="15"
                             >
-
                         </div>
 
-
                         <div>
-
                             <label for="total_hours">
                                 Total Hours
                             </label>
-
-
                             <input
                                 id="total_hours"
                                 type="text"
                                 readonly
                             >
-
                         </div>
-
-
                     </div>
-
 
                     <div class="hours-note">
-
-                        Weeks and total hours are calculated
-                        automatically.
-
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        Weeks and total hours are calculated automatically based on duration.
                     </div>
-
-
                 </div>
 
-
-                <!-- GENERATE -->
-
+                <!-- GENERATE BUTTON -->
                 <button
                     class="generate"
                     type="submit"
                     id="generateBtn"
                 >
-                    Generate Letter
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Generate Letter</span>
                 </button>
-
-
             </form>
 
-
-            <div
-                id="message"
-                aria-live="polite"
-            ></div>
-
-
+            <div id="message" aria-live="polite"></div>
         </section>
 
-
         <!-- =================================================
-             RIGHT PREVIEW
+             RIGHT PREVIEW SECTION
              ================================================= -->
-
-        <section class="card preview-card">
-
-
+        <section class="card preview-card preview-card-animate">
             <div class="preview-head">
-
-
                 <h2>
-                    PDF Preview
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    PDF Live Preview
                 </h2>
-
 
                 <button
                     id="editBtn"
@@ -637,65 +336,80 @@
                     type="button"
                     disabled
                 >
-                    Edit
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <span>Edit</span>
                 </button>
-
-
             </div>
 
-
             <div class="preview-container">
-
-
-                <div
-                    id="emptyPreview"
-                    class="empty-preview"
-                >
-
-
-                    <div class="empty-icon">
-                        PDF
+                <!-- EMPTY PREVIEW STATE -->
+                <div id="emptyPreview" class="empty-preview">
+                    <div class="empty-preview-graphic">
+                        <div class="empty-preview-circle">
+                            <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <span class="empty-preview-badge">Live Preview</span>
                     </div>
-
 
                     <div class="empty-title">
-                        No letter generated
+                        No letter generated yet
                     </div>
-
 
                     <div class="empty-text">
-
-                        Enter the student details and
-                        click Generate Letter.
-
+                        Fill in the student details on the left and click <strong>Generate Letter</strong> to view the real-time PDF preview here.
                     </div>
-
-
                 </div>
 
+                <!-- GENERATING PREVIEW LOADING STATE -->
+                <div id="generatingPreview" class="generating-preview" hidden>
+                    <div class="generating-icon-wrapper">
+                        <svg class="generating-doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <span class="generating-pulse-ring"></span>
+                    </div>
+                    <div class="generating-title">Generating your offer letter...</div>
+                    <div class="generating-subtitle">Please wait while the PDF is compiled and formatted.</div>
+                    <div class="generating-progress-bar">
+                        <div class="generating-progress-indicator"></div>
+                    </div>
+                </div>
 
+                <!-- PDF IFRAME -->
                 <iframe
                     id="pdfPreview"
                     title="Generated PDF Preview"
                     loading="lazy"
                     hidden
                 ></iframe>
-
-
             </div>
 
-
             <div class="actions">
-
-
                 <a
                     id="downloadBtn"
                     class="primary disabled"
                     aria-disabled="true"
                 >
-                    Download PDF
+                    <svg class="btn-icon-svg download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Download PDF</span>
                 </a>
-
 
                 <button
                     id="sendBtn"
@@ -703,65 +417,59 @@
                     type="button"
                     disabled
                 >
-                    Send to Student 📧
+                    <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span>Send to Student</span>
                 </button>
-
-
             </div>
-
-
         </section>
-
 
     </main>
 
-
 </div>
-
 
 <!-- =========================================================
      RESEND CONFIRMATION MODAL
      ========================================================= -->
-
 <div
     id="resendModal"
     class="resend-modal"
     hidden
 >
-
-
     <div
         class="resend-modal-box"
         role="dialog"
         aria-modal="true"
         aria-labelledby="resendModalTitle"
     >
-
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
 
         <h3 id="resendModalTitle">
             Offer Letter Already Sent
         </h3>
 
-
         <p>
-            An offer letter has already been sent to:
+            An offer letter has already been delivered to:
         </p>
-
 
         <div
             id="duplicateEmail"
             class="duplicate-email"
         ></div>
 
-
         <p>
-            Do you want to send the email again?
+            Do you want to send this offer letter email again?
         </p>
 
-
         <div class="resend-modal-actions">
-
-
             <button
                 type="button"
                 id="cancelResendBtn"
@@ -770,7 +478,6 @@
                 Cancel
             </button>
 
-
             <button
                 type="button"
                 id="confirmResendBtn"
@@ -778,1336 +485,635 @@
             >
                 Send Again
             </button>
-
-
         </div>
-
-
     </div>
-
-
 </div>
-
 
 <!-- =========================================================
      JAVASCRIPT
      ========================================================= -->
-
 <script>
-
 
 /* ==========================================================
    ELEMENTS
    ========================================================== */
-
-const form =
-    document.getElementById("letterForm");
-
-
-const typeButtons =
-    document.querySelectorAll(".type-btn");
-
-
-const letterType =
-    document.getElementById("letter_type");
-
-
-const duration =
-    document.getElementById("duration");
-
-
-const hoursSection =
-    document.getElementById("hoursSection");
-
-
-const weeks =
-    document.getElementById("weeks");
-
-
-const hoursPerWeek =
-    document.getElementById("hours_per_week");
-
-
-const totalHours =
-    document.getElementById("total_hours");
-
-
-const preview =
-    document.getElementById("pdfPreview");
-
-
-const emptyPreview =
-    document.getElementById("emptyPreview");
-
-
-const downloadBtn =
-    document.getElementById("downloadBtn");
-
-
-const sendBtn =
-    document.getElementById("sendBtn");
-
-
-const editBtn =
-    document.getElementById("editBtn");
-
-
-const generateBtn =
-    document.getElementById("generateBtn");
-
-
-const message =
-    document.getElementById("message");
-
-
-const resendModal =
-    document.getElementById("resendModal");
-
-
-const duplicateEmail =
-    document.getElementById("duplicateEmail");
-
-
-const confirmResendBtn =
-    document.getElementById("confirmResendBtn");
-
-
-const cancelResendBtn =
-    document.getElementById("cancelResendBtn");
-
+const form = document.getElementById("letterForm");
+const typeButtons = document.querySelectorAll(".type-btn");
+const letterType = document.getElementById("letter_type");
+const duration = document.getElementById("duration");
+const hoursSection = document.getElementById("hoursSection");
+const weeks = document.getElementById("weeks");
+const hoursPerWeek = document.getElementById("hours_per_week");
+const totalHours = document.getElementById("total_hours");
+const preview = document.getElementById("pdfPreview");
+const emptyPreview = document.getElementById("emptyPreview");
+const generatingPreview = document.getElementById("generatingPreview");
+const downloadBtn = document.getElementById("downloadBtn");
+const sendBtn = document.getElementById("sendBtn");
+const editBtn = document.getElementById("editBtn");
+const generateBtn = document.getElementById("generateBtn");
+const message = document.getElementById("message");
+const resendModal = document.getElementById("resendModal");
+const duplicateEmail = document.getElementById("duplicateEmail");
+const confirmResendBtn = document.getElementById("confirmResendBtn");
+const cancelResendBtn = document.getElementById("cancelResendBtn");
 
 /* ==========================================================
    STATE
    ========================================================== */
-
 let currentFilename = "";
-
 let generated = false;
-
 let formChanged = false;
-
 let sendingEmail = false;
-
 
 /* ==========================================================
    GET WEEKS
    ========================================================== */
-
 function getWeeks() {
-
-    const months =
-        parseInt(duration.value);
-
+    const months = parseInt(duration.value);
     return months * 4;
-
 }
-
 
 /* ==========================================================
    UPDATE HOURS
    ========================================================== */
-
 function updateHours() {
-
-    if (
-        letterType.value !==
-        "with_hours"
-    ) {
-
+    if (letterType.value !== "with_hours") {
         return;
-
     }
 
+    const calculatedWeeks = getWeeks();
+    weeks.value = calculatedWeeks;
 
-    const calculatedWeeks =
-        getWeeks();
-
-
-    weeks.value =
-        calculatedWeeks;
-
-
-    const hours =
-        parseInt(hoursPerWeek.value);
-
-
-    if (
-        Number.isFinite(hours)
-        &&
-        hours > 0
-    ) {
-
-        totalHours.value =
-            calculatedWeeks * hours;
-
-    }
-    else {
-
+    const hours = parseInt(hoursPerWeek.value);
+    if (Number.isFinite(hours) && hours > 0) {
+        totalHours.value = calculatedWeeks * hours;
+    } else {
         totalHours.value = "";
-
     }
-
 }
-
 
 /* ==========================================================
    DURATION CHANGE
    ========================================================== */
-
-duration.addEventListener(
-    "change",
-    function () {
-
-        updateHours();
-
-        markFormChanged();
-
-    }
-);
-
+duration.addEventListener("change", function () {
+    updateHours();
+    markFormChanged();
+});
 
 /* ==========================================================
    HOURS CHANGE
    ========================================================== */
-
-hoursPerWeek.addEventListener(
-    "input",
-    function () {
-
-        updateHours();
-
-        markFormChanged();
-
-    }
-);
-
+hoursPerWeek.addEventListener("input", function () {
+    updateHours();
+    markFormChanged();
+});
 
 /* ==========================================================
    LETTER TYPE
    ========================================================== */
-
 function setType(type) {
+    letterType.value = type;
 
+    typeButtons.forEach(function (button) {
+        button.classList.toggle("active", button.dataset.type === type);
+    });
 
-    letterType.value =
-        type;
-
-
-    typeButtons.forEach(
-        function (button) {
-
-            button.classList.toggle(
-
-                "active",
-
-                button.dataset.type === type
-
-            );
-
-        }
-    );
-
-
-    const withHours =
-        type === "with_hours";
-
-
-    hoursSection.style.display =
-        withHours
-            ? "block"
-            : "none";
-
-
-    hoursPerWeek.required =
-        withHours;
-
+    const withHours = type === "with_hours";
+    hoursSection.style.display = withHours ? "block" : "none";
+    hoursPerWeek.required = withHours;
 
     if (withHours) {
-
         updateHours();
-
     }
 
-
     markFormChanged();
-
 }
-
 
 /* ==========================================================
    TYPE BUTTON EVENTS
    ========================================================== */
-
-typeButtons.forEach(
-    function (button) {
-
-
-        button.addEventListener(
-            "click",
-            function () {
-
-                setType(
-                    button.dataset.type
-                );
-
-            }
-        );
-
-
-    }
-);
-
+typeButtons.forEach(function (button) {
+    button.addEventListener("click", function () {
+        setType(button.dataset.type);
+    });
+});
 
 /* ==========================================================
    FORM CHANGED
    ========================================================== */
-
 function markFormChanged() {
-
-
     if (!generated) {
-
         return;
-
     }
-
 
     if (formChanged) {
-
         return;
-
     }
 
-
-    formChanged =
-        true;
-
-
-    preview.src =
-        "about:blank";
-
-
-    preview.hidden =
-        true;
-
-
-    emptyPreview.hidden =
-        false;
-
+    formChanged = true;
+    preview.src = "about:blank";
+    preview.hidden = true;
+    preview.classList.remove("preview-appear");
+    if (generatingPreview) {
+        generatingPreview.hidden = true;
+    }
+    emptyPreview.hidden = false;
 
     disableDownload();
-
-
-    sendBtn.disabled =
-        true;
-
-
-    message.textContent =
-        "Details changed. Generate the letter again.";
-
+    sendBtn.disabled = true;
+    message.textContent = "Details changed. Generate the letter again.";
 }
-
 
 /* ==========================================================
    FORM INPUT EVENTS
    ========================================================== */
+form.addEventListener("input", function () {
+    markFormChanged();
+});
 
-form.addEventListener(
-    "input",
-    function () {
-
-        markFormChanged();
-
-    }
-);
-
-
-form.addEventListener(
-    "change",
-    function () {
-
-        markFormChanged();
-
-    }
-);
-
+form.addEventListener("change", function () {
+    markFormChanged();
+});
 
 /* ==========================================================
    COLLECT FORM DATA
    ========================================================== */
-
 function collectFormData() {
-
-
     return {
-
-
-        letter_type:
-            letterType.value,
-
-
-        student_name:
-            document
-                .getElementById("student_name")
-                .value
-                .trim(),
-
-
-        student_email:
-            document
-                .getElementById("student_email")
-                .value
-                .trim(),
-
-
-        domain:
-            document
-                .getElementById("domain")
-                .value
-                .trim(),
-
-
-        duration:
-            duration.value,
-
-
-        start_date:
-            document
-                .getElementById("start_date")
-                .value,
-
-
-        end_date:
-            document
-                .getElementById("end_date")
-                .value,
-
-
-        stipend:
-            document
-                .getElementById("stipend")
-                .value
-                .trim(),
-
-
-        weeks:
-            weeks.value,
-
-
-        hours_per_week:
-            hoursPerWeek.value,
-
-
-        total_hours:
-            totalHours.value
-
+        letter_type: letterType.value,
+        student_name: document.getElementById("student_name").value.trim(),
+        student_email: document.getElementById("student_email").value.trim(),
+        domain: document.getElementById("domain").value.trim(),
+        duration: duration.value,
+        start_date: document.getElementById("start_date").value,
+        end_date: document.getElementById("end_date").value,
+        stipend: document.getElementById("stipend").value.trim(),
+        weeks: weeks.value,
+        hours_per_week: hoursPerWeek.value,
+        total_hours: totalHours.value
     };
-
 }
-
 
 /* ==========================================================
    DOWNLOAD
    ========================================================== */
-
 function disableDownload() {
-
-
     downloadBtn.removeAttribute("href");
-
     downloadBtn.removeAttribute("download");
-
-
-    downloadBtn.classList.add(
-        "disabled"
-    );
-
-
-    downloadBtn.setAttribute(
-        "aria-disabled",
-        "true"
-    );
-
+    downloadBtn.classList.add("disabled");
+    downloadBtn.setAttribute("aria-disabled", "true");
 }
 
-
-function enableDownload(
-    url,
-    filename
-) {
-
-
-    downloadBtn.href =
-        url;
-
-
-    downloadBtn.download =
-        filename;
-
-
-    downloadBtn.classList.remove(
-        "disabled"
-    );
-
-
-    downloadBtn.setAttribute(
-        "aria-disabled",
-        "false"
-    );
-
+function enableDownload(url, filename) {
+    downloadBtn.href = url;
+    downloadBtn.download = filename;
+    downloadBtn.classList.remove("disabled");
+    downloadBtn.setAttribute("aria-disabled", "false");
 }
 
+/* Download button click animation (does not interfere with native download) */
+downloadBtn.addEventListener("click", function () {
+    if (downloadBtn.classList.contains("disabled")) {
+        return;
+    }
+
+    downloadBtn.classList.add("downloading");
+    downloadBtn.innerHTML = `
+        <span class="btn-spinner"></span>
+        <span>Downloading...</span>
+    `;
+
+    setTimeout(function () {
+        downloadBtn.classList.remove("downloading");
+        downloadBtn.classList.add("is-success");
+        downloadBtn.innerHTML = `
+            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Downloaded!</span>
+        `;
+
+        setTimeout(function () {
+            downloadBtn.classList.remove("is-success");
+            downloadBtn.innerHTML = `
+                <svg class="btn-icon-svg download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download PDF</span>
+            `;
+        }, 1500);
+    }, 1100);
+});
 
 /* ==========================================================
    GENERATE LETTER
    ========================================================== */
-
-form.addEventListener(
-    "submit",
-    async function (event) {
-
-
-        event.preventDefault();
-
-
-        if (!form.checkValidity()) {
-
-            form.reportValidity();
-
-            return;
-
-        }
-
-
-        updateHours();
-
-
-        generateBtn.disabled =
-            true;
-
-
-        generateBtn.textContent =
-            "Generating...";
-
-
-        message.textContent =
-            "Generating letter...";
-
-
-        const data =
-            collectFormData();
-
-
-        try {
-
-
-            const response =
-                await fetch(
-
-                    "/generate",
-
-                    {
-
-                        method: "POST",
-
-                        headers: {
-
-                            "Content-Type":
-                                "application/json"
-
-                        },
-
-                        body:
-                            JSON.stringify(data)
-
-                    }
-
-                );
-
-
-            const result =
-                await response.json();
-
-
-            if (!response.ok) {
-
-                throw new Error(
-
-                    result.error
-                    ||
-                    "Generation failed."
-
-                );
-
-            }
-
-
-            currentFilename =
-                result.filename;
-
-
-            generated =
-                true;
-
-
-            formChanged =
-                false;
-
-
-            emptyPreview.hidden =
-                true;
-
-
-            preview.hidden =
-                false;
-
-
-            preview.src =
-
-                result.url
-
-                +
-
-                "?t="
-
-                +
-
-                Date.now();
-
-
-            enableDownload(
-
-                result.url,
-
-                result.filename
-
-            );
-
-
-            sendBtn.disabled =
-                false;
-
-
-            editBtn.disabled =
-                false;
-
-
-            message.textContent =
-                "Letter generated successfully.";
-
-
-        }
-        catch (error) {
-
-
-            console.error(error);
-
-
-            message.textContent =
-
-                error.message
-
-                ||
-
-                "Generation failed.";
-
-
-            sendBtn.disabled =
-                true;
-
-
-            disableDownload();
-
-
-        }
-        finally {
-
-
-            generateBtn.disabled =
-                false;
-
-
-            generateBtn.textContent =
-                "Generate Letter";
-
-        }
-
-
+form.addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
     }
-);
 
+    updateHours();
+
+    generateBtn.disabled = true;
+    generateBtn.classList.add("is-generating");
+    generateBtn.innerHTML = `
+        <span class="btn-spinner"></span>
+        <span>Generating...</span>
+    `;
+
+    /* Show loading animation in preview panel */
+    emptyPreview.hidden = true;
+    preview.hidden = true;
+    preview.classList.remove("preview-appear");
+    if (generatingPreview) {
+        generatingPreview.hidden = false;
+    }
+
+    message.textContent = "Generating letter...";
+
+    const data = collectFormData();
+
+    try {
+        const response = await fetch("/generate", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Generation failed.");
+        }
+
+        currentFilename = result.filename;
+        generated = true;
+        formChanged = false;
+
+        if (generatingPreview) {
+            generatingPreview.hidden = true;
+        }
+
+        preview.hidden = false;
+        preview.src = result.url + "?t=" + Date.now();
+        preview.classList.add("preview-appear");
+
+        enableDownload(result.url, result.filename);
+
+        sendBtn.disabled = false;
+        editBtn.disabled = false;
+
+        /* Add activation pulse animation to action buttons */
+        downloadBtn.classList.add("btn-activate-pulse");
+        sendBtn.classList.add("btn-activate-pulse");
+        setTimeout(function () {
+            downloadBtn.classList.remove("btn-activate-pulse");
+            sendBtn.classList.remove("btn-activate-pulse");
+        }, 600);
+
+        message.textContent = "Letter generated successfully.";
+    }
+    catch (error) {
+        console.error(error);
+        if (generatingPreview) {
+            generatingPreview.hidden = true;
+        }
+        emptyPreview.hidden = false;
+        message.textContent = error.message || "Generation failed.";
+        sendBtn.disabled = true;
+        disableDownload();
+    }
+    finally {
+        generateBtn.disabled = false;
+        generateBtn.classList.remove("is-generating");
+        generateBtn.innerHTML = `
+            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <span>Generate Letter</span>
+        `;
+    }
+});
 
 /* ==========================================================
    EDIT BUTTON
    ========================================================== */
-
-editBtn.addEventListener(
-    "click",
-    function () {
-
-
-        preview.src =
-            "about:blank";
-
-
-        preview.hidden =
-            true;
-
-
-        emptyPreview.hidden =
-            false;
-
-
-        disableDownload();
-
-
-        sendBtn.disabled =
-            true;
-
-
-        formChanged =
-            true;
-
-
-        message.textContent =
-            "Edit the details and generate again.";
-
-
-        document
-            .getElementById("student_name")
-            .focus();
-
-
+editBtn.addEventListener("click", function () {
+    preview.src = "about:blank";
+    preview.hidden = true;
+    preview.classList.remove("preview-appear");
+    if (generatingPreview) {
+        generatingPreview.hidden = true;
     }
-);
+    emptyPreview.hidden = false;
 
+    disableDownload();
+    sendBtn.disabled = true;
+    formChanged = true;
+
+    message.textContent = "Edit the details and generate again.";
+    document.getElementById("student_name").focus();
+});
 
 /* ==========================================================
    OPEN RESEND MODAL
    ========================================================== */
-
 function openResendModal(email) {
-
-
-    duplicateEmail.textContent =
-        email;
-
-
-    resendModal.hidden =
-        false;
-
-
-    document.body.style.overflow =
-        "hidden";
-
-
+    duplicateEmail.textContent = email;
+    resendModal.classList.remove("modal-closing");
+    resendModal.hidden = false;
+    document.body.style.overflow = "hidden";
     confirmResendBtn.focus();
-
 }
 
-
 /* ==========================================================
-   CLOSE RESEND MODAL
+   CLOSE RESEND MODAL (WITH SMOOTH FADE OUT)
    ========================================================== */
-
 function closeResendModal() {
-
-
-    resendModal.hidden =
-        true;
-
-
-    document.body.style.overflow =
-        "";
-
-
+    resendModal.classList.add("modal-closing");
+    setTimeout(function () {
+        resendModal.hidden = true;
+        resendModal.classList.remove("modal-closing");
+        document.body.style.overflow = "";
+    }, 200);
 }
+
 /* ==========================================================
-   UPDATE EMAIL STATUS COUNTS LIVE
+   UPDATE EMAIL STATUS COUNTS LIVE (WITH SMOOTH NUMBER PULSE)
    ========================================================== */
+function animateCounter(element, newValue) {
+    if (!element) return;
+    const currentVal = element.textContent.trim();
+    const formattedNewVal = String(newValue ?? 0);
+    
+    if (currentVal !== formattedNewVal) {
+        element.textContent = formattedNewVal;
+        element.classList.remove("count-pulse");
+        void element.offsetWidth; // trigger reflow
+        element.classList.add("count-pulse");
+        setTimeout(function () {
+            element.classList.remove("count-pulse");
+        }, 600);
+    }
+}
 
 async function updateEmailStatusCounts() {
-
     try {
-
-        const response =
-            await fetch(
-                "/api/email-status-counts",
-                {
-                    cache: "no-store"
-                }
-            );
-
+        const response = await fetch("/api/email-status-counts", {
+            cache: "no-store"
+        });
 
         if (!response.ok) {
-
-            throw new Error(
-                "Unable to update email counts."
-            );
-
+            throw new Error("Unable to update email counts.");
         }
 
-
-        const result =
-            await response.json();
-
-
-        const successCount =
-            document.getElementById(
-                "successCount"
-            );
-
-
-        const failedCount =
-            document.getElementById(
-                "failedCount"
-            );
-
+        const result = await response.json();
+        const successCount = document.getElementById("successCount");
+        const failedCount = document.getElementById("failedCount");
 
         if (successCount) {
-
-            successCount.textContent =
-                result.success_count ?? 0;
-
+            animateCounter(successCount, result.success_count);
         }
-
 
         if (failedCount) {
-
-            failedCount.textContent =
-                result.failed_count ?? 0;
-
+            animateCounter(failedCount, result.failed_count);
         }
-
     }
     catch (error) {
-
-        console.error(
-            "EMAIL COUNT UPDATE ERROR:",
-            error
-        );
-
+        console.error("EMAIL COUNT UPDATE ERROR:", error);
     }
-
 }
 
 /* ==========================================================
-   SEND EMAIL FUNCTION
+   SEND EMAIL FUNCTION (WITH NOTICEABLE ANIMATIONS)
    ========================================================== */
-
 async function sendEmail(sendAgain = false) {
-
-
     if (sendingEmail) {
-
         return;
-
     }
 
+    sendingEmail = true;
+    sendBtn.disabled = true;
+    sendBtn.classList.remove("is-success", "is-error");
+    sendBtn.classList.add("is-sending");
+    sendBtn.innerHTML = `
+        <svg class="btn-icon-svg plane-animated" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+        <span>Sending...</span>
+    `;
 
-    sendingEmail =
-        true;
+    confirmResendBtn.disabled = true;
+    cancelResendBtn.disabled = true;
 
+    const studentEmail = document.getElementById("student_email").value.trim();
+    const studentName = document.getElementById("student_name").value.trim();
 
-    sendBtn.disabled =
-        true;
-
-
-    confirmResendBtn.disabled =
-        true;
-
-
-    cancelResendBtn.disabled =
-        true;
-
-
-    const studentEmail =
-        document
-            .getElementById("student_email")
-            .value
-            .trim();
-
-
-    const studentName =
-        document
-            .getElementById("student_name")
-            .value
-            .trim();
-
-
-    message.textContent =
-
-        sendAgain
-
-            ?
-
-            "Sending email again..."
-
-            :
-
-            "Sending email...";
-
+    message.textContent = sendAgain ? "Sending email again..." : "Sending email...";
 
     try {
-
-
-        const response =
-            await fetch(
-
-                "/send-email",
-
-                {
-
-                    method: "POST",
-
-                    headers: {
-
-                        "Content-Type":
-                            "application/json"
-
-                    },
-
-                    body:
-
-                        JSON.stringify({
-
-                            filename:
-                                currentFilename,
-
-
-                            student_email:
-                                studentEmail,
-
-
-                            student_name:
-                                studentName,
-
-
-                            domain:
-
-                                document
-                                    .getElementById("domain")
-                                    .value
-                                    .trim(),
-
-
-                            duration:
-
-                                document
-                                    .getElementById("duration")
-                                    .value,
-
-
-                            start_date:
-
-                                document
-                                    .getElementById("start_date")
-                                    .value,
-
-
-                            end_date:
-
-                                document
-                                    .getElementById("end_date")
-                                    .value,
-
-
-                            stipend:
-
-                                document
-                                    .getElementById("stipend")
-                                    .value
-                                    .trim(),
-
-
-                            letter_type:
-                                letterType.value,
-
-
-                            weeks:
-                                weeks.value,
-
-
-                            hours_per_week:
-                                hoursPerWeek.value,
-
-
-                            total_hours:
-                                totalHours.value,
-
-
-                            send_again:
-                                sendAgain
-
-                        })
-
-                }
-
-            );
-
-
-        const result =
-            await response.json();
-
-
-        /* ==============================================
-           DUPLICATE EMAIL
-           ============================================== */
-
-        if (
-
-            response.status === 409
-
-            &&
-
-            result.duplicate
-
-        ) {
-
-
-            sendingEmail =
-                false;
-
-
-            sendBtn.disabled =
-                false;
-
-
-            confirmResendBtn.disabled =
-                false;
-
-
-            cancelResendBtn.disabled =
-                false;
-
-
-            openResendModal(
-                studentEmail
-            );
-
-
+        const response = await fetch("/send-email", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                filename: currentFilename,
+                student_email: studentEmail,
+                student_name: studentName,
+                domain: document.getElementById("domain").value.trim(),
+                duration: document.getElementById("duration").value,
+                start_date: document.getElementById("start_date").value,
+                end_date: document.getElementById("end_date").value,
+                stipend: document.getElementById("stipend").value.trim(),
+                letter_type: letterType.value,
+                weeks: weeks.value,
+                hours_per_week: hoursPerWeek.value,
+                total_hours: totalHours.value,
+                send_again: sendAgain
+            })
+        });
+
+        const result = await response.json();
+
+        /* DUPLICATE EMAIL */
+        if (response.status === 409 && result.duplicate) {
+            sendingEmail = false;
+            sendBtn.disabled = false;
+            sendBtn.classList.remove("is-sending");
+            sendBtn.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Student</span>
+            `;
+
+            confirmResendBtn.disabled = false;
+            cancelResendBtn.disabled = false;
+
+            openResendModal(studentEmail);
             return;
-
         }
 
-
-        /* ==============================================
-           ERROR
-           ============================================== */
-
+        /* ERROR */
         if (!response.ok) {
-
-
-            throw new Error(
-
-                result.error
-
-                ||
-
-                result.message
-
-                ||
-
-                "Email failed."
-
-            );
-
+            throw new Error(result.error || result.message || "Email failed.");
         }
 
-
-        /* ==============================================
-           SUCCESS
-           ============================================== */
-
+        /* SUCCESS */
         closeResendModal();
 
-
-        /*
-           Notify other pages that the
-           email history has changed.
-        */
-
-        localStorage.setItem(
-
-            "persevex_history_updated",
-
-            Date.now().toString()
-
-        );
+        localStorage.setItem("persevex_history_updated", Date.now().toString());
         await updateEmailStatusCounts();
 
+        sendBtn.classList.remove("is-sending");
+        sendBtn.classList.add("is-success");
+        sendBtn.innerHTML = `
+            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>✓ Email Sent Successfully</span>
+        `;
 
         if (result.resent) {
-
-
-            message.textContent =
-                "Email sent again successfully.";
-
-
-        }
-        else {
-
-
-            message.textContent =
-                "Email sent successfully.";
-
-
+            message.textContent = "Email sent again successfully.";
+        } else {
+            message.textContent = "Email sent successfully.";
         }
 
-
+        setTimeout(function () {
+            sendBtn.classList.remove("is-success");
+            sendBtn.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Student</span>
+            `;
+        }, 2500);
     }
     catch (error) {
+        console.error(error);
+        localStorage.setItem("persevex_history_updated", Date.now().toString());
+        await updateEmailStatusCounts();
 
-    console.error(error);
+        message.textContent = error.message || "Email failed.";
 
+        sendBtn.classList.remove("is-sending");
+        sendBtn.classList.add("is-error");
+        sendBtn.innerHTML = `
+            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <span>✕ Sending Failed</span>
+        `;
 
-    /*
-       The server may have saved a
-       failed email record in history.
-    */
-
-    localStorage.setItem(
-
-        "persevex_history_updated",
-
-        Date.now().toString()
-
-    );
-
-
-    /* Update counts immediately */
-
-    await updateEmailStatusCounts();
-
-
-    message.textContent =
-
-        error.message
-
-        ||
-
-        "Email failed.";
-
-}
-
-
-    finally {
-
-
-        sendingEmail =
-            false;
-
-
-        sendBtn.disabled =
-            false;
-
-
-        confirmResendBtn.disabled =
-            false;
-
-
-        cancelResendBtn.disabled =
-            false;
-
-
+        setTimeout(function () {
+            sendBtn.classList.remove("is-error");
+            sendBtn.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Student</span>
+            `;
+        }, 2500);
     }
-
+    finally {
+        sendingEmail = false;
+        sendBtn.disabled = false;
+        confirmResendBtn.disabled = false;
+        cancelResendBtn.disabled = false;
+    }
 }
-
 
 /* ==========================================================
    SEND BUTTON
    ========================================================== */
-
-sendBtn.addEventListener(
-    "click",
-    async function () {
-
-
-        if (!currentFilename) {
-
-
-            message.textContent =
-                "Generate the letter first.";
-
-            return;
-
-        }
-
-
-        const studentEmail =
-            document
-                .getElementById("student_email")
-                .value
-                .trim();
-
-
-        if (!studentEmail) {
-
-
-            message.textContent =
-                "Please enter the student's email.";
-
-            return;
-
-        }
-
-
-        await sendEmail(false);
-
-
+sendBtn.addEventListener("click", async function () {
+    if (!currentFilename) {
+        message.textContent = "Generate the letter first.";
+        return;
     }
-);
 
+    const studentEmail = document.getElementById("student_email").value.trim();
+    if (!studentEmail) {
+        message.textContent = "Please enter the student's email.";
+        return;
+    }
+
+    await sendEmail(false);
+});
 
 /* ==========================================================
    MODAL SEND AGAIN BUTTON
    ========================================================== */
-
-confirmResendBtn.addEventListener(
-    "click",
-    async function () {
-
-
-        await sendEmail(true);
-
-
-    }
-);
-
+confirmResendBtn.addEventListener("click", async function () {
+    await sendEmail(true);
+});
 
 /* ==========================================================
    MODAL CANCEL BUTTON
    ========================================================== */
-
-cancelResendBtn.addEventListener(
-    "click",
-    function () {
-
-
-        closeResendModal();
-
-
-        message.textContent =
-            "Email sending cancelled.";
-
-
-    }
-);
-
+cancelResendBtn.addEventListener("click", function () {
+    closeResendModal();
+    message.textContent = "Email sending cancelled.";
+});
 
 /* ==========================================================
    CLOSE MODAL WHEN CLICKING OUTSIDE
    ========================================================== */
-
-resendModal.addEventListener(
-    "click",
-    function (event) {
-
-
-        if (
-
-            event.target === resendModal
-
-        ) {
-
-
-            closeResendModal();
-
-
-            message.textContent =
-                "Email sending cancelled.";
-
-        }
-
-
+resendModal.addEventListener("click", function (event) {
+    if (event.target === resendModal) {
+        closeResendModal();
+        message.textContent = "Email sending cancelled.";
     }
-);
-
+});
 
 /* ==========================================================
    ESCAPE KEY CLOSE
    ========================================================== */
-
-document.addEventListener(
-    "keydown",
-    function (event) {
-
-
-        if (
-
-            event.key === "Escape"
-
-            &&
-
-            !resendModal.hidden
-
-        ) {
-
-
-            closeResendModal();
-
-
-            message.textContent =
-                "Email sending cancelled.";
-
-        }
-
-
+document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !resendModal.hidden) {
+        closeResendModal();
+        message.textContent = "Email sending cancelled.";
     }
-);
-
+});
 
 /* ==========================================================
    INITIAL STATE
    ========================================================== */
-
-setType(
-    "with_hours"
-);
-
-
-preview.src =
-    "about:blank";
-
-
-preview.hidden =
-    true;
-
-
-emptyPreview.hidden =
-    false;
-
-
+setType("with_hours");
+preview.src = "about:blank";
+preview.hidden = true;
+if (generatingPreview) {
+    generatingPreview.hidden = true;
+}
+emptyPreview.hidden = false;
 disableDownload();
-
-
-sendBtn.disabled =
-    true;
-
-
-editBtn.disabled =
-    true;
-
-
-generated =
-    false;
-
-
-formChanged =
-    false;
-
-
-sendingEmail =
-    false;
-
-
+sendBtn.disabled = true;
+editBtn.disabled = true;
+generated = false;
+formChanged = false;
+sendingEmail = false;
 updateHours();
-
 
 </script>
 
-
 </body>
-
 </html>

@@ -1,1022 +1,515 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-
-```
-<meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
->
-
-<title>Email History | Persevex</title>
-
-<link
-    rel="icon"
-    type="image/png"
-    href="/static/persevex-icon.png"
->
-
-<link
-    rel="stylesheet"
-    href="/static/style.css"
->
-
-<style>
-
-    /* =====================================================
-       PAGE
-    ===================================================== */
-
-    .history-main {
-        display: block !important;
-        width: 100%;
-        max-width: 100%;
-    }
-
-    .history-main .card {
-        width: 100%;
-        padding: 24px;
-        box-sizing: border-box;
-    }
-
-
-    /* =====================================================
-       HEADER BUTTONS
-    ===================================================== */
-
-    .header-actions {
-        margin-left: auto;
-        display: flex;
-        gap: 10px;
-    }
-
-    .history-btn {
-        background: #2563b8;
-        color: white;
-        text-decoration: none;
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 700;
-    }
-
-    .logout-btn {
-        background: #172033;
-        color: white;
-        text-decoration: none;
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 700;
-    }
-
-
-    /* =====================================================
-       TITLE
-    ===================================================== */
-
-    .history-title {
-        font-size: 22px;
-        margin: 0 0 20px;
-    }
-
-
-    /* =====================================================
-       FILTERS
-    ===================================================== */
-
-    .history-filters {
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr auto auto;
-        gap: 12px;
-        margin-bottom: 20px;
-    }
-
-    .history-filters input,
-    .history-filters select {
-        width: 100%;
-        padding: 11px 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        font-size: 14px;
-        background: white;
-        box-sizing: border-box;
-    }
-
-    .filter-btn {
-        border: none;
-        background: #172033;
-        color: white;
-        padding: 11px 20px;
-        border-radius: 8px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-
-    .clear-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        background: #e8edf3;
-        color: #172033;
-        padding: 11px 16px;
-        border-radius: 8px;
-        font-weight: 700;
-    }
-
-
-    /* =====================================================
-       TABLE
-    ===================================================== */
-
-    .history-table-wrapper {
-        width: 100%;
-        overflow-x: auto;
-        border: 1px solid #d8dee7;
-        border-radius: 10px;
-    }
-
-    .history-table {
-        width: 100%;
-        min-width: 1200px;
-        border-collapse: collapse;
-    }
-
-    .history-table th {
-        background: #f1f5f9;
-        color: #334155;
-        text-align: left;
-        padding: 14px;
-        border-bottom: 2px solid #d8dee7;
-        white-space: nowrap;
-        font-size: 13px;
-    }
-
-    .history-table td {
-        padding: 14px;
-        border-bottom: 1px solid #e2e8f0;
-        white-space: nowrap;
-        font-size: 14px;
-    }
-
-    .history-table tbody tr {
-        transition:
-            opacity 0.2s ease,
-            background 0.2s ease;
-    }
-
-    .history-table tbody tr:hover {
-        background: #f8fafc;
-    }
-
-
-    /* =====================================================
-       STATUS
-    ===================================================== */
-
-    .status-sent {
-        display: inline-block;
-        background: #dcfce7;
-        color: #166534;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-
-    .status-failed {
-        display: inline-block;
-        background: #fee2e2;
-        color: #991b1b;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 700;
-    }
-
-
-    /* =====================================================
-       DELETE BUTTON
-    ===================================================== */
-
-    .delete-btn {
-        width: 38px;
-        height: 38px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        background: #fee2e2;
-        color: #dc2626;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .delete-btn:hover {
-        background: #dc2626;
-        color: white;
-        transform: translateY(-1px);
-    }
-
-    .delete-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-    }
-
-    .delete-btn svg {
-        width: 18px;
-        height: 18px;
-    }
-
-
-    /* =====================================================
-       SENT DATE
-    ===================================================== */
-
-    .sent-date {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-    }
-
-    .sent-date-day {
-        font-weight: 600;
-        color: #334155;
-    }
-
-    .sent-date-time {
-        font-size: 12px;
-        color: #64748b;
-    }
-
-
-    /* =====================================================
-       PAGINATION
-    ===================================================== */
-
-    .pagination {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 15px;
-        margin-top: 20px;
-        flex-wrap: wrap;
-    }
-
-    .pagination-info {
-        font-size: 13px;
-        color: #64748b;
-    }
-
-    .pagination-buttons {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .page-btn {
-        text-decoration: none;
-        padding: 9px 14px;
-        border-radius: 7px;
-        background: #e8edf3;
-        color: #172033;
-        font-size: 13px;
-        font-weight: 700;
-    }
-
-    .page-btn.active {
-        background: #172033;
-        color: white;
-    }
-
-    .page-btn.disabled {
-        opacity: 0.4;
-        pointer-events: none;
-    }
-
-
-    /* =====================================================
-       EMPTY HISTORY
-    ===================================================== */
-
-    .empty-history {
-        text-align: center;
-        padding: 80px 20px;
-        color: #64748b;
-    }
-
-    .empty-history h3 {
-        color: #334155;
-        margin-bottom: 8px;
-    }
-
-
-    /* =====================================================
-       ERROR MESSAGE
-    ===================================================== */
-
-    .error-message {
-        padding: 14px;
-        background: #fee2e2;
-        color: #991b1b;
-        border-radius: 8px;
-        margin-bottom: 18px;
-    }
-
-
-    /* =====================================================
-       TOAST
-    ===================================================== */
-
-    .history-toast {
-        position: fixed;
-        top: 25px;
-        right: 25px;
-        background: #172033;
-        color: white;
-        padding: 14px 20px;
-        border-radius: 10px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        z-index: 10000;
-        opacity: 0;
-        transform: translateY(-20px);
-        pointer-events: none;
-        transition: all 0.25s ease;
-    }
-
-    .history-toast.show {
-        opacity: 1;
-        transform: translateY(0);
-    }
-
-    .history-toast.success {
-        background: #166534;
-    }
-
-    .history-toast.error {
-        background: #b91c1c;
-    }
-
-
-    /* =====================================================
-       DELETE MODAL
-    ===================================================== */
-
-    .delete-modal {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(15, 23, 42, 0.55);
-        z-index: 9999;
-        padding: 20px;
-    }
-
-    .delete-modal[hidden] {
-        display: none;
-    }
-
-    .delete-modal-box {
-        width: 100%;
-        max-width: 420px;
-        background: white;
-        border-radius: 16px;
-        padding: 30px;
-        text-align: center;
-        box-shadow: 0 25px 70px rgba(0, 0, 0, 0.25);
-    }
-
-    .delete-modal-icon {
-        width: 58px;
-        height: 58px;
-        margin: 0 auto 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #fee2e2;
-        color: #dc2626;
-        border-radius: 50%;
-    }
-
-    .delete-modal-icon svg {
-        width: 26px;
-        height: 26px;
-    }
-
-    .delete-modal-box h3 {
-        margin: 0 0 10px;
-        color: #172033;
-        font-size: 21px;
-    }
-
-    .delete-modal-box p {
-        margin: 0;
-        color: #64748b;
-        line-height: 1.6;
-    }
-
-    .delete-modal-actions {
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-        margin-top: 25px;
-    }
-
-    .modal-cancel-btn {
-        border: none;
-        background: #e8edf3;
-        color: #172033;
-        padding: 11px 20px;
-        border-radius: 8px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-
-    .modal-delete-btn {
-        border: none;
-        background: #dc2626;
-        color: white;
-        padding: 11px 20px;
-        border-radius: 8px;
-        font-weight: 700;
-        cursor: pointer;
-    }
-
-    .modal-delete-btn:disabled {
-        opacity: 0.7;
-        cursor: not-allowed;
-    }
-
-
-    /* =====================================================
-       RESPONSIVE
-    ===================================================== */
-
-    @media (max-width: 1000px) {
-
-        .history-filters {
-            grid-template-columns: 1fr 1fr;
-        }
-
-    }
-
-    @media (max-width: 600px) {
-
-        header {
-            flex-wrap: wrap;
-        }
-
-        .header-actions {
-            width: 100%;
-        }
-
-        .history-filters {
-            grid-template-columns: 1fr;
-        }
-
-        .history-main .card {
-            padding: 14px;
-        }
-
-    }
-
-</style>
-```
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email History | Persevex Offer Letter Generator</title>
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
-
 <body>
 
 <div class="app">
 
-```
-<!-- =====================================================
-     HEADER
-===================================================== -->
-
-<header>
-
-    <div>
-
-        <div class="brand">
-            persevex
-        </div>
-
-        <div class="tagline">
-            LEARN, GROW, SUCCEED
-        </div>
-
-    </div>
-
-
-    <h1>
-        EMAIL HISTORY
-    </h1>
-
-
-    <div class="header-actions">
-
-        <a
-            href="/"
-            class="history-btn"
-        >
-            Back to Generator
-        </a>
-
-
-        <a
-            href="/logout"
-            class="logout-btn"
-        >
-            Logout
-        </a>
-
-    </div>
-
-</header>
-
-
-<!-- =====================================================
-     MAIN
-===================================================== -->
-
-<main class="history-main">
-
-    <section class="card">
-
-
-        <h2 class="history-title">
-            Sent Offer Letters
-        </h2>
-
-
-        {% if error %}
-
-            <div class="error-message">
-                {{ error }}
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
             </div>
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
+            </div>
+        </div>
 
-        {% endif %}
+        <h1>
+            EMAIL <span class="highlight">HISTORY</span>
+        </h1>
 
-
-        <!-- =================================================
-             SEARCH + FILTERS
-        ================================================= -->
-
-        <form
-            method="GET"
-            action="/history"
-            class="history-filters"
-        >
-
-            <input
-                type="text"
-                name="search"
-                placeholder="Search student name or email..."
-                value="{{ search or '' }}"
-            >
-
-
-            <input
-                type="date"
-                name="date"
-                value="{{ date_filter or '' }}"
-            >
-
-
-            <select name="status">
-
-                <option value="">
-                    All Status
-                </option>
-
-
-                <option
-                    value="sent"
-                    {% if status_filter == "sent" %}
-                        selected
-                    {% endif %}
-                >
-                    Sent
-                </option>
-
-
-                <option
-                    value="failed"
-                    {% if status_filter == "failed" %}
-                        selected
-                    {% endif %}
-                >
-                    Failed
-                </option>
-
-            </select>
-
-
-            <button
-                type="submit"
-                class="filter-btn"
-            >
-                Search
-            </button>
-
-
-            <a
-                href="/history"
-                class="clear-btn"
-            >
-                Clear
+        <div class="header-actions">
+            <a href="/" class="history-btn" title="Back to Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                <span>Back to Generator</span>
             </a>
 
-        </form>
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
 
+    <!-- =====================================================
+         MAIN HISTORY
+         ===================================================== -->
+    <main class="history-main">
+        <section class="card history-card-animate">
+            
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Sent Offer Letters
+                </h2>
+                <span class="section-tag">Audit Log</span>
+            </div>
 
-        <!-- =================================================
-             HISTORY CONTENT
-        ================================================= -->
-
-        <div id="historyContent">
-
-
+            <!-- =================================================
+                 DASHBOARD SUMMARY METRICS
+                 ================================================= -->
+            {% set total_sent = namespace(count=0) %}
+            {% set total_failed = namespace(count=0) %}
             {% if history_records %}
-
-
-                <div
-                    id="tableContainer"
-                    class="history-table-wrapper"
-                >
-
-                    <table class="history-table">
-
-                        <thead>
-
-                            <tr>
-
-                                <th>Student Name</th>
-
-                                <th>Email</th>
-
-                                <th>Domain</th>
-
-                                <th>Duration</th>
-
-                                <th>Letter Type</th>
-
-                                <th>Status</th>
-
-                                <th>Sent Date & Time</th>
-
-                                <th>Send Count</th>
-
-                                <th>Offer Letter ID</th>
-
-                                <th>Action</th>
-
-                            </tr>
-
-                        </thead>
-
-
-                        <tbody id="historyTableBody">
-
-
-                            {% for record in history_records %}
-
-                                <tr
-                                    id="record-{{ record.id }}"
-                                    data-record-id="{{ record.id }}"
-                                >
-
-                                    <td>
-                                        {{ record.student_name or "-" }}
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.student_email or "-" }}
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.internship_domain or "-" }}
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.internship_duration or "-" }}
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.offer_letter_type or "-" }}
-                                    </td>
-
-
-                                    <td>
-
-                                        {% if record.email_status == "sent" %}
-
-                                            <span class="status-sent">
-                                                SENT
-                                            </span>
-
-                                        {% else %}
-
-                                            <span class="status-failed">
-                                                FAILED
-                                            </span>
-
-                                        {% endif %}
-
-                                    </td>
-
-
-                                    <td>
-
-                                        <div
-                                            class="sent-date"
-                                            data-timestamp="{{ record.sent_at or record.created_at or '' }}"
-                                        >
-
-                                            <span class="sent-date-day">
-
-                                                {{ record.sent_at or record.created_at or "-" }}
-
-                                            </span>
-
-                                        </div>
-
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.send_count or 0 }}
-                                    </td>
-
-
-                                    <td>
-                                        {{ record.offer_letter_id or "-" }}
-                                    </td>
-
-
-                                    <td>
-
-                                        <button
-                                            type="button"
-                                            class="delete-btn"
-                                            title="Delete Record"
-                                            aria-label="Delete Record"
-                                            data-record-id="{{ record.id }}"
-                                            onclick="openDeleteModal(this.dataset.recordId)"
-                                        >
-
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
-
-                                                <path d="M3 6h18"/>
-
-                                                <path d="M8 6V4h8v2"/>
-
-                                                <path d="M19 6l-1 14H6L5 6"/>
-
-                                                <path d="M10 11v6"/>
-
-                                                <path d="M14 11v6"/>
-
-                                            </svg>
-
-                                        </button>
-
-                                    </td>
-
-                                </tr>
-
-                            {% endfor %}
-
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-
-                <!-- =================================================
-                     PAGINATION
-                ================================================= -->
-
-                <div
-                    class="pagination"
-                    id="paginationContainer"
-                >
-
-                    <div
-                        class="pagination-info"
-                        id="paginationInfo"
-                    >
-
-                        Total Records:
-
-                        <span id="totalRecords">
-                            {{ total_records }}
-                        </span>
-
-                        |
-
-                        Page {{ page }}
-
-                        of
-
-                        {{ total_pages }}
-
-                    </div>
-
-
-                    <div class="pagination-buttons">
-
-
-                        {% if page > 1 %}
-
-                            <a
-                                class="page-btn"
-                                href="/history?page={{ page - 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                            >
-                                Previous
-                            </a>
-
-                        {% else %}
-
-                            <span class="page-btn disabled">
-                                Previous
-                            </span>
-
-                        {% endif %}
-
-
-                        {% for page_number in range(1, total_pages + 1) %}
-
-                            {% if page_number <= 5 %}
-
-                                <a
-                                    class="page-btn {% if page_number == page %}active{% endif %}"
-                                    href="/history?page={{ page_number }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                                >
-                                    {{ page_number }}
-                                </a>
-
-                            {% endif %}
-
-                        {% endfor %}
-
-
-                        {% if page < total_pages %}
-
-                            <a
-                                class="page-btn"
-                                href="/history?page={{ page + 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                            >
-                                Next
-                            </a>
-
-                        {% else %}
-
-                            <span class="page-btn disabled">
-                                Next
-                            </span>
-
-                        {% endif %}
-
-
-                    </div>
-
-                </div>
-
-
-            {% else %}
-
-
-                <div
-                    class="empty-history"
-                    id="emptyHistory"
-                >
-
-                    <h3>
-                        No Email History Found
-                    </h3>
-
-                    <p>
-                        No records match your search or filters.
-                    </p>
-
-                </div>
-
-
+                {% for r in history_records %}
+                    {% if r.email_status == 'sent' %}
+                        {% set total_sent.count = total_sent.count + 1 %}
+                    {% else %}
+                        {% set total_failed.count = total_failed.count + 1 %}
+                    {% endif %}
+                {% endfor %}
             {% endif %}
 
+            <div class="history-summary-grid">
+                <div class="summary-stat-card stat-total">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Records</span>
+                        <span class="stat-value" id="summaryTotalRecords">{{ total_records or 0 }}</span>
+                    </div>
+                </div>
 
-        </div>
+                <div class="summary-stat-card stat-success">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Successfully Sent</span>
+                        <span class="stat-value" id="summarySentRecords">{{ total_sent.count }}</span>
+                    </div>
+                </div>
 
-    </section>
+                <div class="summary-stat-card stat-failed">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Failed Emails</span>
+                        <span class="stat-value" id="summaryFailedRecords">{{ total_failed.count }}</span>
+                    </div>
+                </div>
 
-</main>
-```
+                <div class="summary-stat-card stat-page">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Page Records</span>
+                        <span class="stat-value" id="summaryPageRecords">{{ (history_records|length) if history_records else 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if error %}
+                <div class="error-message">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>{{ error }}</span>
+                </div>
+            {% endif %}
+
+            <!-- =================================================
+                 SEARCH + FILTERS
+                 ================================================= -->
+            <form
+                method="GET"
+                action="/history"
+                class="history-filters"
+            >
+                <div class="filter-group filter-search">
+                    <label for="historySearch" class="filter-label">Search Candidate</label>
+                    <div class="filter-input-wrap">
+                        <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                            id="historySearch"
+                            type="text"
+                            name="search"
+                            placeholder="Search by student name or email..."
+                            value="{{ search or '' }}"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                    </div>
+                </div>
+
+                <div class="filter-group filter-date">
+                    <label for="historyDate" class="filter-label">Sent Date</label>
+                    <div class="filter-input-wrap">
+                        <input
+                            id="historyDate"
+                            type="date"
+                            name="date"
+                            value="{{ date_filter or '' }}"
+                        >
+                    </div>
+                </div>
+
+                <div class="filter-group filter-status">
+                    <label for="historyStatus" class="filter-label">Status</label>
+                    <div class="filter-input-wrap">
+                        <select id="historyStatus" name="status">
+                            <option value="">All Status</option>
+                            <option value="sent" {% if status_filter == "sent" %}selected{% endif %}>Sent</option>
+                            <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>Failed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="filter-actions">
+                    <button
+                        type="submit"
+                        class="filter-btn"
+                        title="Search and filter records"
+                    >
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <span>Search</span>
+                    </button>
+
+                    <a
+                        href="/history"
+                        class="clear-btn"
+                        title="Reset all filters"
+                    >
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                        <span>Clear</span>
+                    </a>
+                </div>
+            </form>
+
+            <!-- =================================================
+                 HISTORY CONTENT
+                 ================================================= -->
+            <div id="historyContent">
+
+                {% if history_records %}
+
+                    <div
+                        id="tableContainer"
+                        class="history-table-wrapper"
+                    >
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th class="th-name">Student Name</th>
+                                    <th class="th-email">Email</th>
+                                    <th class="th-domain">Domain</th>
+                                    <th class="th-duration">Duration</th>
+                                    <th class="th-type">Letter Type</th>
+                                    <th class="th-status">Status</th>
+                                    <th class="th-date">Sent Date & Time</th>
+                                    <th class="th-count" style="text-align: center;">Send Count</th>
+                                    <th class="th-id">Offer Letter ID</th>
+                                    <th class="th-action" style="text-align: center;">Action</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="historyTableBody">
+                                {% for record in history_records %}
+                                    <tr
+                                        id="record-{{ record.id }}"
+                                        data-record-id="{{ record.id }}"
+                                        class="history-row-animate"
+                                    >
+                                        <td class="cell-name" data-label="Student Name">
+                                            <span class="cell-name-text">{{ record.student_name or "-" }}</span>
+                                        </td>
+
+                                        <td class="cell-email" data-label="Email">
+                                            <span class="cell-truncate-email" title="{{ record.student_email or '-' }}">
+                                                {{ record.student_email or "-" }}
+                                            </span>
+                                        </td>
+
+                                        <td class="cell-domain" data-label="Domain">
+                                            <span class="domain-tag">{{ record.internship_domain or "-" }}</span>
+                                        </td>
+
+                                        <td class="cell-duration" data-label="Duration">
+                                            <span class="duration-badge">{{ record.internship_duration or "-" }}</span>
+                                        </td>
+
+                                        <td class="cell-type" data-label="Letter Type">
+                                            {% if "with hours" in (record.offer_letter_type or '')|lower %}
+                                                <span class="type-pill type-hours">With Hours</span>
+                                            {% elif "without hours" in (record.offer_letter_type or '')|lower %}
+                                                <span class="type-pill type-no-hours">Without Hours</span>
+                                            {% else %}
+                                                <span class="type-pill">{{ record.offer_letter_type or "-" }}</span>
+                                            {% endif %}
+                                        </td>
+
+                                        <td class="cell-status" data-label="Status">
+                                            {% if record.email_status == "sent" %}
+                                                <span class="status-sent" title="Email sent successfully">
+                                                    SENT
+                                                </span>
+                                            {% else %}
+                                                <span class="status-failed" title="Email delivery failed">
+                                                    FAILED
+                                                </span>
+                                            {% endif %}
+                                        </td>
+
+                                        <td class="cell-date" data-label="Sent Date">
+                                            <div
+                                                class="sent-date"
+                                                data-timestamp="{{ record.sent_at or record.created_at or '' }}"
+                                            >
+                                                <span class="sent-date-day">
+                                                    {{ record.sent_at or record.created_at or "-" }}
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        <td class="cell-count" data-label="Send Count" style="text-align: center;">
+                                            <span class="send-count-badge" title="Sent {{ record.send_count or 0 }} time(s)">
+                                                {{ record.send_count or 0 }}
+                                            </span>
+                                        </td>
+
+                                        <td class="cell-id" data-label="Offer Letter ID">
+                                            <span class="cell-truncate-id" title="{{ record.offer_letter_id or '-' }}">
+                                                {{ record.offer_letter_id or "-" }}
+                                            </span>
+                                        </td>
+
+                                        <td class="cell-action" data-label="Action" style="text-align: center;">
+                                            <button
+                                                type="button"
+                                                class="delete-btn"
+                                                title="Delete Record"
+                                                aria-label="Delete Record"
+                                                data-record-id="{{ record.id }}"
+                                                onclick="openDeleteModal(this.dataset.recordId)"
+                                            >
+                                                <svg
+                                                    class="delete-icon-svg"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                >
+                                                    <path d="M3 6h18"/>
+                                                    <path d="M8 6V4h8v2"/>
+                                                    <path d="M19 6l-1 14H6L5 6"/>
+                                                    <path d="M10 11v6"/>
+                                                    <path d="M14 11v6"/>
+                                                </svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- =================================================
+                         PAGINATION
+                         ================================================= -->
+                    <div
+                        class="pagination"
+                        id="paginationContainer"
+                    >
+                        <div
+                            class="pagination-info"
+                            id="paginationInfo"
+                        >
+                            Showing
+                            <strong>
+                                {{ ((page - 1) * 10) + 1 if total_records > 0 else 0 }}–{{ [page * 10, total_records]|min }}
+                            </strong>
+                            of
+                            <strong id="totalRecords">{{ total_records }}</strong> records
+                            <span class="pagination-page-indicator">(Page {{ page }} of {{ total_pages }})</span>
+                        </div>
+
+                        <div class="pagination-buttons">
+                            {% if page > 1 %}
+                                <a
+                                    class="page-btn page-prev"
+                                    href="/history?page={{ page - 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
+                                    title="Previous page"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                    <span>Prev</span>
+                                </a>
+                            {% else %}
+                                <span class="page-btn page-prev disabled">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <polyline points="15 18 9 12 15 6"></polyline>
+                                    </svg>
+                                    <span>Prev</span>
+                                </span>
+                            {% endif %}
+
+                            {% for page_number in range(1, total_pages + 1) %}
+                                {% if page_number <= 5 or page_number == total_pages or (page_number >= page - 1 and page_number <= page + 1) %}
+                                    <a
+                                        class="page-btn {% if page_number == page %}active{% endif %}"
+                                        href="/history?page={{ page_number }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
+                                    >
+                                        {{ page_number }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page < total_pages %}
+                                <a
+                                    class="page-btn page-next"
+                                    href="/history?page={{ page + 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
+                                    title="Next page"
+                                >
+                                    <span>Next</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </a>
+                            {% else %}
+                                <span class="page-btn page-next disabled">
+                                    <span>Next</span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                {% else %}
+
+                    <div
+                        class="empty-history"
+                        id="emptyHistory"
+                    >
+                        <div class="empty-preview-graphic">
+                            <div class="empty-preview-circle">
+                                <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <h3>No Email History Found</h3>
+                        <p>No records match your search query or selected filters.</p>
+                        <a href="/history" class="filter-btn" style="display: inline-flex; margin-top: 14px; text-decoration: none;">
+                            Reset Filters
+                        </a>
+                    </div>
+
+                {% endif %}
+
+            </div>
+        </section>
+    </main>
 
 </div>
 
 <!-- =========================================================
      DELETE CONFIRMATION MODAL
-========================================================= -->
-
+     ========================================================= -->
 <div
     id="deleteModal"
     class="delete-modal"
     hidden
 >
+    <div class="delete-modal-box">
+        <div class="modal-icon-header delete-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4h8v2"/>
+                <path d="M19 6l-1 14H6L5 6"/>
+                <path d="M10 11v6"/>
+                <path d="M14 11v6"/>
+            </svg>
+        </div>
 
-```
-<div class="delete-modal-box">
+        <h3>Delete History Record?</h3>
+        <p>This email history record will be permanently deleted from the database.</p>
 
-    <div class="delete-modal-icon">
+        <div class="delete-modal-actions">
+            <button
+                type="button"
+                id="cancelDeleteBtn"
+                class="modal-cancel-btn"
+            >
+                Cancel
+            </button>
 
-        <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-        >
-
-            <path d="M3 6h18"/>
-
-            <path d="M8 6V4h8v2"/>
-
-            <path d="M19 6l-1 14H6L5 6"/>
-
-            <path d="M10 11v6"/>
-
-            <path d="M14 11v6"/>
-
-        </svg>
-
+            <button
+                type="button"
+                id="confirmDeleteBtn"
+                class="modal-delete-btn"
+            >
+                Delete
+            </button>
+        </div>
     </div>
-
-
-    <h3>
-        Delete History Record?
-    </h3>
-
-
-    <p>
-        This email history record will be permanently deleted.
-    </p>
-
-
-    <div class="delete-modal-actions">
-
-        <button
-            type="button"
-            id="cancelDeleteBtn"
-            class="modal-cancel-btn"
-        >
-            Cancel
-        </button>
-
-
-        <button
-            type="button"
-            id="confirmDeleteBtn"
-            class="modal-delete-btn"
-        >
-            Delete
-        </button>
-
-    </div>
-
-</div>
-```
-
 </div>
 
 <!-- =========================================================
      TOAST
-========================================================= -->
-
+     ========================================================= -->
 <div
     id="historyToast"
     class="history-toast"
@@ -1024,349 +517,176 @@
 
 <script>
 
-    /* ==========================================================
-       VARIABLES
-    ========================================================== */
+/* ==========================================================
+   VARIABLES
+   ========================================================== */
+let selectedRecordId = null;
+const deleteModal = document.getElementById("deleteModal");
+const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
+const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
+const historyToast = document.getElementById("historyToast");
 
-    let selectedRecordId = null;
+/* ==========================================================
+   SHOW TOAST
+   ========================================================== */
+function showToast(text, type = "success") {
+    historyToast.textContent = text;
+    historyToast.className = "history-toast " + type;
+    historyToast.classList.add("show");
 
-    const deleteModal =
-        document.getElementById("deleteModal");
+    setTimeout(function() {
+        historyToast.classList.remove("show");
+    }, 3000);
+}
 
-    const confirmDeleteBtn =
-        document.getElementById("confirmDeleteBtn");
+/* ==========================================================
+   FORMAT DATE AND TIME
+   ========================================================== */
+function formatHistoryDates() {
+    const dateElements = document.querySelectorAll(".sent-date");
 
-    const cancelDeleteBtn =
-        document.getElementById("cancelDeleteBtn");
+    dateElements.forEach(function(element) {
+        const timestamp = element.dataset.timestamp;
+        if (!timestamp) {
+            return;
+        }
 
-    const historyToast =
-        document.getElementById("historyToast");
-
-
-    /* ==========================================================
-       SHOW TOAST
-    ========================================================== */
-
-    function showToast(text, type = "success") {
-
-        historyToast.textContent = text;
-
-        historyToast.className =
-            "history-toast " + type;
-
-        historyToast.classList.add("show");
-
-        setTimeout(function() {
-
-            historyToast.classList.remove("show");
-
-        }, 3000);
-
-    }
-
-
-    /* ==========================================================
-       FORMAT DATE AND TIME
-    ========================================================== */
-
-    function formatHistoryDates() {
-
-        const dateElements =
-            document.querySelectorAll(".sent-date");
-
-        dateElements.forEach(function(element) {
-
-            const timestamp =
-                element.dataset.timestamp;
-
-            if (!timestamp) {
+        try {
+            const date = new Date(timestamp);
+            if (isNaN(date.getTime())) {
                 return;
             }
 
-            try {
+            const formattedDate = date.toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            });
 
-                const date =
-                    new Date(timestamp);
+            const formattedTime = date.toLocaleTimeString("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: true
+            });
 
-                if (isNaN(date.getTime())) {
-                    return;
-                }
+            element.innerHTML = `
+                <span class="sent-date-day">${formattedDate}</span>
+                <span class="sent-date-time">${formattedTime}</span>
+            `;
+        }
+        catch (error) {
+            console.error("Date formatting error:", error);
+        }
+    });
+}
 
-                const formattedDate =
-                    date.toLocaleDateString(
-                        "en-IN",
-                        {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric"
-                        }
-                    );
+/* ==========================================================
+   OPEN DELETE MODAL
+   ========================================================== */
+function openDeleteModal(recordId) {
+    selectedRecordId = recordId;
+    deleteModal.classList.remove("modal-closing");
+    deleteModal.hidden = false;
+    document.body.style.overflow = "hidden";
+}
 
-                const formattedTime =
-                    date.toLocaleTimeString(
-                        "en-IN",
-                        {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                            hour12: true
-                        }
-                    );
+/* ==========================================================
+   CLOSE DELETE MODAL (WITH SMOOTH FADE OUT)
+   ========================================================== */
+function closeDeleteModal() {
+    deleteModal.classList.add("modal-closing");
+    setTimeout(function () {
+        deleteModal.hidden = true;
+        deleteModal.classList.remove("modal-closing");
+        selectedRecordId = null;
+        document.body.style.overflow = "";
+    }, 200);
+}
 
-                element.innerHTML = `
-                    <span class="sent-date-day">
-                        ${formattedDate}
-                    </span>
+/* ==========================================================
+   CANCEL DELETE
+   ========================================================== */
+cancelDeleteBtn.addEventListener("click", function() {
+    closeDeleteModal();
+});
 
-                    <span class="sent-date-time">
-                        ${formattedTime}
-                    </span>
-                `;
+/* ==========================================================
+   CLOSE MODAL WHEN CLICKING OUTSIDE
+   ========================================================== */
+deleteModal.addEventListener("click", function(event) {
+    if (event.target === deleteModal) {
+        closeDeleteModal();
+    }
+});
 
+/* ==========================================================
+   DELETE RECORD
+   ========================================================== */
+confirmDeleteBtn.addEventListener("click", async function() {
+    if (!selectedRecordId) {
+        return;
+    }
+
+    const recordId = selectedRecordId;
+    confirmDeleteBtn.disabled = true;
+    confirmDeleteBtn.textContent = "Deleting...";
+
+    try {
+        const response = await fetch(`/history/${recordId}`, {
+            method: "DELETE",
+            headers: {
+                "Content-Type": "application/json"
             }
-            catch (error) {
-
-                console.error(
-                    "Date formatting error:",
-                    error
-                );
-
-            }
-
         });
 
+        let result = {};
+        try {
+            result = await response.json();
+        } catch (e) {
+            result = {};
+        }
+
+        if (!response.ok) {
+            throw new Error(result.error || result.message || "Unable to delete record.");
+        }
+
+        closeDeleteModal();
+        localStorage.setItem("persevex_history_updated", Date.now().toString());
+
+        showToast("History record deleted successfully.", "success");
+
+        setTimeout(function() {
+            window.location.reload();
+        }, 700);
     }
-
-
-    /* ==========================================================
-       OPEN DELETE MODAL
-    ========================================================== */
-
-    function openDeleteModal(recordId) {
-
-        selectedRecordId = recordId;
-
-        deleteModal.hidden = false;
-
+    catch (error) {
+        console.error("Delete history error:", error);
+        showToast(error.message || "Unable to delete record.", "error");
     }
-
-
-    /* ==========================================================
-       CLOSE DELETE MODAL
-    ========================================================== */
-
-    function closeDeleteModal() {
-
-        deleteModal.hidden = true;
-
-        selectedRecordId = null;
-
+    finally {
+        confirmDeleteBtn.disabled = false;
+        confirmDeleteBtn.textContent = "Delete";
     }
-
-
-    /* ==========================================================
-       CANCEL DELETE
-    ========================================================== */
-
-    cancelDeleteBtn.addEventListener(
-        "click",
-        function() {
-
-            closeDeleteModal();
-
-        }
-    );
-
-
-    /* ==========================================================
-       CLOSE MODAL WHEN CLICKING OUTSIDE
-    ========================================================== */
-
-    deleteModal.addEventListener(
-        "click",
-        function(event) {
-
-            if (event.target === deleteModal) {
-
-                closeDeleteModal();
-
-            }
-
-        }
-    );
-
-
-    /* ==========================================================
-       DELETE RECORD
-       IMPORTANT: ONLY ONE EVENT LISTENER
-    ========================================================== */
-
-    confirmDeleteBtn.addEventListener(
-        "click",
-        async function() {
-
-            if (!selectedRecordId) {
-                return;
-            }
-
-            const recordId =
-                selectedRecordId;
-
-            confirmDeleteBtn.disabled = true;
-
-            confirmDeleteBtn.textContent =
-                "Deleting...";
-
-
-            try {
-
-                const response =
-                    await fetch(
-                        `/history/${recordId}`,
-                        {
-                            method: "DELETE",
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            }
-                        }
-                    );
-
-
-                let result = {};
-
-
-                try {
-
-                    result =
-                        await response.json();
-
-                }
-                catch (error) {
-
-                    result = {};
-
-                }
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        result.error ||
-                        result.message ||
-                        "Unable to delete record."
-                    );
-
-                }
-
-
-                /* ==========================================
-                   CLOSE MODAL
-                ========================================== */
-
-                closeDeleteModal();
-
-
-                /* ==========================================
-                   NOTIFY OTHER PAGES
-                ========================================== */
-
-                localStorage.setItem(
-                    "persevex_history_updated",
-                    Date.now().toString()
-                );
-
-
-                /* ==========================================
-                   SUCCESS MESSAGE
-                ========================================== */
-
-                showToast(
-                    "History record deleted successfully.",
-                    "success"
-                );
-
-
-                /* ==========================================
-                   RELOAD PAGE
-                   Ensures correct:
-                   - Total records
-                   - Pagination
-                   - Empty state
-                   - Server data
-                ========================================== */
-
-                setTimeout(function() {
-
-                    window.location.reload();
-
-                }, 700);
-
-            }
-            catch (error) {
-
-                console.error(
-                    "Delete history error:",
-                    error
-                );
-
-
-                showToast(
-                    error.message ||
-                    "Unable to delete record.",
-                    "error"
-                );
-
-            }
-            finally {
-
-                confirmDeleteBtn.disabled = false;
-
-                confirmDeleteBtn.textContent =
-                    "Delete";
-
-            }
-
-        }
-    );
-
-
-    /* ==========================================================
-       ESC KEY CLOSE MODAL
-    ========================================================== */
-
-    document.addEventListener(
-        "keydown",
-        function(event) {
-
-            if (
-                event.key === "Escape" &&
-                !deleteModal.hidden
-            ) {
-
-                closeDeleteModal();
-
-            }
-
-        }
-    );
-
-
-    /* ==========================================================
-       INITIAL DATE FORMATTING
-    ========================================================== */
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        function() {
-
-            formatHistoryDates();
-
-        }
-    );
+});
+
+/* ==========================================================
+   ESC KEY CLOSE MODAL
+   ========================================================== */
+document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape" && !deleteModal.hidden) {
+        closeDeleteModal();
+    }
+});
+
+/* ==========================================================
+   INITIAL DATE FORMATTING
+   ========================================================== */
+document.addEventListener("DOMContentLoaded", function() {
+    formatHistoryDates();
+});
 
 </script>
 
 </body>
-
 </html>
