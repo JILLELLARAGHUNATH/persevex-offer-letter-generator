@@ -1,10 +1,12 @@
 import tempfile
 import os
+import io
+import csv
 import hmac
 from pathlib import Path
 import re
 import smtplib
-from datetime import datetime,timezone
+from datetime import datetime, timezone
 from email.message import EmailMessage
 import imaplib
 
@@ -20,6 +22,7 @@ from flask import (
     redirect,
     url_for,
     session,
+    Response,
 )
 
 import pymupdf
@@ -3242,520 +3245,426 @@ def history():
         # ----------------------------------------------------
 
         search = (
-
-            request.args.get(
-                "search",
-                ""
-            )
-
-            or
-
-            ""
-
+            request.args.get("search", "") or ""
         ).strip()
 
+        month_filter = (
+            request.args.get("month", "") or ""
+        ).strip()
+
+        date_from = (
+            request.args.get("date_from", "") or ""
+        ).strip()
+
+        date_to = (
+            request.args.get("date_to", "") or ""
+        ).strip()
 
         date_filter = (
-
-            request.args.get(
-                "date",
-                ""
-            )
-
-            or
-
-            ""
-
+            request.args.get("date", "") or ""
         ).strip()
 
-
         status_filter = (
-
-            request.args.get(
-                "status",
-                ""
-            )
-
-            or
-
-            ""
-
+            request.args.get("status", "") or ""
         ).strip().lower()
 
+        # ----------------------------------------------------
+        # PER PAGE
+        # ----------------------------------------------------
+
+        try:
+            per_page = int(
+                request.args.get("per_page", 25)
+            )
+            if per_page not in [10, 25, 50, 100]:
+                per_page = 25
+        except (TypeError, ValueError):
+            per_page = 25
 
         # ----------------------------------------------------
         # PAGE
         # ----------------------------------------------------
 
         try:
-
             page = int(
-
-                request.args.get(
-
-                    "page",
-
-                    1
-
-                )
-
+                request.args.get("page", 1)
             )
-
-        except (
-
-            TypeError,
-
-            ValueError
-
-        ):
-
+        except (TypeError, ValueError):
             page = 1
-
 
         if page < 1:
-
             page = 1
-
-
-        PER_PAGE = 25
-
 
         # ----------------------------------------------------
         # GET RECORDS FROM SUPABASE
         # ----------------------------------------------------
 
         response = (
-
             supabase
-
-            .table(
-                "email_history"
-            )
-
-            .select(
-                "*"
-            )
-
-            .order(
-
-                "created_at",
-
-                desc=True
-
-            )
-
+            .table("email_history")
+            .select("*")
+            .order("created_at", desc=True)
             .execute()
-
         )
 
+        all_records = response.data or []
 
-        records = (
+        # ----------------------------------------------------
+        # COMPUTE AVAILABLE MONTHS DYNAMICALLY
+        # ----------------------------------------------------
 
-            response.data
+        month_set = set()
+        for rec in all_records:
+            ts = str(rec.get("sent_at") or rec.get("created_at") or "")
+            if len(ts) >= 7 and ts[:4].isdigit() and ts[5:7].isdigit():
+                month_set.add(ts[:7])
 
-            or
+        # Also ensure current month is present
+        now_month = datetime.now().strftime("%Y-%m")
+        month_set.add(now_month)
 
-            []
+        sorted_months = sorted(list(month_set), reverse=True)
+        available_months = []
+        for ym in sorted_months:
+            try:
+                dt_obj = datetime.strptime(ym, "%Y-%m")
+                label = dt_obj.strftime("%B %Y")
+            except Exception:
+                label = ym
+            available_months.append({
+                "value": ym,
+                "label": label
+            })
 
-        )
-
+        records = list(all_records)
 
         # ----------------------------------------------------
         # SEARCH BY STUDENT NAME OR EMAIL
         # ----------------------------------------------------
 
         if search:
-
-
-            search_lower = (
-
-                search.lower()
-
-            )
-
-
+            search_lower = search.lower()
             records = [
-
-
                 record
-
                 for record in records
-
-
                 if (
-
-                    search_lower
-
-                    in
-
-                    str(
-
-                        record.get(
-                            "student_name"
-                        )
-
-                        or
-
-                        ""
-
-                    ).lower()
-
-                    or
-
-                    search_lower
-
-                    in
-
-                    str(
-
-                        record.get(
-                            "student_email"
-                        )
-
-                        or
-
-                        ""
-
-                    ).lower()
-
+                    search_lower in str(record.get("student_name") or "").lower()
+                    or search_lower in str(record.get("student_email") or "").lower()
                 )
-
             ]
 
-
         # ----------------------------------------------------
-        # FILTER BY DATE
+        # FILTER BY MONTH (YYYY-MM)
         # ----------------------------------------------------
 
-        if date_filter:
-
-
+        if month_filter:
             records = [
-
-
                 record
-
                 for record in records
-
-
                 if (
-
-                    str(
-
-                        record.get(
-                            "created_at"
-                        )
-
-                        or
-
-                        ""
-
-                    ).startswith(
-
-                        date_filter
-
-                    )
-
-                    or
-
-                    str(
-
-                        record.get(
-                            "sent_at"
-                        )
-
-                        or
-
-                        ""
-
-                    ).startswith(
-
-                        date_filter
-
-                    )
-
+                    str(record.get("created_at") or "").startswith(month_filter)
+                    or str(record.get("sent_at") or "").startswith(month_filter)
                 )
-
             ]
 
+        # ----------------------------------------------------
+        # FILTER BY DATE RANGE (date_from, date_to)
+        # ----------------------------------------------------
+
+        if date_from or date_to:
+            filtered_by_range = []
+            for record in records:
+                rec_date = str(record.get("sent_at") or record.get("created_at") or "")[:10]
+                if date_from and rec_date and rec_date < date_from:
+                    continue
+                if date_to and rec_date and rec_date > date_to:
+                    continue
+                filtered_by_range.append(record)
+            records = filtered_by_range
+
+        # ----------------------------------------------------
+        # FILTER BY SINGLE DATE (legacy fallback)
+        # ----------------------------------------------------
+
+        if date_filter and not (date_from or date_to):
+            records = [
+                record
+                for record in records
+                if (
+                    str(record.get("created_at") or "").startswith(date_filter)
+                    or str(record.get("sent_at") or "").startswith(date_filter)
+                )
+            ]
 
         # ----------------------------------------------------
         # FILTER BY STATUS
         # ----------------------------------------------------
 
         if status_filter:
-
-
             records = [
-
-
                 record
-
                 for record in records
-
-
-                if (
-
-                    str(
-
-                        record.get(
-                            "email_status"
-                        )
-
-                        or
-
-                        ""
-
-                    ).lower()
-
-                    ==
-
-                    status_filter
-
-                )
-
+                if str(record.get("email_status") or "").strip().lower() == status_filter
             ]
-
 
         # ----------------------------------------------------
         # GLOBAL FILTERED STATISTICS (BEFORE PAGINATION)
         # ----------------------------------------------------
 
-        total_records = (
-
-            len(
-                records
-            )
-
-        )
-
+        total_records = len(records)
 
         total_sent = sum(
-
             1
-
             for record in records
-
-            if str(
-                record.get(
-                    "email_status"
-                )
-
-                or
-
-                ""
-
-            ).strip().lower()
-
-            ==
-
-            "sent"
-
+            if str(record.get("email_status") or "").strip().lower() == "sent"
         )
-
 
         total_failed = sum(
-
             1
-
             for record in records
-
-            if str(
-                record.get(
-                    "email_status"
-                )
-
-                or
-
-                ""
-
-            ).strip().lower()
-
-            ==
-
-            "failed"
-
+            if str(record.get("email_status") or "").strip().lower() == "failed"
         )
-
 
         # ----------------------------------------------------
         # PAGINATION
         # ----------------------------------------------------
 
         total_pages = max(
-
             1,
-
-            (
-
-                total_records
-
-                +
-
-                PER_PAGE
-
-                -
-
-                1
-
-            )
-
-            //
-
-            PER_PAGE
-
+            (total_records + per_page - 1) // per_page
         )
-
 
         if page > total_pages:
-
             page = total_pages
 
+        start_index = (page - 1) * per_page
+        end_index = start_index + per_page
 
-        start_index = (
+        history_records = records[start_index:end_index]
 
-            page
+        # ----------------------------------------------------
+        # JSON RESPONSE (FOR LIVE SEARCH / AJAX)
+        # ----------------------------------------------------
 
-            -
-
-            1
-
-        ) * PER_PAGE
-
-
-        end_index = (
-
-            start_index
-
-            +
-
-            PER_PAGE
-
+        is_json = (
+            request.args.get("format") == "json"
+            or request.headers.get("Accept") == "application/json"
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         )
 
+        if is_json:
+            return jsonify({
+                "success": True,
+                "records": history_records,
+                "history_records": history_records,
+                "total_records": total_records,
+                "total_sent": total_sent,
+                "total_failed": total_failed,
+                "page": page,
+                "total_pages": total_pages,
+                "per_page": per_page,
+                "available_months": available_months
+            })
 
-        history_records = (
-
-            records[
-
-                start_index:end_index
-
-            ]
-
-        )
-
+        # ----------------------------------------------------
+        # HTML TEMPLATE RENDER
+        # ----------------------------------------------------
 
         return render_template(
-
-
             "history.html",
-
-
-            history_records=
-                history_records,
-
-
-            search=
-                search,
-
-
-            date_filter=
-                date_filter,
-
-
-            status_filter=
-                status_filter,
-
-
-            page=
-                page,
-
-
-            total_pages=
-                total_pages,
-
-
-            total_records=
-                total_records,
-
-
-            total_sent=
-                total_sent,
-
-
-            total_failed=
-                total_failed,
-
-
-            error=
-                None
-
+            history_records=history_records,
+            search=search,
+            month_filter=month_filter,
+            date_from=date_from,
+            date_to=date_to,
+            date_filter=date_filter,
+            status_filter=status_filter,
+            page=page,
+            total_pages=total_pages,
+            total_records=total_records,
+            total_sent=total_sent,
+            total_failed=total_failed,
+            per_page=per_page,
+            available_months=available_months,
+            error=None
         )
-
 
     except Exception as exc:
 
+        print("HISTORY ERROR:", repr(exc))
 
-        print(
-
-            "HISTORY ERROR:",
-
-            repr(
-                exc
-            )
-
+        is_json = (
+            request.args.get("format") == "json"
+            or request.headers.get("Accept") == "application/json"
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         )
 
+        if is_json:
+            return jsonify({
+                "success": False,
+                "error": str(exc),
+                "records": [],
+                "total_records": 0,
+                "total_sent": 0,
+                "total_failed": 0,
+                "page": 1,
+                "total_pages": 1,
+                "per_page": 25,
+                "available_months": []
+            }), 500
 
         return render_template(
-
-
             "history.html",
-
-
-            history_records=
-                [],
-
-
-            search=
-                "",
-
-
-            date_filter=
-                "",
-
-
-            status_filter=
-                "",
-
-
-            page=
-                1,
-
-
-            total_pages=
-                1,
-
-
-            total_records=
-                0,
-
-
-            total_sent=
-                0,
-
-
-            total_failed=
-                0,
-
-
-            error=
-
-                str(
-                    exc
-                )
-
+            history_records=[],
+            search="",
+            month_filter="",
+            date_from="",
+            date_to="",
+            date_filter="",
+            status_filter="",
+            page=1,
+            total_pages=1,
+            total_records=0,
+            total_sent=0,
+            total_failed=0,
+            per_page=25,
+            available_months=[],
+            error=str(exc)
         )
+
+
+# ============================================================
+# EXPORT EMAIL HISTORY (CSV)
+# ============================================================
+
+@app.get("/history/export")
+def export_history():
+
+    try:
+
+        from_date = (request.args.get("date_from") or request.args.get("from_date") or "").strip()
+        to_date = (request.args.get("date_to") or request.args.get("to_date") or "").strip()
+        status_filter = request.args.get("status", "").strip().lower()
+
+        # Date range validation
+        if from_date and to_date and from_date > to_date:
+            return jsonify({
+                "success": False,
+                "error": "From Date cannot be later than To Date."
+            }), 400
+
+        # Fetch records
+        response = (
+            supabase
+            .table("email_history")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        records = response.data or []
+
+        # Filter by Date Range
+        if from_date or to_date:
+            filtered = []
+            for r in records:
+                rec_date = str(r.get("sent_at") or r.get("created_at") or "")[:10]
+                if from_date and rec_date and rec_date < from_date:
+                    continue
+                if to_date and rec_date and rec_date > to_date:
+                    continue
+                filtered.append(r)
+            records = filtered
+
+        # Filter by Status
+        if status_filter:
+            records = [
+                r for r in records
+                if str(r.get("email_status") or "").strip().lower() == status_filter
+            ]
+
+        # Generate CSV in memory with UTF-8 BOM for Microsoft Excel compatibility
+        output = io.StringIO()
+        output.write("\ufeff")
+        writer = csv.writer(output)
+
+        # Write header row
+        writer.writerow([
+            "Student Name",
+            "Student Email",
+            "Internship Domain",
+            "Duration",
+            "Letter Type",
+            "Status",
+            "Sent Date",
+            "Sent Time",
+            "Send Count",
+            "Offer Letter ID"
+        ])
+
+        for r in records:
+            raw_ts = str(r.get("sent_at") or r.get("created_at") or "")
+            date_str = ""
+            time_str = ""
+
+            if raw_ts:
+                try:
+                    dt = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
+                    date_str = dt.strftime("%d-%b-%Y")
+                    time_str = dt.strftime("%I:%M:%S %p")
+                except Exception:
+                    date_str = raw_ts[:10]
+                    time_str = raw_ts[11:19]
+
+            status_display = (
+                "SENT"
+                if str(r.get("email_status") or "").strip().lower() == "sent"
+                else "FAILED"
+            )
+
+            writer.writerow([
+                r.get("student_name") or "-",
+                r.get("student_email") or "-",
+                r.get("internship_domain") or "-",
+                r.get("internship_duration") or "-",
+                r.get("offer_letter_type") or "-",
+                status_display,
+                date_str or "-",
+                time_str or "-",
+                r.get("send_count") or 1,
+                r.get("offer_letter_id") or "-"
+            ])
+
+        filename_parts = ["Persevex_Email_History"]
+        if from_date:
+            filename_parts.append(from_date)
+        if to_date:
+            filename_parts.append(f"to_{to_date}")
+        if not from_date and not to_date:
+            filename_parts.append(datetime.now().strftime("%Y-%m-%d"))
+
+        filename = "_".join(filename_parts) + ".csv"
+
+        csv_content = output.getvalue()
+        output.close()
+
+        return Response(
+            csv_content,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Type": "text/csv; charset=utf-8"
+            }
+        )
+
+    except Exception as exc:
+
+        print("EXPORT ERROR:", repr(exc))
+
+        return jsonify({
+            "success": False,
+            "error": str(exc)
+        }), 500
 
 
 # ============================================================

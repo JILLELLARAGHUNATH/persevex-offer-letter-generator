@@ -71,7 +71,7 @@
             </div>
 
             <!-- =================================================
-                 DASHBOARD SUMMARY METRICS
+                 DASHBOARD SUMMARY METRICS (GLOBAL COUNTS)
                  ================================================= -->
             <div class="history-summary-grid">
                 <div class="summary-stat-card stat-total">
@@ -145,13 +145,16 @@
             {% endif %}
 
             <!-- =================================================
-                 SEARCH + FILTERS
+                 LIVE SEARCH + ADVANCED FILTERS TOOLBAR
                  ================================================= -->
             <form
+                id="historyFilterForm"
                 method="GET"
                 action="/history"
                 class="history-filters"
+                onsubmit="event.preventDefault(); triggerFilterFetch(1);"
             >
+                <!-- Live Search Box -->
                 <div class="filter-group filter-search">
                     <label for="historySearch" class="filter-label">Search Candidate</label>
                     <div class="filter-input-wrap">
@@ -163,52 +166,75 @@
                             id="historySearch"
                             type="text"
                             name="search"
-                            placeholder="Search by student name or email..."
+                            placeholder="Type student name or email..."
                             value="{{ search or '' }}"
                             autocomplete="off"
                             spellcheck="false"
                         >
+                        <div id="searchSpinner" class="search-spinner" hidden title="Searching..."></div>
                     </div>
                 </div>
 
-                <div class="filter-group filter-date">
-                    <label for="historyDate" class="filter-label">Sent Date</label>
+                <!-- Month Quick Filter -->
+                <div class="filter-group filter-month">
+                    <label for="historyMonth" class="filter-label">Month</label>
+                    <div class="filter-input-wrap">
+                        <select id="historyMonth" name="month">
+                            <option value="">All Months</option>
+                            {% for m in (available_months or []) %}
+                                <option value="{{ m.value }}" {% if month_filter == m.value %}selected{% endif %}>
+                                    {{ m.label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Date Range: From -->
+                <div class="filter-group filter-date-from">
+                    <label for="historyDateFrom" class="filter-label">From Date</label>
                     <div class="filter-input-wrap">
                         <input
-                            id="historyDate"
+                            id="historyDateFrom"
                             type="date"
-                            name="date"
-                            value="{{ date_filter or '' }}"
+                            name="date_from"
+                            value="{{ date_from or '' }}"
+                            title="Filter from date"
                         >
                     </div>
                 </div>
 
+                <!-- Date Range: To -->
+                <div class="filter-group filter-date-to">
+                    <label for="historyDateTo" class="filter-label">To Date</label>
+                    <div class="filter-input-wrap">
+                        <input
+                            id="historyDateTo"
+                            type="date"
+                            name="date_to"
+                            value="{{ date_to or '' }}"
+                            title="Filter to date"
+                        >
+                    </div>
+                </div>
+
+                <!-- Status Filter -->
                 <div class="filter-group filter-status">
                     <label for="historyStatus" class="filter-label">Status</label>
                     <div class="filter-input-wrap">
                         <select id="historyStatus" name="status">
                             <option value="">All Status</option>
-                            <option value="sent" {% if status_filter == "sent" %}selected{% endif %}>Sent</option>
-                            <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>Failed</option>
+                            <option value="sent" {% if status_filter == "sent" %}selected{% endif %}>✔ Successful</option>
+                            <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>❌ Failed</option>
                         </select>
                     </div>
                 </div>
 
+                <!-- Action Buttons -->
                 <div class="filter-actions">
                     <button
-                        type="submit"
-                        class="filter-btn"
-                        title="Search and filter records"
-                    >
-                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <span>Search</span>
-                    </button>
-
-                    <a
-                        href="/history"
+                        type="button"
+                        id="clearFiltersBtn"
                         class="clear-btn"
                         title="Reset all filters"
                     >
@@ -216,241 +242,338 @@
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
-                        <span>Clear</span>
-                    </a>
+                        <span>Reset</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        id="openExportModalBtn"
+                        class="export-btn"
+                        title="Export filtered records to CSV"
+                    >
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Export CSV</span>
+                    </button>
                 </div>
             </form>
 
             <!-- =================================================
-                 HISTORY CONTENT
+                 HISTORY CONTENT / TABLE CONTAINER
                  ================================================= -->
             <div id="historyContent">
 
-                {% if history_records %}
+                <div
+                    id="tableContainer"
+                    class="history-table-wrapper"
+                    {% if not history_records %}style="display: none;"{% endif %}
+                >
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th class="th-name">Student Name</th>
+                                <th class="th-email">Email</th>
+                                <th class="th-domain">Domain</th>
+                                <th class="th-duration">Duration</th>
+                                <th class="th-type">Letter Type</th>
+                                <th class="th-status" style="text-align: center;">Status</th>
+                                <th class="th-date">Sent Date & Time</th>
+                                <th class="th-count" style="text-align: center;">Send Count</th>
+                                <th class="th-id">Offer Letter ID</th>
+                                <th class="th-action" style="text-align: center;">Action</th>
+                            </tr>
+                        </thead>
 
-                    <div
-                        id="tableContainer"
-                        class="history-table-wrapper"
-                    >
-                        <table class="history-table">
-                            <thead>
-                                <tr>
-                                    <th class="th-name">Student Name</th>
-                                    <th class="th-email">Email</th>
-                                    <th class="th-domain">Domain</th>
-                                    <th class="th-duration">Duration</th>
-                                    <th class="th-type">Letter Type</th>
-                                    <th class="th-status">Status</th>
-                                    <th class="th-date">Sent Date & Time</th>
-                                    <th class="th-count" style="text-align: center;">Send Count</th>
-                                    <th class="th-id">Offer Letter ID</th>
-                                    <th class="th-action" style="text-align: center;">Action</th>
+                        <tbody id="historyTableBody">
+                            {% for record in (history_records or []) %}
+                                <tr
+                                    id="record-{{ record.id }}"
+                                    data-record-id="{{ record.id }}"
+                                    class="history-row-animate"
+                                >
+                                    <td class="cell-name" data-label="Student Name">
+                                        <span class="cell-name-text">{{ record.student_name or "-" }}</span>
+                                    </td>
+
+                                    <td class="cell-email" data-label="Email">
+                                        <span class="cell-truncate-email" title="{{ record.student_email or '-' }}">
+                                            {{ record.student_email or "-" }}
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-domain" data-label="Domain">
+                                        <span class="domain-tag">{{ record.internship_domain or "-" }}</span>
+                                    </td>
+
+                                    <td class="cell-duration" data-label="Duration">
+                                        <span class="duration-badge">{{ record.internship_duration or "-" }}</span>
+                                    </td>
+
+                                    <td class="cell-type" data-label="Letter Type">
+                                        {% if "with hours" in (record.offer_letter_type or '')|lower %}
+                                            <span class="type-pill type-hours">With Hours</span>
+                                        {% elif "without hours" in (record.offer_letter_type or '')|lower %}
+                                            <span class="type-pill type-no-hours">Without Hours</span>
+                                        {% else %}
+                                            <span class="type-pill">{{ record.offer_letter_type or "-" }}</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="cell-status" data-label="Status" style="text-align: center;">
+                                        {% if record.email_status == "sent" %}
+                                            <span class="status-icon-badge status-sent" title="Email sent successfully">
+                                                <span class="status-symbol">✔</span>
+                                            </span>
+                                        {% else %}
+                                            <span class="status-icon-badge status-failed" title="Email delivery failed">
+                                                <span class="status-symbol">❌</span>
+                                            </span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="cell-date" data-label="Sent Date">
+                                        <div
+                                            class="sent-date"
+                                            data-timestamp="{{ record.sent_at or record.created_at or '' }}"
+                                        >
+                                            <span class="sent-date-day">
+                                                {{ record.sent_at or record.created_at or "-" }}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td class="cell-count" data-label="Send Count" style="text-align: center;">
+                                        <span class="send-count-badge" title="Sent {{ record.send_count or 0 }} time(s)">
+                                            {{ record.send_count or 0 }}
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-id" data-label="Offer Letter ID">
+                                        <span class="cell-truncate-id" title="{{ record.offer_letter_id or '-' }}">
+                                            {{ record.offer_letter_id or "-" }}
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-action" data-label="Action" style="text-align: center;">
+                                        <button
+                                            type="button"
+                                            class="delete-btn"
+                                            title="Delete Record"
+                                            aria-label="Delete Record"
+                                            data-record-id="{{ record.id }}"
+                                            onclick="openDeleteModal(this.dataset.recordId)"
+                                        >
+                                            <svg
+                                                class="delete-icon-svg"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                            >
+                                                <path d="M3 6h18"/>
+                                                <path d="M8 6V4h8v2"/>
+                                                <path d="M19 6l-1 14H6L5 6"/>
+                                                <path d="M10 11v6"/>
+                                                <path d="M14 11v6"/>
+                                            </svg>
+                                        </button>
+                                    </td>
                                 </tr>
-                            </thead>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
 
-                            <tbody id="historyTableBody">
-                                {% for record in history_records %}
-                                    <tr
-                                        id="record-{{ record.id }}"
-                                        data-record-id="{{ record.id }}"
-                                        class="history-row-animate"
-                                    >
-                                        <td class="cell-name" data-label="Student Name">
-                                            <span class="cell-name-text">{{ record.student_name or "-" }}</span>
-                                        </td>
-
-                                        <td class="cell-email" data-label="Email">
-                                            <span class="cell-truncate-email" title="{{ record.student_email or '-' }}">
-                                                {{ record.student_email or "-" }}
-                                            </span>
-                                        </td>
-
-                                        <td class="cell-domain" data-label="Domain">
-                                            <span class="domain-tag">{{ record.internship_domain or "-" }}</span>
-                                        </td>
-
-                                        <td class="cell-duration" data-label="Duration">
-                                            <span class="duration-badge">{{ record.internship_duration or "-" }}</span>
-                                        </td>
-
-                                        <td class="cell-type" data-label="Letter Type">
-                                            {% if "with hours" in (record.offer_letter_type or '')|lower %}
-                                                <span class="type-pill type-hours">With Hours</span>
-                                            {% elif "without hours" in (record.offer_letter_type or '')|lower %}
-                                                <span class="type-pill type-no-hours">Without Hours</span>
-                                            {% else %}
-                                                <span class="type-pill">{{ record.offer_letter_type or "-" }}</span>
-                                            {% endif %}
-                                        </td>
-
-                                        <td class="cell-status" data-label="Status">
-                                            {% if record.email_status == "sent" %}
-                                                <span class="status-sent" title="Email sent successfully">
-                                                    SENT
-                                                </span>
-                                            {% else %}
-                                                <span class="status-failed" title="Email delivery failed">
-                                                    FAILED
-                                                </span>
-                                            {% endif %}
-                                        </td>
-
-                                        <td class="cell-date" data-label="Sent Date">
-                                            <div
-                                                class="sent-date"
-                                                data-timestamp="{{ record.sent_at or record.created_at or '' }}"
-                                            >
-                                                <span class="sent-date-day">
-                                                    {{ record.sent_at or record.created_at or "-" }}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        <td class="cell-count" data-label="Send Count" style="text-align: center;">
-                                            <span class="send-count-badge" title="Sent {{ record.send_count or 0 }} time(s)">
-                                                {{ record.send_count or 0 }}
-                                            </span>
-                                        </td>
-
-                                        <td class="cell-id" data-label="Offer Letter ID">
-                                            <span class="cell-truncate-id" title="{{ record.offer_letter_id or '-' }}">
-                                                {{ record.offer_letter_id or "-" }}
-                                            </span>
-                                        </td>
-
-                                        <td class="cell-action" data-label="Action" style="text-align: center;">
-                                            <button
-                                                type="button"
-                                                class="delete-btn"
-                                                title="Delete Record"
-                                                aria-label="Delete Record"
-                                                data-record-id="{{ record.id }}"
-                                                onclick="openDeleteModal(this.dataset.recordId)"
-                                            >
-                                                <svg
-                                                    class="delete-icon-svg"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    stroke-width="2"
-                                                    stroke-linecap="round"
-                                                    stroke-linejoin="round"
-                                                >
-                                                    <path d="M3 6h18"/>
-                                                    <path d="M8 6V4h8v2"/>
-                                                    <path d="M19 6l-1 14H6L5 6"/>
-                                                    <path d="M10 11v6"/>
-                                                    <path d="M14 11v6"/>
-                                                </svg>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- =================================================
-                         PAGINATION
-                         ================================================= -->
-                    <div
-                        class="pagination"
-                        id="paginationContainer"
-                    >
-                        <div
-                            class="pagination-info"
-                            id="paginationInfo"
-                        >
+                <!-- =================================================
+                     PAGINATION WITH PER-PAGE SELECTOR
+                     ================================================= -->
+                <div
+                    class="pagination"
+                    id="paginationContainer"
+                    {% if not history_records %}style="display: none;"{% endif %}
+                >
+                    <div class="pagination-left">
+                        <div class="pagination-info" id="paginationInfo">
                             Showing
-                            <strong>
-                                {{ ((page - 1) * 25) + 1 if total_records > 0 else 0 }}–{{ [page * 25, total_records]|min }}
+                            <strong id="paginationRange">
+                                {{ ((page - 1) * (per_page or 25)) + 1 if total_records > 0 else 0 }}–{{ [page * (per_page or 25), total_records]|min }}
                             </strong>
                             of
-                            <strong id="totalRecords">{{ total_records }}</strong> records
-                            <span class="pagination-page-indicator">(Page {{ page }} of {{ total_pages }})</span>
+                            <strong id="totalRecords">{{ total_records or 0 }}</strong> records
+                            <span class="pagination-page-indicator" id="paginationPageIndicator">(Page {{ page }} of {{ total_pages }})</span>
                         </div>
 
-                        <div class="pagination-buttons">
-                            {% if page > 1 %}
-                                <a
-                                    class="page-btn page-prev"
-                                    href="/history?page={{ page - 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                                    title="Previous page"
-                                >
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                        <polyline points="15 18 9 12 15 6"></polyline>
-                                    </svg>
-                                    <span>Prev</span>
-                                </a>
-                            {% else %}
-                                <span class="page-btn page-prev disabled">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                        <polyline points="15 18 9 12 15 6"></polyline>
-                                    </svg>
-                                    <span>Prev</span>
-                                </span>
-                            {% endif %}
-
-                            {% for page_number in range(1, total_pages + 1) %}
-                                {% if page_number <= 5 or page_number == total_pages or (page_number >= page - 1 and page_number <= page + 1) %}
-                                    <a
-                                        class="page-btn {% if page_number == page %}active{% endif %}"
-                                        href="/history?page={{ page_number }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                                    >
-                                        {{ page_number }}
-                                    </a>
-                                {% endif %}
-                            {% endfor %}
-
-                            {% if page < total_pages %}
-                                <a
-                                    class="page-btn page-next"
-                                    href="/history?page={{ page + 1 }}&search={{ search or '' }}&date={{ date_filter or '' }}&status={{ status_filter or '' }}"
-                                    title="Next page"
-                                >
-                                    <span>Next</span>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
-                                    </svg>
-                                </a>
-                            {% else %}
-                                <span class="page-btn page-next disabled">
-                                    <span>Next</span>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                        <polyline points="9 18 15 12 9 6"></polyline>
-                                    </svg>
-                                </span>
-                            {% endif %}
+                        <div class="per-page-selector">
+                            <label for="historyPerPage" class="per-page-label">Show:</label>
+                            <select id="historyPerPage" class="per-page-select" title="Records per page">
+                                <option value="25" {% if per_page == 25 %}selected{% endif %}>25 / page</option>
+                                <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
+                                <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
+                            </select>
                         </div>
                     </div>
 
-                {% else %}
-
-                    <div
-                        class="empty-history"
-                        id="emptyHistory"
-                    >
-                        <div class="empty-preview-graphic">
-                            <div class="empty-preview-circle">
-                                <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <polyline points="12 6 12 12 16 14"></polyline>
+                    <div class="pagination-buttons" id="paginationButtons">
+                        {% if page > 1 %}
+                            <button
+                                type="button"
+                                class="page-btn page-prev"
+                                data-page="{{ page - 1 }}"
+                                onclick="goToPage(this.dataset.page)"
+                                title="Previous page"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
                                 </svg>
-                            </div>
-                        </div>
-                        <h3>No Email History Found</h3>
-                        <p>No records match your search query or selected filters.</p>
-                        <a href="/history" class="filter-btn" style="display: inline-flex; margin-top: 14px; text-decoration: none;">
-                            Reset Filters
-                        </a>
-                    </div>
+                                <span>Prev</span>
+                            </button>
+                        {% else %}
+                            <span class="page-btn page-prev disabled">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <polyline points="15 18 9 12 15 6"></polyline>
+                                </svg>
+                                <span>Prev</span>
+                            </span>
+                        {% endif %}
 
-                {% endif %}
+                        {% for page_number in range(1, (total_pages or 1) + 1) %}
+                            {% if page_number <= 5 or page_number == total_pages or (page_number >= page - 1 and page_number <= page + 1) %}
+                                <button
+                                    type="button"
+                                    class="page-btn {% if page_number == page %}active{% endif %}"
+                                    data-page="{{ page_number }}"
+                                    onclick="goToPage(this.dataset.page)"
+                                >
+                                    {{ page_number }}
+                                </button>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page < total_pages %}
+                            <button
+                                type="button"
+                                class="page-btn page-next"
+                                data-page="{{ page + 1 }}"
+                                onclick="goToPage(this.dataset.page)"
+                                title="Next page"
+                            >
+                                <span>Next</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        {% else %}
+                            <span class="page-btn page-next disabled">
+                                <span>Next</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- =================================================
+                     EMPTY STATE
+                     ================================================= -->
+                <div
+                    class="empty-history"
+                    id="emptyHistory"
+                    {% if history_records %}style="display: none;"{% endif %}
+                >
+                    <div class="empty-preview-graphic">
+                        <div class="empty-preview-circle">
+                            <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <h3>No Email History Found</h3>
+                    <p>No records match your search query or selected filters.</p>
+                    <button type="button" id="resetEmptyBtn" class="filter-btn" style="display: inline-flex; margin-top: 14px;">
+                        Reset Filters
+                    </button>
+                </div>
 
             </div>
         </section>
     </main>
 
+</div>
+
+<!-- =========================================================
+     EXPORT RECORDS MODAL
+     ========================================================= -->
+<div
+    id="exportModal"
+    class="export-modal"
+    hidden
+>
+    <div class="export-modal-box">
+        <div class="modal-icon-header export-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+        </div>
+
+        <h3>Export Email History</h3>
+        <p>Choose filters below to export offer letter email records into a formatted CSV spreadsheet.</p>
+
+        <div class="export-modal-form">
+            <div class="export-form-row">
+                <div class="export-field">
+                    <label for="exportDateFrom" class="export-label">From Date</label>
+                    <input type="date" id="exportDateFrom" class="export-input">
+                </div>
+                <div class="export-field">
+                    <label for="exportDateTo" class="export-label">To Date</label>
+                    <input type="date" id="exportDateTo" class="export-input">
+                </div>
+            </div>
+
+            <div class="export-form-row">
+                <div class="export-field full-width">
+                    <label for="exportStatus" class="export-label">Status Filter</label>
+                    <select id="exportStatus" class="export-input">
+                        <option value="">All Status (Sent & Failed)</option>
+                        <option value="sent">✔ Successful Sent Only</option>
+                        <option value="failed">❌ Failed Emails Only</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="export-modal-actions">
+            <button
+                type="button"
+                id="cancelExportBtn"
+                class="modal-cancel-btn"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="confirmExportBtn"
+                class="modal-confirm-btn export-download-btn"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download CSV</span>
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- =========================================================
@@ -496,8 +619,9 @@
 </div>
 
 <!-- =========================================================
-     TOAST
+     TOAST & PAGE CONFIG
      ========================================================= -->
+<div id="historyConfig" data-page="{{ page or 1 }}" data-per-page="{{ per_page or 25 }}" hidden></div>
 <div
     id="historyToast"
     class="history-toast"
@@ -506,9 +630,48 @@
 <script>
 
 /* ==========================================================
-   VARIABLES
+   STATE & DOM ELEMENTS
    ========================================================== */
+const historyConfig = document.getElementById("historyConfig");
+let currentPage = historyConfig ? (parseInt(historyConfig.dataset.page, 10) || 1) : 1;
+let currentPerPage = historyConfig ? (parseInt(historyConfig.dataset.perPage, 10) || 25) : 25;
+let searchDebounceTimer = null;
 let selectedRecordId = null;
+
+const searchInput = document.getElementById("historySearch");
+const searchSpinner = document.getElementById("searchSpinner");
+const monthSelect = document.getElementById("historyMonth");
+const dateFromInput = document.getElementById("historyDateFrom");
+const dateToInput = document.getElementById("historyDateTo");
+const statusSelect = document.getElementById("historyStatus");
+const perPageSelect = document.getElementById("historyPerPage");
+const clearFiltersBtn = document.getElementById("clearFiltersBtn");
+const resetEmptyBtn = document.getElementById("resetEmptyBtn");
+
+const tableContainer = document.getElementById("tableContainer");
+const tableBody = document.getElementById("historyTableBody");
+const paginationContainer = document.getElementById("paginationContainer");
+const emptyHistory = document.getElementById("emptyHistory");
+
+const summaryTotalRecords = document.getElementById("summaryTotalRecords");
+const summarySentRecords = document.getElementById("summarySentRecords");
+const summaryFailedRecords = document.getElementById("summaryFailedRecords");
+const summaryPageRecords = document.getElementById("summaryPageRecords");
+
+const paginationRange = document.getElementById("paginationRange");
+const totalRecordsElem = document.getElementById("totalRecords");
+const paginationPageIndicator = document.getElementById("paginationPageIndicator");
+const paginationButtons = document.getElementById("paginationButtons");
+
+// Modals
+const exportModal = document.getElementById("exportModal");
+const openExportModalBtn = document.getElementById("openExportModalBtn");
+const cancelExportBtn = document.getElementById("cancelExportBtn");
+const confirmExportBtn = document.getElementById("confirmExportBtn");
+const exportDateFrom = document.getElementById("exportDateFrom");
+const exportDateTo = document.getElementById("exportDateTo");
+const exportStatus = document.getElementById("exportStatus");
+
 const deleteModal = document.getElementById("deleteModal");
 const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
@@ -524,53 +687,450 @@ function showToast(text, type = "success") {
 
     setTimeout(function() {
         historyToast.classList.remove("show");
-    }, 3000);
+    }, 3200);
 }
 
 /* ==========================================================
-   FORMAT DATE AND TIME
+   DATE FORMATTER HELPER
    ========================================================== */
+function formatTimestamp(timestamp) {
+    if (!timestamp) return { date: "-", time: "" };
+    try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return { date: timestamp, time: "" };
+
+        const formattedDate = date.toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric"
+        });
+
+        const formattedTime = date.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: true
+        });
+
+        return { date: formattedDate, time: formattedTime };
+    } catch (e) {
+        return { date: timestamp, time: "" };
+    }
+}
+
 function formatHistoryDates() {
     const dateElements = document.querySelectorAll(".sent-date");
-
     dateElements.forEach(function(element) {
         const timestamp = element.dataset.timestamp;
-        if (!timestamp) {
-            return;
-        }
-
-        try {
-            const date = new Date(timestamp);
-            if (isNaN(date.getTime())) {
-                return;
-            }
-
-            const formattedDate = date.toLocaleDateString("en-IN", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric"
-            });
-
-            const formattedTime = date.toLocaleTimeString("en-IN", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                hour12: true
-            });
-
-            element.innerHTML = `
-                <span class="sent-date-day">${formattedDate}</span>
-                <span class="sent-date-time">${formattedTime}</span>
-            `;
-        }
-        catch (error) {
-            console.error("Date formatting error:", error);
-        }
+        if (!timestamp) return;
+        const formatted = formatTimestamp(timestamp);
+        element.innerHTML = `
+            <span class="sent-date-day">${formatted.date}</span>
+            ${formatted.time ? `<span class="sent-date-time">${formatted.time}</span>` : ''}
+        `;
     });
 }
 
 /* ==========================================================
-   OPEN DELETE MODAL
+   FETCH FILTERED RECORDS (AJAX / LIVE SEARCH)
+   ========================================================== */
+async function triggerFilterFetch(targetPage = 1) {
+    currentPage = targetPage;
+    currentPerPage = parseInt(perPageSelect.value, 10) || 25;
+
+    const searchValue = (searchInput.value || "").trim();
+    const monthValue = monthSelect.value || "";
+    const dateFromValue = dateFromInput.value || "";
+    const dateToValue = dateToInput.value || "";
+    const statusValue = statusSelect.value || "";
+
+    const params = new URLSearchParams();
+    params.set("format", "json");
+    params.set("page", currentPage);
+    params.set("per_page", currentPerPage);
+
+    if (searchValue) params.set("search", searchValue);
+    if (monthValue) params.set("month", monthValue);
+    if (dateFromValue) params.set("date_from", dateFromValue);
+    if (dateToValue) params.set("date_to", dateToValue);
+    if (statusValue) params.set("status", statusValue);
+
+    if (searchSpinner) searchSpinner.hidden = false;
+
+    try {
+        const response = await fetch(`/history?${params.toString()}`, {
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to load records.");
+        }
+
+        const data = await response.json();
+        renderLiveHistory(data);
+    } catch (error) {
+        console.error("Live filter error:", error);
+        showToast("Error updating history records.", "error");
+    } finally {
+        if (searchSpinner) searchSpinner.hidden = true;
+    }
+}
+
+/* ==========================================================
+   RENDER TABLE & METRICS
+   ========================================================== */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return "-";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function renderLiveHistory(data) {
+    const records = data.history_records || [];
+    const totalRecords = data.total_records || 0;
+    const totalSent = data.total_sent || 0;
+    const totalFailed = data.total_failed || 0;
+    const totalPages = data.total_pages || 1;
+    const page = data.page || 1;
+    const perPage = data.per_page || 25;
+
+    // Update global summary stats
+    if (summaryTotalRecords) summaryTotalRecords.textContent = totalRecords;
+    if (summarySentRecords) summarySentRecords.textContent = totalSent;
+    if (summaryFailedRecords) summaryFailedRecords.textContent = totalFailed;
+    if (summaryPageRecords) summaryPageRecords.textContent = records.length;
+
+    // Render table or empty state
+    if (records.length === 0) {
+        if (tableContainer) tableContainer.style.display = "none";
+        if (paginationContainer) paginationContainer.style.display = "none";
+        if (emptyHistory) emptyHistory.style.display = "block";
+        return;
+    }
+
+    if (emptyHistory) emptyHistory.style.display = "none";
+    if (tableContainer) tableContainer.style.display = "block";
+    if (paginationContainer) paginationContainer.style.display = "flex";
+
+    // Build rows
+    let rowsHtml = "";
+    records.forEach((record, index) => {
+        const studentName = escapeHtml(record.student_name);
+        const studentEmail = escapeHtml(record.student_email);
+        const domain = escapeHtml(record.internship_domain);
+        const duration = escapeHtml(record.internship_duration);
+        const letterType = record.offer_letter_type || "";
+        const letterTypeLower = letterType.toLowerCase();
+        
+        let typePillHtml = `<span class="type-pill">${escapeHtml(letterType)}</span>`;
+        if (letterTypeLower.includes("with hours")) {
+            typePillHtml = `<span class="type-pill type-hours">With Hours</span>`;
+        } else if (letterTypeLower.includes("without hours")) {
+            typePillHtml = `<span class="type-pill type-no-hours">Without Hours</span>`;
+        }
+
+        const isSent = (record.email_status || "").toLowerCase() === "sent";
+        const statusHtml = isSent
+            ? `<span class="status-icon-badge status-sent" title="Email sent successfully">
+                   <span class="status-symbol">✔</span>
+               </span>`
+            : `<span class="status-icon-badge status-failed" title="Email delivery failed">
+                   <span class="status-symbol">❌</span>
+               </span>`;
+
+        const rawTimestamp = record.sent_at || record.created_at || "";
+        const formatted = formatTimestamp(rawTimestamp);
+        const dateHtml = `
+            <div class="sent-date" data-timestamp="${escapeHtml(rawTimestamp)}">
+                <span class="sent-date-day">${formatted.date}</span>
+                ${formatted.time ? `<span class="sent-date-time">${formatted.time}</span>` : ''}
+            </div>
+        `;
+
+        const sendCount = record.send_count || 0;
+        const offerLetterId = escapeHtml(record.offer_letter_id);
+        const recordId = escapeHtml(record.id);
+
+        rowsHtml += `
+            <tr id="record-${recordId}" data-record-id="${recordId}" class="history-row-animate">
+                <td class="cell-name" data-label="Student Name">
+                    <span class="cell-name-text">${studentName}</span>
+                </td>
+                <td class="cell-email" data-label="Email">
+                    <span class="cell-truncate-email" title="${studentEmail}">
+                        ${studentEmail}
+                    </span>
+                </td>
+                <td class="cell-domain" data-label="Domain">
+                    <span class="domain-tag">${domain}</span>
+                </td>
+                <td class="cell-duration" data-label="Duration">
+                    <span class="duration-badge">${duration}</span>
+                </td>
+                <td class="cell-type" data-label="Letter Type">
+                    ${typePillHtml}
+                </td>
+                <td class="cell-status" data-label="Status" style="text-align: center;">
+                    ${statusHtml}
+                </td>
+                <td class="cell-date" data-label="Sent Date">
+                    ${dateHtml}
+                </td>
+                <td class="cell-count" data-label="Send Count" style="text-align: center;">
+                    <span class="send-count-badge" title="Sent ${sendCount} time(s)">
+                        ${sendCount}
+                    </span>
+                </td>
+                <td class="cell-id" data-label="Offer Letter ID">
+                    <span class="cell-truncate-id" title="${offerLetterId}">
+                        ${offerLetterId}
+                    </span>
+                </td>
+                <td class="cell-action" data-label="Action" style="text-align: center;">
+                    <button
+                        type="button"
+                        class="delete-btn"
+                        title="Delete Record"
+                        aria-label="Delete Record"
+                        data-record-id="${recordId}"
+                        onclick="openDeleteModal(this.dataset.recordId)"
+                    >
+                        <svg class="delete-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"/>
+                            <path d="M8 6V4h8v2"/>
+                            <path d="M19 6l-1 14H6L5 6"/>
+                            <path d="M10 11v6"/>
+                            <path d="M14 11v6"/>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableBody.innerHTML = rowsHtml;
+
+    // Update Pagination UI
+    const startRange = totalRecords > 0 ? ((page - 1) * perPage) + 1 : 0;
+    const endRange = Math.min(page * perPage, totalRecords);
+
+    if (paginationRange) paginationRange.textContent = `${startRange}–${endRange}`;
+    if (totalRecordsElem) totalRecordsElem.textContent = totalRecords;
+    if (paginationPageIndicator) paginationPageIndicator.textContent = `(Page ${page} of ${totalPages})`;
+
+    renderPaginationButtons(page, totalPages);
+}
+
+/* ==========================================================
+   RENDER PAGINATION BUTTONS
+   ========================================================== */
+function renderPaginationButtons(page, totalPages) {
+    let html = "";
+
+    // Prev Button
+    if (page > 1) {
+        html += `
+            <button type="button" class="page-btn page-prev" onclick="goToPage(${page - 1})" title="Previous page">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>Prev</span>
+            </button>
+        `;
+    } else {
+        html += `
+            <span class="page-btn page-prev disabled">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>Prev</span>
+            </span>
+        `;
+    }
+
+    // Numbered Buttons
+    for (let i = 1; i <= totalPages; i++) {
+        if (i <= 5 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
+            const activeClass = i === page ? "active" : "";
+            html += `
+                <button type="button" class="page-btn ${activeClass}" onclick="goToPage(${i})">
+                    ${i}
+                </button>
+            `;
+        }
+    }
+
+    // Next Button
+    if (page < totalPages) {
+        html += `
+            <button type="button" class="page-btn page-next" onclick="goToPage(${page + 1})" title="Next page">
+                <span>Next</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+        `;
+    } else {
+        html += `
+            <span class="page-btn page-next disabled">
+                <span>Next</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </span>
+        `;
+    }
+
+    if (paginationButtons) {
+        paginationButtons.innerHTML = html;
+    }
+}
+
+function goToPage(page) {
+    const targetPage = parseInt(page, 10) || 1;
+    triggerFilterFetch(targetPage);
+    window.scrollTo({ top: 180, behavior: 'smooth' });
+}
+
+/* ==========================================================
+   EVENT LISTENERS: LIVE SEARCH & FILTERS
+   ========================================================== */
+if (searchInput) {
+    searchInput.addEventListener("input", function() {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(function() {
+            triggerFilterFetch(1);
+        }, 300);
+    });
+}
+
+if (monthSelect) {
+    monthSelect.addEventListener("change", function() {
+        if (this.value) {
+            // Clear date range if month is chosen
+            if (dateFromInput) dateFromInput.value = "";
+            if (dateToInput) dateToInput.value = "";
+        }
+        triggerFilterFetch(1);
+    });
+}
+
+if (dateFromInput) {
+    dateFromInput.addEventListener("change", function() {
+        if (this.value && monthSelect) {
+            monthSelect.value = "";
+        }
+        triggerFilterFetch(1);
+    });
+}
+
+if (dateToInput) {
+    dateToInput.addEventListener("change", function() {
+        if (this.value && monthSelect) {
+            monthSelect.value = "";
+        }
+        triggerFilterFetch(1);
+    });
+}
+
+if (statusSelect) {
+    statusSelect.addEventListener("change", function() {
+        triggerFilterFetch(1);
+    });
+}
+
+if (perPageSelect) {
+    perPageSelect.addEventListener("change", function() {
+        triggerFilterFetch(1);
+    });
+}
+
+function resetAllFilters() {
+    if (searchInput) searchInput.value = "";
+    if (monthSelect) monthSelect.value = "";
+    if (dateFromInput) dateFromInput.value = "";
+    if (dateToInput) dateToInput.value = "";
+    if (statusSelect) statusSelect.value = "";
+    triggerFilterFetch(1);
+}
+
+if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener("click", resetAllFilters);
+}
+
+if (resetEmptyBtn) {
+    resetEmptyBtn.addEventListener("click", resetAllFilters);
+}
+
+/* ==========================================================
+   EXPORT MODAL HANDLERS
+   ========================================================== */
+function openExportModal() {
+    // Pre-populate with current filters
+    if (exportDateFrom && dateFromInput) exportDateFrom.value = dateFromInput.value;
+    if (exportDateTo && dateToInput) exportDateTo.value = dateToInput.value;
+    if (exportStatus && statusSelect) exportStatus.value = statusSelect.value;
+
+    exportModal.classList.remove("modal-closing");
+    exportModal.hidden = false;
+    document.body.style.overflow = "hidden";
+}
+
+function closeExportModal() {
+    exportModal.classList.add("modal-closing");
+    setTimeout(function() {
+        exportModal.hidden = true;
+        exportModal.classList.remove("modal-closing");
+        document.body.style.overflow = "";
+    }, 200);
+}
+
+if (openExportModalBtn) {
+    openExportModalBtn.addEventListener("click", openExportModal);
+}
+
+if (cancelExportBtn) {
+    cancelExportBtn.addEventListener("click", closeExportModal);
+}
+
+exportModal.addEventListener("click", function(event) {
+    if (event.target === exportModal) {
+        closeExportModal();
+    }
+});
+
+if (confirmExportBtn) {
+    confirmExportBtn.addEventListener("click", function() {
+        const fromVal = (exportDateFrom.value || "").trim();
+        const toVal = (exportDateTo.value || "").trim();
+        const statVal = (exportStatus.value || "").trim();
+
+        if (fromVal && toVal && fromVal > toVal) {
+            showToast("From Date cannot be after To Date.", "error");
+            return;
+        }
+
+        const params = new URLSearchParams();
+        if (fromVal) params.set("date_from", fromVal);
+        if (toVal) params.set("date_to", toVal);
+        if (statVal) params.set("status", statVal);
+
+        showToast("Generating CSV export...", "success");
+        closeExportModal();
+
+        // Trigger direct file download
+        window.location.href = `/history/export?${params.toString()}`;
+    });
+}
+
+/* ==========================================================
+   DELETE MODAL HANDLERS
    ========================================================== */
 function openDeleteModal(recordId) {
     selectedRecordId = recordId;
@@ -579,9 +1139,6 @@ function openDeleteModal(recordId) {
     document.body.style.overflow = "hidden";
 }
 
-/* ==========================================================
-   CLOSE DELETE MODAL (WITH SMOOTH FADE OUT)
-   ========================================================== */
 function closeDeleteModal() {
     deleteModal.classList.add("modal-closing");
     setTimeout(function () {
@@ -592,29 +1149,18 @@ function closeDeleteModal() {
     }, 200);
 }
 
-/* ==========================================================
-   CANCEL DELETE
-   ========================================================== */
 cancelDeleteBtn.addEventListener("click", function() {
     closeDeleteModal();
 });
 
-/* ==========================================================
-   CLOSE MODAL WHEN CLICKING OUTSIDE
-   ========================================================== */
 deleteModal.addEventListener("click", function(event) {
     if (event.target === deleteModal) {
         closeDeleteModal();
     }
 });
 
-/* ==========================================================
-   DELETE RECORD
-   ========================================================== */
 confirmDeleteBtn.addEventListener("click", async function() {
-    if (!selectedRecordId) {
-        return;
-    }
+    if (!selectedRecordId) return;
 
     const recordId = selectedRecordId;
     confirmDeleteBtn.disabled = true;
@@ -641,12 +1187,10 @@ confirmDeleteBtn.addEventListener("click", async function() {
 
         closeDeleteModal();
         localStorage.setItem("persevex_history_updated", Date.now().toString());
-
         showToast("History record deleted successfully.", "success");
 
-        setTimeout(function() {
-            window.location.reload();
-        }, 700);
+        // Refresh list dynamically without full page reload
+        triggerFilterFetch(currentPage);
     }
     catch (error) {
         console.error("Delete history error:", error);
@@ -659,16 +1203,17 @@ confirmDeleteBtn.addEventListener("click", async function() {
 });
 
 /* ==========================================================
-   ESC KEY CLOSE MODAL
+   KEYBOARD SHORTCUTS (ESC)
    ========================================================== */
 document.addEventListener("keydown", function(event) {
-    if (event.key === "Escape" && !deleteModal.hidden) {
-        closeDeleteModal();
+    if (event.key === "Escape") {
+        if (!deleteModal.hidden) closeDeleteModal();
+        if (!exportModal.hidden) closeExportModal();
     }
 });
 
 /* ==========================================================
-   INITIAL DATE FORMATTING
+   INITIAL FORMATTING ON LOAD
    ========================================================== */
 document.addEventListener("DOMContentLoaded", function() {
     formatHistoryDates();
