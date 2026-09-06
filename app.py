@@ -10,7 +10,7 @@ import imaplib
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
-from flask import Flask, render_template, request, jsonify
+
 from flask import (
     Flask,
     render_template,
@@ -57,7 +57,9 @@ if not SESSION_SECRET:
 app.secret_key = SESSION_SECRET
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = False
+app.config["SESSION_COOKIE_SECURE"] = (
+    os.getenv("VERCEL") == "1"
+)
 
 
 # ============================================================
@@ -2383,6 +2385,58 @@ def index():
         failed_count=failed_count,
     )
 
+# ============================================================
+# LIVE EMAIL STATUS COUNTS
+# ============================================================
+
+@app.get("/api/email-status-counts")
+def email_status_counts():
+
+    try:
+
+        response = (
+            supabase
+            .table("email_history")
+            .select("email_status")
+            .execute()
+        )
+
+        records = response.data or []
+
+        success_count = sum(
+            1
+            for record in records
+            if str(
+                record.get("email_status") or ""
+            ).lower() == "sent"
+        )
+
+        failed_count = sum(
+            1
+            for record in records
+            if str(
+                record.get("email_status") or ""
+            ).lower() == "failed"
+        )
+
+        return jsonify({
+            "success": True,
+            "success_count": success_count,
+            "failed_count": failed_count
+        })
+
+    except Exception as exc:
+
+        print(
+            "LIVE STATUS COUNT ERROR:",
+            repr(exc)
+        )
+
+        return jsonify({
+            "success": False,
+            "success_count": 0,
+            "failed_count": 0
+        }), 500
 
 # ============================================================
 # GENERATE API
@@ -2705,45 +2759,6 @@ def get_previous_email_record(email):
         )
 
         return None
-
-# ============================================================
-# EMAIL HISTORY HELPERS
-# ============================================================
-
-def get_previous_email_record(email):
-
-    try:
-
-        response = (
-            supabase
-            .table("email_history")
-            .select("*")
-            .eq(
-                "student_email",
-                email.lower()
-            )
-            .order(
-                "created_at",
-                desc=True
-            )
-            .limit(1)
-            .execute()
-        )
-
-        if response.data:
-            return response.data[0]
-
-        return None
-
-    except Exception as exc:
-
-        print(
-            "DUPLICATE EMAIL CHECK ERROR:",
-            repr(exc)
-        )
-
-        return None
-
 # ============================================================
 # SEND EMAIL
 # ============================================================

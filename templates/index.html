@@ -1,29 +1,21 @@
 <!doctype html>
 <html lang="en">
-
 <head>
-
     <meta charset="utf-8">
-
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1"
     >
-
     <title>Persevex Offer Letter Generator</title>
-
     <link
         rel="icon"
         type="image/png"
         href="/static/persevex-icon.png"
     >
-
     <link
         rel="stylesheet"
         href="/static/style.css"
     >
-
-
 <style>
 
 /* ==========================================================
@@ -62,8 +54,6 @@
     display: none !important;
 
 }
-
-
 /* ==========================================================
    MODAL BOX
    ========================================================== */
@@ -91,8 +81,6 @@
     animation: modalAppear 0.2s ease-out;
 
 }
-
-
 @keyframes modalAppear {
 
     from {
@@ -259,12 +247,10 @@
          ===================================================== -->
 
     <header>
-
-
         <div>
 
             <div class="brand">
-                persevex
+                persevex LLP
             </div>
 
             <div class="tagline">
@@ -282,12 +268,18 @@
         <div class="header-stats" aria-label="Email delivery summary">
             <div class="header-stat success-stat">
                 <span class="header-stat-icon">✓</span>
-                <span>Success: <strong>{{ success_count }}</strong></span>
+                <span>
+                    Success:
+                    <strong id="successCount">{{ success_count }}</strong>
+                </span>
             </div>
 
             <div class="header-stat failed-stat">
                 <span class="header-stat-icon">✕</span>
-                <span>Failed: <strong>{{ failed_count }}</strong></span>
+                <span>
+                    Failed:
+                    <strong id="failedCount">{{ failed_count }}</strong>
+                </span>
             </div>
         </div>
 
@@ -1530,7 +1522,74 @@ function closeResendModal() {
 
 
 }
+/* ==========================================================
+   UPDATE EMAIL STATUS COUNTS LIVE
+   ========================================================== */
 
+async function updateEmailStatusCounts() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/email-status-counts",
+                {
+                    cache: "no-store"
+                }
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Unable to update email counts."
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        const successCount =
+            document.getElementById(
+                "successCount"
+            );
+
+
+        const failedCount =
+            document.getElementById(
+                "failedCount"
+            );
+
+
+        if (successCount) {
+
+            successCount.textContent =
+                result.success_count ?? 0;
+
+        }
+
+
+        if (failedCount) {
+
+            failedCount.textContent =
+                result.failed_count ?? 0;
+
+        }
+
+    }
+    catch (error) {
+
+        console.error(
+            "EMAIL COUNT UPDATE ERROR:",
+            error
+        );
+
+    }
+
+}
 
 /* ==========================================================
    SEND EMAIL FUNCTION
@@ -1775,6 +1834,7 @@ async function sendEmail(sendAgain = false) {
             Date.now().toString()
 
         );
+        await updateEmailStatusCounts();
 
 
         if (result.resent) {
@@ -1798,20 +1858,39 @@ async function sendEmail(sendAgain = false) {
     }
     catch (error) {
 
-
-        console.error(error);
-
-
-        message.textContent =
-
-            error.message
-
-            ||
-
-            "Email failed.";
+    console.error(error);
 
 
-    }
+    /*
+       The server may have saved a
+       failed email record in history.
+    */
+
+    localStorage.setItem(
+
+        "persevex_history_updated",
+
+        Date.now().toString()
+
+    );
+
+
+    /* Update counts immediately */
+
+    await updateEmailStatusCounts();
+
+
+    message.textContent =
+
+        error.message
+
+        ||
+
+        "Email failed.";
+
+}
+
+
     finally {
 
 
