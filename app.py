@@ -2910,7 +2910,7 @@ def send_email():
 
         message = EmailMessage()
 
-        message["From"] = f"Persevex <{SENDER_EMAIL}>"
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
 
         message["To"] = recipient
 
