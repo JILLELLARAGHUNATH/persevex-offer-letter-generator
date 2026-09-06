@@ -2353,9 +2353,34 @@ def logout():
 
 @app.get("/")
 def index():
+    try:
+        response = (
+            supabase
+            .table("email_history")
+            .select("email_status")
+            .execute()
+        )
+        records = response.data or []
+
+        success_count = sum(
+            1
+            for record in records
+            if str(record.get("email_status") or "").lower() == "sent"
+        )
+        failed_count = sum(
+            1
+            for record in records
+            if str(record.get("email_status") or "").lower() == "failed"
+        )
+    except Exception as exc:
+        print("HEADER STATUS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
 
     return render_template(
-        "index.html"
+        "index.html",
+        success_count=success_count,
+        failed_count=failed_count,
     )
 
 

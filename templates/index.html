@@ -279,6 +279,18 @@
         </h1>
 
 
+        <div class="header-stats" aria-label="Email delivery summary">
+            <div class="header-stat success-stat">
+                <span class="header-stat-icon">✓</span>
+                <span>Success: <strong>{{ success_count }}</strong></span>
+            </div>
+
+            <div class="header-stat failed-stat">
+                <span class="header-stat-icon">✕</span>
+                <span>Failed: <strong>{{ failed_count }}</strong></span>
+            </div>
+        </div>
+
         <div class="header-actions">
 
             <a
@@ -699,7 +711,7 @@
                     type="button"
                     disabled
                 >
-                    Send to Student
+                    Send to Student 📧
                 </button>
 
 

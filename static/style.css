@@ -329,3 +329,59 @@ input[readonly] {
     }
 
 }
+
+/* ==========================================================
+   HEADER EMAIL SUMMARY
+   ========================================================== */
+
+.header-stats {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-left: auto;
+}
+
+.header-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.header-stat-icon {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.success-stat {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.failed-stat {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.header-stat strong {
+    font-size: 15px;
+}
+
+@media (max-width: 900px) {
+    .header-stats {
+        order: 3;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .header-stats {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}
