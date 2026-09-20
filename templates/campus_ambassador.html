@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Campus Ambassador Offer Letter - Persevex</title>
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
+            </div>
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
+            </div>
+        </div>
+
+        <h1>
+            CAMPUS AMBASSADOR <span class="highlight">OFFER LETTER</span>
+        </h1>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador" class="nav-tab-link active" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/history" class="nav-tab-link" title="Unified History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </a>
+        </nav>
+
+        <div class="header-stats" aria-label="Email delivery summary">
+            <div class="header-stat success-stat" title="Total Successful Email Deliveries">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+                <span>
+                    Success:
+                    <strong id="successCount">{{ success_count }}</strong>
+                </span>
+            </div>
+
+            <div class="header-stat failed-stat" title="Total Failed Email Attempts">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+                <span>
+                    Failed:
+                    <strong id="failedCount">{{ failed_count }}</strong>
+                </span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- =====================================================
+         MODE SWITCHER: SINGLE vs BULK CA OFFER LETTER
+         ===================================================== -->
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <a href="/campus-ambassador/single" id="tabSingleCA" class="mode-pill-btn active" style="text-decoration: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Single CA Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador/bulk" id="tabBulkCA" class="mode-pill-btn" style="text-decoration: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>Bulk CA Offer Letters</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         MAIN WORKSPACE
+         ===================================================== -->
+    <main>
+
+        <!-- =================================================
+             LEFT FORM SECTION
+             ================================================= -->
+        <section class="card form-card-animate">
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    Candidate Details
+                </h2>
+                <span class="section-tag">2-Page CA Letter</span>
+            </div>
+
+            <form id="caForm" autocomplete="off">
+                <!-- CANDIDATE NAME -->
+                <div class="form-group">
+                    <label for="student_name">
+                        Candidate Name
+                    </label>
+                    <input
+                        id="student_name"
+                        type="text"
+                        required
+                        placeholder="e.g. Mir suzan Hyder Baquary"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <!-- CANDIDATE EMAIL -->
+                <div class="form-group">
+                    <label for="student_email">
+                        Candidate Email
+                    </label>
+                    <input
+                        id="student_email"
+                        type="email"
+                        required
+                        placeholder="candidate@example.com"
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <!-- ISSUE DATE -->
+                <div class="form-group">
+                    <label for="issue_date">
+                        Letter Date
+                    </label>
+                    <input
+                        id="issue_date"
+                        type="date"
+                        required
+                        value="{{ today_iso }}"
+                    >
+                    <div class="hours-note" style="margin-top: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        Defaults to today's date (<strong>{{ today_formatted }}</strong>). You can change it anytime.
+                    </div>
+                </div>
+
+                <!-- GENERATE BUTTON -->
+                <button
+                    class="generate"
+                    type="submit"
+                    id="generateBtn"
+                >
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Generate CA Letter</span>
+                </button>
+            </form>
+
+            <div id="message" aria-live="polite"></div>
+        </section>
+
+        <!-- =================================================
+             RIGHT PREVIEW SECTION
+             ================================================= -->
+        <section class="card preview-card preview-card-animate">
+            <div class="preview-head">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    PDF Live Preview
+                </h2>
+
+                <button
+                    id="editBtn"
+                    class="secondary"
+                    type="button"
+                    disabled
+                >
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <span>Edit</span>
+                </button>
+            </div>
+
+            <div class="preview-container">
+                <!-- EMPTY PREVIEW STATE -->
+                <div id="emptyPreview" class="empty-preview">
+                    <div class="empty-preview-graphic">
+                        <div class="empty-preview-circle">
+                            <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <span class="empty-preview-badge">Live CA Preview</span>
+                    </div>
+
+                    <div class="empty-title">
+                        No CA letter generated yet
+                    </div>
+
+                    <div class="empty-text">
+                        Enter candidate details on the left and click <strong>Generate CA Letter</strong> to view the real-time 2-page PDF preview here.
+                    </div>
+                </div>
+
+                <!-- GENERATING PREVIEW LOADING STATE -->
+                <div id="generatingPreview" class="generating-preview" hidden>
+                    <div class="generating-icon-wrapper">
+                        <svg class="generating-doc-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        <span class="generating-pulse-ring"></span>
+                    </div>
+                    <div class="generating-title">Generating Campus Ambassador Offer Letter...</div>
+                    <div class="generating-subtitle">Please wait while the 2-page document is compiled and formatted.</div>
+                    <div class="generating-progress-bar">
+                        <div class="generating-progress-indicator"></div>
+                    </div>
+                </div>
+
+                <!-- PDF IFRAME -->
+                <iframe
+                    id="pdfPreview"
+                    title="Campus Ambassador PDF Preview"
+                    loading="lazy"
+                    hidden
+                ></iframe>
+            </div>
+
+            <div class="actions">
+                <a
+                    id="downloadBtn"
+                    class="primary disabled"
+                    aria-disabled="true"
+                >
+                    <svg class="btn-icon-svg download-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Download PDF</span>
+                </a>
+
+                <button
+                    id="sendBtn"
+                    class="email"
+                    type="button"
+                    disabled
+                >
+                    <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span>Send to Candidate</span>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<!-- JAVASCRIPT LOGIC -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("caForm");
+    const nameInput = document.getElementById("student_name");
+    const emailInput = document.getElementById("student_email");
+    const dateInput = document.getElementById("issue_date");
+    const generateBtn = document.getElementById("generateBtn");
+    const editBtn = document.getElementById("editBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const pdfPreview = document.getElementById("pdfPreview");
+    const emptyPreview = document.getElementById("emptyPreview");
+    const generatingPreview = document.getElementById("generatingPreview");
+    const messageBox = document.getElementById("message");
+    const toastContainer = document.getElementById("toastContainer");
+
+    let currentFilename = "";
+    let currentPayload = null;
+
+    function showToast(text, type = "success") {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                ${type === "success"
+                    ? '<polyline points="20 6 9 17 4 12"></polyline>'
+                    : '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>'}
+            </svg>
+            <div class="toast-text">${text}</div>
+            <button type="button" class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add("fade-out");
+            setTimeout(() => toast.remove(), 400);
+        }, 5000);
+    }
+
+    function setMessage(text, type = "info") {
+        if (!text) {
+            messageBox.innerHTML = "";
+            messageBox.className = "";
+            return;
+        }
+        messageBox.className = `message-box ${type}`;
+        messageBox.textContent = text;
+    }
+
+    // GENERATE FORM SUBMIT
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        setMessage("");
+
+        const student_name = nameInput.value.trim();
+        const student_email = emailInput.value.trim();
+        const date_val = dateInput.value.trim();
+
+        if (!student_name || !student_email || !date_val) {
+            setMessage("Please fill in all required fields.", "error");
+            return;
+        }
+
+        currentPayload = {
+            student_name: student_name,
+            student_email: student_email,
+            date: date_val
+        };
+
+        // Loading state
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = `
+            <span class="spinner" style="display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px;"></span>
+            <span>Generating...</span>
+        `;
+        emptyPreview.hidden = true;
+        pdfPreview.hidden = true;
+        generatingPreview.hidden = false;
+
+        try {
+            const res = await fetch("/api/campus-ambassador/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(currentPayload)
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || "Failed to generate CA Letter.");
+            }
+
+            currentFilename = data.filename;
+
+            // Set PDF Preview
+            const previewUrl = data.url + "?t=" + Date.now();
+            pdfPreview.src = previewUrl;
+            pdfPreview.hidden = false;
+            generatingPreview.hidden = true;
+            emptyPreview.hidden = true;
+
+            // Enable action buttons
+            downloadBtn.href = data.url;
+            downloadBtn.setAttribute("download", data.filename);
+            downloadBtn.classList.remove("disabled");
+            downloadBtn.removeAttribute("aria-disabled");
+
+            sendBtn.disabled = false;
+            editBtn.disabled = false;
+
+            showToast("Campus Ambassador Offer Letter generated successfully!", "success");
+        } catch (err) {
+            console.error("Generation error:", err);
+            emptyPreview.hidden = false;
+            generatingPreview.hidden = true;
+            pdfPreview.hidden = true;
+            setMessage(err.message, "error");
+            showToast(err.message, "error");
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = `
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>Generate CA Letter</span>
+            `;
+        }
+    });
+
+    // SEND EMAIL ACTION
+    sendBtn.addEventListener("click", async () => {
+        if (!currentFilename || !currentPayload) {
+            setMessage("Please generate the letter first.", "error");
+            return;
+        }
+
+        const confirmSend = confirm(`Send Campus Ambassador Offer Letter to ${currentPayload.student_email}?`);
+        if (!confirmSend) return;
+
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = `
+            <span class="spinner" style="display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px;"></span>
+            <span>Sending Email...</span>
+        `;
+
+        try {
+            const res = await fetch("/api/campus-ambassador/send-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    filename: currentFilename,
+                    student_name: currentPayload.student_name,
+                    student_email: currentPayload.student_email,
+                    date: currentPayload.date
+                })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || "Failed to send CA Offer Letter email.");
+            }
+
+            showToast(`Offer letter successfully sent to ${currentPayload.student_email}!`, "success");
+
+            // Increment success count in UI with pulse
+            const successCountEl = document.getElementById("successCount");
+            if (successCountEl) {
+                successCountEl.textContent = (parseInt(successCountEl.textContent, 10) || 0) + 1;
+                successCountEl.classList.remove("count-pulse");
+                void successCountEl.offsetWidth;
+                successCountEl.classList.add("count-pulse");
+            }
+        } catch (err) {
+            console.error("Email send error:", err);
+            showToast(err.message, "error");
+            const failedCountEl = document.getElementById("failedCount");
+            if (failedCountEl) {
+                failedCountEl.textContent = (parseInt(failedCountEl.textContent, 10) || 0) + 1;
+                failedCountEl.classList.remove("count-pulse");
+                void failedCountEl.offsetWidth;
+                failedCountEl.classList.add("count-pulse");
+            }
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Candidate</span>
+            `;
+        }
+    });
+
+    // EDIT BUTTON
+    editBtn.addEventListener("click", () => {
+        nameInput.focus();
+        showToast("You can now update the form details and re-generate.", "info");
+    });
+});
+</script>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    font-size: 14px;
+    animation: slideIn 0.3s ease;
+    border-left: 4px solid #3b82f6;
+}
+.toast.success { border-left-color: #10b981; }
+.toast.error { border-left-color: #ef4444; }
+.toast.info { border-left-color: #3b82f6; }
+.toast-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.toast.success .toast-icon { color: #10b981; }
+.toast.error .toast-icon { color: #ef4444; }
+.toast.info .toast-icon { color: #3b82f6; }
+.toast-text { flex: 1; font-weight: 500; }
+.toast-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.toast-close:hover { color: #fff; }
+.fade-out {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.4s ease;
+}
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+</body>
+</html>

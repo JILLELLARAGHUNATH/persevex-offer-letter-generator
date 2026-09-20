@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>{{ "Certificate Verified | " ~ certificate.student_name ~ " • Persevex LLP" if valid and certificate and status != "revoked" else ("Certificate Revoked • Persevex LLP" if status == "revoked" else ("Verification Service Temporarily Unavailable • Persevex LLP" if status == "service_unavailable" else "Certificate Not Verified • Persevex LLP")) }}</title>
+
+    <!-- Meta tags for social previews (LinkedIn, WhatsApp, Twitter, Facebook) -->
+    {% if valid and certificate and status != "revoked" %}
+    <meta name="description" content="Official Certificate Verification for {{ certificate.student_name }} in {{ certificate.internship_domain }} at Persevex Education Consultancy LLP. Certificate ID: {{ certificate.certificate_id }}.">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Verified Certificate | {{ certificate.student_name }} | Persevex">
+    <meta property="og:description" content="Officially verified internship certificate for {{ certificate.student_name }} in {{ certificate.internship_domain }} issued by Persevex Education Consultancy LLP. Certificate ID: {{ certificate.certificate_id }}">
+    <meta property="og:image" content="{{ thumbnail_url }}">
+    <meta property="og:image:secure_url" content="{{ thumbnail_url }}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="848">
+    <meta property="og:url" content="{{ verification_url }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Persevex Certificate Portal">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Verified Certificate | {{ certificate.student_name }} | Persevex">
+    <meta name="twitter:description" content="Officially verified internship certificate in {{ certificate.internship_domain }}. Certificate ID: {{ certificate.certificate_id }}">
+    <meta name="twitter:image" content="{{ thumbnail_url }}">
+    {% endif %}
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='persevex-icon.png') }}">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="verify-page-body">
+
+<div class="verify-app-container">
+
+    <!-- ============================================================
+         1. PROFESSIONAL BRAND HEADER
+         ============================================================ -->
+    <header class="verify-portal-header" role="banner">
+        <div class="verify-brand-container">
+            <div class="verify-logo-wrapper">
+                <img
+                    src="{{ url_for('static', filename='Untitled design.png') }}"
+                    alt="Persevex Education Consultancy LLP Logo"
+                    class="verify-portal-logo"
+                    loading="eager"
+                >
+            </div>
+            <div class="verify-portal-title-block">
+                <span class="verify-portal-sub">PERSEVEX CERTIFICATE PORTAL</span>
+                <h1 class="verify-portal-main-title">Official Credential Verification System</h1>
+                <div class="verify-security-indicator" aria-label="Security status">
+                    <span class="security-pulse-dot" aria-hidden="true"></span>
+                    <svg class="security-lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span>Verified in Persevex Official Registry</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="verify-portal-main" id="main-content">
+        {% if valid and certificate %}
+            <!-- ============================================================
+                 2. VALID CERTIFICATE VERIFICATION PORTAL
+                 ============================================================ -->
+            <article class="verify-main-card valid-verify-card" aria-labelledby="verification-heading">
+
+                <!-- 2-Column Responsive Layout (Desktop: Side-by-Side | Mobile: Stacked) -->
+                <div class="verify-content-split-grid">
+
+                    <!-- LEFT COLUMN: Status + Credential Details + Trust Information -->
+                    <div class="verify-column-left">
+
+                        <!-- Status Banner with animated checkmark -->
+                        <div class="verify-status-banner verified-banner">
+                            <div class="status-icon-circle success-circle" aria-hidden="true">
+                                <svg class="check-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path class="checkmark-path" d="M20 6L9 17L4 12"></path>
+                                </svg>
+                            </div>
+                            <div class="status-text-block">
+                                <div class="status-badge-row">
+                                    <span class="status-pill-verified">🟢 VERIFIED</span>
+                                    <span class="status-cert-id-tag">ID: {{ certificate.certificate_id }}</span>
+                                </div>
+                                <h2 class="status-heading" id="verification-heading">CERTIFICATE VERIFIED</h2>
+                                <p class="status-subtext">This certificate has been successfully verified against the official Persevex credential database.</p>
+                            </div>
+                        </div>
+
+                        <!-- 1. Credential Information Card -->
+                        <section class="verify-section-box" aria-label="Credential Information">
+                            <div class="section-subheading">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                    <polyline points="10 9 9 9 8 9"></polyline>
+                                </svg>
+                                <span>Credential Information</span>
+                            </div>
+
+                            <div class="verify-details-card">
+                                <!-- Student Name -->
+                                <div class="verify-detail-item highlight-item-student">
+                                    <span class="detail-label">Candidate Name</span>
+                                    <strong class="detail-value highlight-student-name">{{ certificate.student_name }}</strong>
+                                </div>
+
+                                <!-- Internship Domain -->
+                                <div class="verify-detail-item highlight-item-domain">
+                                    <span class="detail-label">Internship Domain</span>
+                                    <div class="domain-badge-wrapper">
+                                        <span class="domain-accent-badge">{{ certificate.internship_domain }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Details 2-Column Subgrid -->
+                                <div class="details-inner-subgrid">
+                                    <!-- Duration / Period -->
+                                    <div class="verify-detail-item">
+                                        <span class="detail-label">Internship Period</span>
+                                        <strong class="detail-value date-range-value">
+                                            <span>{{ certificate.start_date }}</span>
+                                            <span class="date-arrow" aria-hidden="true">→</span>
+                                            <span>{{ certificate.end_date }}</span>
+                                        </strong>
+                                    </div>
+
+                                    <!-- Issue Date -->
+                                    <div class="verify-detail-item">
+                                        <span class="detail-label">Date of Issue</span>
+                                        <strong class="detail-value">{{ certificate.issued_date }}</strong>
+                                    </div>
+                                </div>
+
+                                <!-- Certificate ID -->
+                                <div class="verify-detail-item">
+                                    <span class="detail-label">Certificate ID</span>
+                                    <div class="cert-id-copy-container">
+                                        <code class="detail-value cert-id-code">{{ certificate.certificate_id }}</code>
+                                        <button type="button" class="btn-copy-mini" onclick="copyText('{{ certificate.certificate_id }}', 'Certificate ID copied!')" title="Copy Certificate ID" aria-label="Copy Certificate ID">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" aria-hidden="true">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Issued By -->
+                                <div class="verify-detail-item">
+                                    <span class="detail-label">Issued By</span>
+                                    <strong class="detail-value org-name-value">Persevex Education Consultancy LLP</strong>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 2. Trust Indicators Section -->
+                        <section class="verify-section-box verify-trust-section" aria-label="Why This Certificate Can Be Trusted">
+                            <div class="section-subheading">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                </svg>
+                                <span>Why This Certificate Can Be Trusted</span>
+                            </div>
+
+                            <div class="trust-badges-grid">
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Certificate Record Found in Official Registry</span>
+                                </div>
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Verified Against Official Database</span>
+                                </div>
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Unique Certificate ID: {{ certificate.certificate_id }}</span>
+                                </div>
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>QR Code Linked to Official Verification Portal</span>
+                                </div>
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Digitally Generated & Authenticated</span>
+                                </div>
+                                <div class="verify-badge-item">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" aria-hidden="true">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>Issued by Persevex Education Consultancy LLP</span>
+                                </div>
+                            </div>
+                        </section>
+
+                    </div>
+
+                    <!-- RIGHT COLUMN: Large Certificate Preview -->
+                    <div class="verify-column-right">
+                        <section class="verify-section-box preview-column-box" aria-label="Certificate Preview">
+                            <div class="section-subheading preview-header-row">
+                                <div class="subheading-label">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                    <span>Certificate Preview</span>
+                                </div>
+                                <a href="{{ url_for('verify_preview_certificate', certificate_id=certificate.certificate_id) }}" target="_blank" rel="noopener noreferrer" class="link-open-tab" title="Open official PDF in new tab">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" aria-hidden="true">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        <polyline points="15 3 21 3 21 9"></polyline>
+                                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                                    </svg>
+                                    <span>Open in New Tab</span>
+                                </a>
+                            </div>
+
+                            <!-- Large Responsive Certificate Image Container with aspect ratio locked -->
+                            <div class="certificate-preview-box" onclick="openFullCertificateModal()" title="Click to view full certificate">
+                                <img
+                                    src="{{ url_for('verify_image_certificate', certificate_id=certificate.certificate_id) }}"
+                                    alt="Official Certificate Preview for {{ certificate.student_name }}"
+                                    class="certificate-preview-img"
+                                    loading="eager"
+                                >
+                                <div class="preview-overlay-prompt">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                        <line x1="11" y1="8" x2="11" y2="14"></line>
+                                        <line x1="8" y1="11" x2="14" y2="11"></line>
+                                    </svg>
+                                    <span>Click to View Full Size</span>
+                                </div>
+                            </div>
+
+                            <!-- Quick Action Buttons -->
+                            <div class="preview-actions-grid">
+                                <button type="button" class="btn btn-view-full" onclick="openFullCertificateModal()" aria-label="View Fullscreen Certificate">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true">
+                                        <path d="M15 3h6v6"></path>
+                                        <path d="M9 21H3v-6"></path>
+                                        <path d="M21 3l-7 7"></path>
+                                        <path d="M3 21l7-7"></path>
+                                    </svg>
+                                    <span>View Fullscreen</span>
+                                </button>
+
+                                <a href="{{ url_for('verify_download_certificate', certificate_id=certificate.certificate_id) }}" class="btn btn-download-primary" download aria-label="Download Official Certificate PDF">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="15" height="15" aria-hidden="true">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    <span>Download PDF</span>
+                                </a>
+                            </div>
+                        </section>
+                    </div>
+
+                </div>
+
+                <!-- ============================================================
+                     3. SHARE YOUR ACHIEVEMENT SECTION (FULL WIDTH)
+                     ============================================================ -->
+                <section class="verify-share-section" aria-label="Share Achievement">
+                    <div class="share-section-header">
+                        <h3 class="share-main-heading">SHARE YOUR ACHIEVEMENT</h3>
+                        <p class="share-sub-heading">Share your officially verified Persevex credential with your professional network.</p>
+                    </div>
+
+                    <div class="share-cards-grid">
+                        <!-- LinkedIn Share Card (Direct New Tab Share + Auto-Copy Post Description) -->
+                        <a class="share-card share-card-linkedin" href="{{ linkedin_share_url }}" target="_blank" rel="noopener noreferrer" onclick="handleLinkedInClick(event)" aria-label="Share on LinkedIn (opens in a new tab)">
+                            <div class="share-card-icon-wrap linkedin-bg">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+                                    <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 8.76a1.45 1.45 0 1 0 0-2.9 1.45 1.45 0 0 0 0 2.9m1.4 9.74V9.94H5.06v8.56h2.8z"></path>
+                                </svg>
+                            </div>
+                            <div class="share-card-content">
+                                <h4 class="share-card-title">LinkedIn</h4>
+                                <p class="share-card-desc">Share professionally on LinkedIn feed with verified credential link</p>
+                            </div>
+                            <div class="share-card-arrow" aria-hidden="true">→</div>
+                        </a>
+
+                        <!-- WhatsApp Share Card (Direct New Tab Share) -->
+                        <a class="share-card share-card-whatsapp" href="{{ whatsapp_share_url }}" target="_blank" rel="noopener noreferrer" aria-label="Share on WhatsApp (opens in a new tab)">
+                            <div class="share-card-icon-wrap whatsapp-bg">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22" aria-hidden="true">
+                                    <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24m4.52 11.66c-.25-.13-1.47-.72-1.7-.81-.23-.08-.39-.13-.56.13-.17.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.13-1.06-.39-2.03-1.25-.75-.67-1.26-1.5-1.41-1.75-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.44.13-.14.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.13-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.1 0 1.24.9 2.45 1.03 2.62.13.17 1.77 2.7 4.29 3.79.6.26 1.07.41 1.44.53.6.19 1.15.16 1.58.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.15-1.18-.07-.1-.23-.17-.48-.29z"></path>
+                                </svg>
+                            </div>
+                            <div class="share-card-content">
+                                <h4 class="share-card-title">WhatsApp</h4>
+                                <p class="share-card-desc">Share instant verification link and accomplishment with recruiters & contacts</p>
+                            </div>
+                            <div class="share-card-arrow" aria-hidden="true">→</div>
+                        </a>
+                    </div>
+
+                    <!-- Quick Copy Action Bar -->
+                    <div class="copy-actions-bar">
+                        <button type="button" class="btn-copy-action" onclick="copyVerificationLink()" aria-label="Copy Verification Link">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                            <span>Copy Verification Link</span>
+                        </button>
+
+                        <button type="button" class="btn-copy-action btn-copy-post-btn" onclick="copyAchievementText()" aria-label="Copy Post Description">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            <span>Copy Achievement Text</span>
+                        </button>
+                    </div>
+                </section>
+
+            </article>
+
+            <!-- ============================================================
+                 MODAL 3: VIEW FULL CERTIFICATE MODAL
+                 ============================================================ -->
+            <div id="full-cert-modal" class="custom-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="full-cert-modal-title" onclick="closeFullCertificateModal(event)">
+                <div class="custom-modal-box full-cert-modal-box" onclick="event.stopPropagation()">
+
+                    <div class="custom-modal-header">
+                        <div class="modal-title-wrap">
+                            <h3 id="full-cert-modal-title" class="modal-main-title">Official Certificate Document</h3>
+                            <span class="modal-cert-tag">ID: {{ certificate.certificate_id }}</span>
+                        </div>
+                        <div class="modal-header-actions">
+                            <a href="{{ url_for('verify_download_certificate', certificate_id=certificate.certificate_id) }}" class="btn-modal-dl-icon" download title="Download Certificate PDF">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </a>
+                            <button type="button" class="btn-modal-close" onclick="closeFullCertificateModal()" aria-label="Close Full Certificate Modal">✕</button>
+                        </div>
+                    </div>
+
+                    <div class="custom-modal-body full-cert-body">
+                        <img
+                            src="{{ url_for('verify_image_certificate', certificate_id=certificate.certificate_id) }}"
+                            alt="Full Certificate Document"
+                            class="full-cert-modal-img"
+                        >
+                    </div>
+
+                </div>
+            </div>
+
+        {% elif status == "revoked" %}
+            <!-- ============================================================
+                 REVOKED CERTIFICATE CARD
+                 ============================================================ -->
+            <article class="verify-main-card revoked-verify-card" aria-labelledby="revoked-heading">
+
+                <div class="verify-status-banner revoked-banner">
+                    <div class="status-icon-circle revoked-circle" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="status-text-block">
+                        <div class="status-badge-row">
+                            <span class="status-pill-revoked">⚠ CERTIFICATE REVOKED</span>
+                            <span class="status-cert-id-tag">ID: {{ certificate_id }}</span>
+                        </div>
+                        <h2 class="status-heading revoked-heading" id="revoked-heading">Certificate Has Been Revoked</h2>
+                        <p class="status-subtext">This credential was previously generated but has been officially revoked by Persevex Education Consultancy LLP.</p>
+                    </div>
+                </div>
+
+                <div class="invalid-info-box revoked-info-box">
+                    {% if certificate %}
+                    <div class="revoked-meta-grid">
+                        <div class="revoked-meta-item">
+                            <span class="meta-label">Candidate Name</span>
+                            <strong class="meta-val">{{ certificate.student_name }}</strong>
+                        </div>
+                        <div class="revoked-meta-item">
+                            <span class="meta-label">Internship Domain</span>
+                            <strong class="meta-val">{{ certificate.internship_domain }}</strong>
+                        </div>
+                        <div class="revoked-meta-item">
+                            <span class="meta-label">Issue Date</span>
+                            <strong class="meta-val">{{ certificate.issued_date }}</strong>
+                        </div>
+                        <div class="revoked-meta-item">
+                            <span class="meta-label">Status</span>
+                            <strong class="meta-val highlight-revoked-text">Revoked / Invalid</strong>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="revocation-notice-box">
+                        <strong class="notice-title">Revocation Reason / Note:</strong>
+                        <p class="notice-text">{{ revocation_reason or "This certificate has been revoked by the issuing authority and is no longer valid for official verification." }}</p>
+                    </div>
+
+                    <div class="invalid-actions-block">
+                        <p class="invalid-help-text">
+                            If you believe this revocation is in error or require administrative assistance:
+                        </p>
+                        <a href="mailto:support@persevex.com?subject=Certificate%20Revocation%20Inquiry%20-%20{{ certificate_id }}" class="btn btn-secondary btn-contact-support">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                            <span>Contact Support (support@persevex.com)</span>
+                        </a>
+                    </div>
+                </div>
+
+            </article>
+
+        {% elif status == "service_unavailable" %}
+            <!-- ============================================================
+                 SERVICE TEMPORARILY UNAVAILABLE CARD (503)
+                 ============================================================ -->
+            <article class="verify-main-card unavailable-verify-card" aria-labelledby="unavailable-heading">
+
+                <div class="verify-status-banner unavailable-banner">
+                    <div class="status-icon-circle unavailable-circle" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <div class="status-text-block">
+                        <div class="status-badge-row">
+                            <span class="status-pill-unavailable">⚠ SERVICE UNAVAILABLE</span>
+                            <span class="status-cert-id-tag">ID: {{ certificate_id }}</span>
+                        </div>
+                        <h2 class="status-heading unavailable-heading" id="unavailable-heading">Verification Service Temporarily Unavailable</h2>
+                        <p class="status-subtext">The Persevex credential database is temporarily experiencing connectivity delays or undergoing scheduled maintenance.</p>
+                    </div>
+                </div>
+
+                <div class="invalid-info-box">
+                    <p class="invalid-main-msg">
+                        We could not verify Certificate ID <code class="invalid-id-tag">{{ certificate_id }}</code> right now because the verification service could not establish a connection to the primary database.
+                    </p>
+                    <div class="invalid-actions-block" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                        <button type="button" class="btn btn-primary" onclick="window.location.reload()" style="padding:10px 20px;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                <path d="M23 4v6h-6"></path>
+                                <path d="M1 20v-6h6"></path>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Retry Verification</span>
+                        </button>
+                        <a href="mailto:support@persevex.com?subject=Registry%20Connection%20Issue%20-%20{{ certificate_id }}" class="btn btn-secondary btn-contact-support">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                            <span>Contact Technical Support</span>
+                        </a>
+                    </div>
+                </div>
+
+            </article>
+
+        {% else %}
+            <!-- ============================================================
+                 INVALID / NOT FOUND CERTIFICATE CARD (404)
+                 ============================================================ -->
+            <article class="verify-main-card invalid-verify-card" aria-labelledby="invalid-heading">
+
+                <div class="verify-status-banner invalid-banner">
+                    <div class="status-icon-circle failed-circle" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </div>
+                    <div class="status-text-block">
+                        <div class="status-badge-row">
+                            <span class="status-pill-invalid">RECORD NOT FOUND</span>
+                        </div>
+                        <h2 class="status-heading invalid-heading" id="invalid-heading">Certificate Not Verified</h2>
+                        <p class="status-subtext">We could not find an authentic certificate matching this verification ID in the official registry.</p>
+                    </div>
+                </div>
+
+                <div class="invalid-info-box">
+                    <p class="invalid-main-msg">
+                        The requested verification ID <code class="invalid-id-tag">{{ certificate_id or "Unknown" }}</code> is either incorrect, expired, or has not been officially registered in the Persevex certificate registry.
+                    </p>
+                    <div class="invalid-actions-block">
+                        <p class="invalid-help-text">
+                            Please verify the Certificate ID printed on your document or contact our credential verification department for manual assistance:
+                        </p>
+                        <a href="mailto:support@persevex.com?subject=Certificate%20Verification%20Inquiry%20-%20{{ certificate_id }}" class="btn btn-secondary btn-contact-support">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                            <span>Contact Support (support@persevex.com)</span>
+                        </a>
+                    </div>
+                </div>
+
+            </article>
+        {% endif %}
+    </main>
+
+    <!-- Professional Registry Footer -->
+    <footer class="verify-page-footer" role="contentinfo">
+        <p class="footer-registry-text">
+            © {{ certificate.issued_date[-4:] if valid and certificate and certificate.issued_date else "2026" }} Persevex Education Consultancy LLP • Official Verification Registry
+        </p>
+        <p class="footer-privacy-text">
+            This verification portal validates authentic credentials officially issued by Persevex LLP.
+        </p>
+    </footer>
+
+</div>
+
+<!-- Hidden payload for copy text -->
+{% if valid and certificate %}
+<div id="linkedin-text-payload" style="display:none;" aria-hidden="true">{{ linkedin_text }}</div>
+{% endif %}
+
+<!-- Professional Floating Toast Notification -->
+<div id="verify-toast" class="verify-toast" role="status" aria-live="polite" aria-atomic="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"></polyline>
+    </svg>
+    <span id="verify-toast-text">Link copied to clipboard</span>
+</div>
+
+<script>
+function showToast(message) {
+    const toast = document.getElementById('verify-toast');
+    const toastText = document.getElementById('verify-toast-text');
+    if (!toast || !toastText) return;
+
+    toastText.textContent = message;
+    toast.classList.add('show');
+
+    clearTimeout(window._toastTimeout);
+    window._toastTimeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3200);
+}
+
+function copyText(text, successMsg) {
+    if (!text) return;
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(successMsg || 'Copied to clipboard');
+        }).catch(() => {
+            fallbackCopy(text, successMsg);
+        });
+    } else {
+        fallbackCopy(text, successMsg);
+    }
+}
+
+function fallbackCopy(text, successMsg) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showToast(successMsg || 'Copied to clipboard');
+    } catch (err) {
+        showToast('Unable to auto-copy. Please copy manually.');
+    }
+    document.body.removeChild(textArea);
+}
+
+function copyVerificationLink() {
+    const url = '{{ verification_url }}' || window.location.href;
+    copyText(url, 'Verification link copied successfully.');
+}
+
+function copyAchievementText() {
+    const payload = document.getElementById('linkedin-text-payload');
+    const text = payload ? payload.textContent.trim() : '';
+    if (text) {
+        copyText(text, 'Achievement post text copied! Ready to paste into LinkedIn.');
+    }
+}
+
+function handleLinkedInClick(event) {
+    const payload = document.getElementById('linkedin-text-payload');
+    const text = payload ? payload.textContent.trim() : '';
+    if (text) {
+        copyText(text, '🎓 LinkedIn post copied! Opening LinkedIn — paste your post text and attach your certificate.');
+    }
+}
+
+/* Fullscreen Certificate Modal Management */
+function openFullCertificateModal() {
+    const modal = document.getElementById('full-cert-modal');
+    if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeFullCertificateModal(event) {
+    const modal = document.getElementById('full-cert-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+}
+
+/* Keyboard accessibility (Escape key closes open modal) */
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeFullCertificateModal();
+    }
+});
+</script>
+
+</body>
+</html>

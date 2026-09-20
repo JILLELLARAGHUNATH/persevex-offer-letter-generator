@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email History | Persevex Offer Letter Generator</title>
+    <title>Unified History | Persevex</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -30,18 +30,44 @@
         </div>
 
         <h1>
-            EMAIL <span class="highlight">HISTORY</span>
+            UNIFIED <span class="highlight">HISTORY</span>
         </h1>
 
-        <div class="header-actions">
-            <a href="/" class="history-btn" title="Back to Offer Letter Generator">
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
                 <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="19" y1="12" x2="5" y2="12"></line>
-                    <polyline points="12 19 5 12 12 5"></polyline>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
                 </svg>
-                <span>Back to Generator</span>
+                <span>Offer Letter</span>
             </a>
+            <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/history" class="nav-tab-link active" title="Unified History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </a>
+        </nav>
 
+        <div class="header-actions">
             <a href="/logout" class="logout-btn" title="Sign out of Persevex">
                 <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -54,34 +80,39 @@
     </header>
 
     <!-- =====================================================
-         MAIN HISTORY
+         MAIN HISTORY WORKSPACE
          ===================================================== -->
     <main class="history-main">
         <section class="card history-card-animate">
             
-            <div class="card-header">
+            <div class="card-header" style="justify-content: space-between;">
                 <h2>
                     <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
-                    Sent Offer Letters
+                    Unified Generation & Delivery Audit
                 </h2>
-                <span class="section-tag">Audit Log</span>
+
+                <!-- Record Type Filter Tabs -->
+                <div class="type-filter-pills" id="recordTypePills">
+                    <button type="button" class="type-filter-pill {% if record_type == 'all' or not record_type %}active{% endif %}" data-type="all">All Records</button>
+                    <button type="button" class="type-filter-pill {% if record_type in ('offer_letter', 'offer') %}active{% endif %}" data-type="offer_letter">Offer Letters</button>
+                    <button type="button" class="type-filter-pill {% if record_type in ('ca_letter', 'ca', 'campus_ambassador') %}active{% endif %}" data-type="ca_letter">CA Offer Letters</button>
+                    <button type="button" class="type-filter-pill {% if record_type in ('certificate', 'cert') %}active{% endif %}" data-type="certificate">Certificates</button>
+                </div>
             </div>
 
             <!-- =================================================
                  DASHBOARD SUMMARY METRICS (GLOBAL COUNTS)
                  ================================================= -->
-            <div class="history-summary-grid">
+            <div class="history-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
                 <div class="summary-stat-card stat-total">
                     <div class="stat-icon-wrapper">
                         <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="9" y1="21" x2="9" y2="9"></line>
                         </svg>
                     </div>
                     <div class="stat-info">
@@ -90,11 +121,51 @@
                     </div>
                 </div>
 
+                <div class="summary-stat-card" style="border-left: 4px solid #3b82f6;">
+                    <div class="stat-icon-wrapper" style="background: #eff6ff; color: #2563eb;">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Offer Letters</span>
+                        <span class="stat-value" id="summaryTotalOffers">{{ total_offer_letters or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card" style="border-left: 4px solid #8b5cf6;">
+                    <div class="stat-icon-wrapper" style="background: #f5f3ff; color: #7c3aed;">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">CA Offer Letters</span>
+                        <span class="stat-value" id="summaryTotalCaOffers">{{ total_ca_letters or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card" style="border-left: 4px solid #f59e0b;">
+                    <div class="stat-icon-wrapper" style="background: #fffbeb; color: #d97706;">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="7"></circle>
+                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Certificates</span>
+                        <span class="stat-value" id="summaryTotalCerts">{{ total_certificates or 0 }}</span>
+                    </div>
+                </div>
+
                 <div class="summary-stat-card stat-success">
                     <div class="stat-icon-wrapper">
                         <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
                     </div>
                     <div class="stat-info">
@@ -106,29 +177,13 @@
                 <div class="summary-stat-card stat-failed">
                     <div class="stat-icon-wrapper">
                         <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </div>
                     <div class="stat-info">
                         <span class="stat-label">Failed Emails</span>
                         <span class="stat-value" id="summaryFailedRecords">{{ total_failed or 0 }}</span>
-                    </div>
-                </div>
-
-                <div class="summary-stat-card stat-page">
-                    <div class="stat-icon-wrapper">
-                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                        </svg>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-label">Page Records</span>
-                        <span class="stat-value" id="summaryPageRecords">{{ (history_records|length) if history_records else 0 }}</span>
                     </div>
                 </div>
             </div>
@@ -149,14 +204,14 @@
                  ================================================= -->
             <form
                 id="historyFilterForm"
-                method="GET"
-                action="/history"
                 class="history-filters"
                 onsubmit="event.preventDefault(); triggerFilterFetch(1);"
             >
+                <input type="hidden" id="filterRecordType" name="record_type" value="{{ record_type or 'all' }}">
+
                 <!-- Live Search Box -->
                 <div class="filter-group filter-search">
-                    <label for="historySearch" class="filter-label">Search Candidate</label>
+                    <label for="historySearch" class="filter-label">Live Search</label>
                     <div class="filter-input-wrap">
                         <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
@@ -166,7 +221,7 @@
                             id="historySearch"
                             type="text"
                             name="search"
-                            placeholder="Type student name or email..."
+                            placeholder="Type student name, email, domain, or ID..."
                             value="{{ search or '' }}"
                             autocomplete="off"
                             spellcheck="false"
@@ -175,12 +230,54 @@
                     </div>
                 </div>
 
+                <!-- Status Filter -->
+                <div class="filter-group filter-status">
+                    <label for="historyStatus" class="filter-label">Status</label>
+                    <div class="filter-input-wrap">
+                        <select id="historyStatus" name="status">
+                            <option value="all">All Delivery Statuses</option>
+                            <option value="sent" {% if status_filter == "sent" %}selected{% endif %}>✔ Sent Successfully</option>
+                            <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>❌ Failed Delivery</option>
+                            <option value="pending" {% if status_filter == "pending" %}selected{% endif %}>⏳ Pending Delivery</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Date Presets -->
+                <div class="filter-group">
+                    <label for="historyDatePreset" class="filter-label">Date Filter</label>
+                    <div class="filter-input-wrap">
+                        <select id="historyDatePreset" name="date_filter">
+                            <option value="all" {% if date_filter == "all" or not date_filter %}selected{% endif %}>All Dates</option>
+                            <option value="today" {% if date_filter == "today" %}selected{% endif %}>Today</option>
+                            <option value="week" {% if date_filter == "week" %}selected{% endif %}>This Week</option>
+                            <option value="month" {% if date_filter == "month" %}selected{% endif %}>This Month</option>
+                            <option value="custom" {% if date_filter == "custom" or date_from or date_to %}selected{% endif %}>Custom Range</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Custom Range From & To -->
+                <div class="filter-group filter-date-from" id="customDateFromGroup" {% if not (date_from or date_to or date_filter == "custom") %}style="display: none;"{% endif %}>
+                    <label for="historyDateFrom" class="filter-label">From Date</label>
+                    <div class="filter-input-wrap">
+                        <input id="historyDateFrom" type="date" name="date_from" value="{{ date_from or '' }}">
+                    </div>
+                </div>
+
+                <div class="filter-group filter-date-to" id="customDateToGroup" {% if not (date_from or date_to or date_filter == "custom") %}style="display: none;"{% endif %}>
+                    <label for="historyDateTo" class="filter-label">To Date</label>
+                    <div class="filter-input-wrap">
+                        <input id="historyDateTo" type="date" name="date_to" value="{{ date_to or '' }}">
+                    </div>
+                </div>
+
                 <!-- Month Quick Filter -->
                 <div class="filter-group filter-month">
                     <label for="historyMonth" class="filter-label">Month</label>
                     <div class="filter-input-wrap">
                         <select id="historyMonth" name="month">
-                            <option value="">All Months</option>
+                            <option value="all">All Months</option>
                             {% for m in (available_months or []) %}
                                 <option value="{{ m.value }}" {% if month_filter == m.value %}selected{% endif %}>
                                     {{ m.label }}
@@ -190,54 +287,22 @@
                     </div>
                 </div>
 
-                <!-- Date Range: From -->
-                <div class="filter-group filter-date-from">
-                    <label for="historyDateFrom" class="filter-label">From Date</label>
+                <!-- Rows Per Page -->
+                <div class="filter-group" style="min-width: 100px;">
+                    <label for="historyPerPage" class="filter-label">Per Page</label>
                     <div class="filter-input-wrap">
-                        <input
-                            id="historyDateFrom"
-                            type="date"
-                            name="date_from"
-                            value="{{ date_from or '' }}"
-                            title="Filter from date"
-                        >
-                    </div>
-                </div>
-
-                <!-- Date Range: To -->
-                <div class="filter-group filter-date-to">
-                    <label for="historyDateTo" class="filter-label">To Date</label>
-                    <div class="filter-input-wrap">
-                        <input
-                            id="historyDateTo"
-                            type="date"
-                            name="date_to"
-                            value="{{ date_to or '' }}"
-                            title="Filter to date"
-                        >
-                    </div>
-                </div>
-
-                <!-- Status Filter -->
-                <div class="filter-group filter-status">
-                    <label for="historyStatus" class="filter-label">Status</label>
-                    <div class="filter-input-wrap">
-                        <select id="historyStatus" name="status">
-                            <option value="">All Status</option>
-                            <option value="sent" {% if status_filter == "sent" %}selected{% endif %}>✔ Successful</option>
-                            <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>❌ Failed</option>
+                        <select id="historyPerPage" name="per_page">
+                            <option value="25" {% if per_page == 25 or not per_page %}selected{% endif %}>25</option>
+                            <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                            <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                            <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
                         </select>
                     </div>
                 </div>
 
                 <!-- Action Buttons -->
                 <div class="filter-actions">
-                    <button
-                        type="button"
-                        id="clearFiltersBtn"
-                        class="clear-btn"
-                        title="Reset all filters"
-                    >
+                    <button type="button" id="clearFiltersBtn" class="clear-btn" title="Reset all filters">
                         <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
                             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -245,57 +310,93 @@
                         <span>Reset</span>
                     </button>
 
-                    <button
-                        type="button"
-                        id="openExportModalBtn"
-                        class="export-btn"
-                        title="Export filtered records to CSV"
-                    >
+                    <button type="button" id="openExportModalBtn" class="export-btn" title="Open Export Options">
                         <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        <span>Export CSV</span>
+                        <span>Export</span>
                     </button>
                 </div>
             </form>
+
+            <!-- =================================================
+                 BULK ACTIONS TOOLBAR
+                 ================================================= -->
+            <div id="bulkActionsToolbar" class="bulk-actions-toolbar" style="display: none;">
+                <div class="bulk-actions-info">
+                    <span id="selectedCountBadge" class="bulk-selection-badge">0</span>
+                    <span>records selected</span>
+                </div>
+                <div class="bulk-actions-btns">
+                    <button type="button" class="bulk-btn-clear" onclick="clearAllSelections()">Clear Selection</button>
+                    <button type="button" id="bulkDeleteBtn" class="bulk-btn-delete" onclick="openBulkDeleteModal()">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        <span>Delete Selected</span>
+                    </button>
+                    <button type="button" id="deleteAllBtn" class="bulk-btn-delete-all" onclick="openDeleteAllModal()">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                        </svg>
+                        <span>Delete All</span>
+                    </button>
+                </div>
+            </div>
 
             <!-- =================================================
                  HISTORY CONTENT / TABLE CONTAINER
                  ================================================= -->
             <div id="historyContent">
 
-                <div
-                    id="tableContainer"
-                    class="history-table-wrapper"
-                    {% if not history_records %}style="display: none;"{% endif %}
-                >
+                <div id="tableContainer" class="history-table-wrapper" {% if not history_records %}style="display: none;"{% endif %}>
                     <table class="history-table">
                         <thead>
                             <tr>
+                                <th class="th-select">
+                                    <input type="checkbox" id="selectAllCheckbox" class="record-checkbox" onchange="toggleSelectAll(this)" title="Select all visible">
+                                </th>
+                                <th class="th-type">Type</th>
+                                <th class="th-id">Document ID</th>
                                 <th class="th-name">Student Name</th>
                                 <th class="th-email">Email</th>
-                                <th class="th-domain">Domain</th>
-                                <th class="th-duration">Duration</th>
-                                <th class="th-type">Letter Type</th>
+                                <th class="th-domain">Domain & Track</th>
+                                <th class="th-date">Dates</th>
+                                <th class="th-sent-at" style="white-space: nowrap;">Sent At</th>
                                 <th class="th-status" style="text-align: center;">Status</th>
-                                <th class="th-date">Sent Date & Time</th>
-                                <th class="th-count" style="text-align: center;">Send Count</th>
-                                <th class="th-id">Offer Letter ID</th>
+                                <th class="th-count" style="text-align: center;">Sent Count</th>
                                 <th class="th-action" style="text-align: center;">Action</th>
                             </tr>
                         </thead>
 
                         <tbody id="historyTableBody">
                             {% for record in (history_records or []) %}
-                                <tr
-                                    id="record-{{ record.id }}"
-                                    data-record-id="{{ record.id }}"
-                                    class="history-row-animate"
-                                >
+                                <tr id="record-{{ record.record_type }}-{{ record.id }}" class="history-row-animate">
+                                    <td class="cell-select">
+                                        <input type="checkbox" class="record-checkbox row-select-checkbox" data-type="{{ record.record_type }}" data-id="{{ record.id }}" onchange="updateSelectionState()">
+                                    </td>
+
+                                    <td class="cell-type" data-label="Type">
+                                        {% if record.record_type == 'ca_letter' %}
+                                            <span class="type-badge-ca">CA Offer Letter</span>
+                                        {% elif record.record_type == 'offer_letter' %}
+                                            <span class="type-badge-offer">Offer Letter</span>
+                                        {% else %}
+                                            <span class="type-badge-cert">Certificate</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <td class="cell-id" data-label="Document ID">
+                                        <code class="cell-truncate-id" title="{{ record.document_id }}">{{ record.document_id }}</code>
+                                    </td>
+
                                     <td class="cell-name" data-label="Student Name">
-                                        <span class="cell-name-text">{{ record.student_name or "-" }}</span>
+                                        <strong class="cell-name-text">{{ record.student_name or "-" }}</strong>
                                     </td>
 
                                     <td class="cell-email" data-label="Email">
@@ -305,83 +406,67 @@
                                     </td>
 
                                     <td class="cell-domain" data-label="Domain">
-                                        <span class="domain-tag">{{ record.internship_domain or "-" }}</span>
-                                    </td>
-
-                                    <td class="cell-duration" data-label="Duration">
-                                        <span class="duration-badge">{{ record.internship_duration or "-" }}</span>
-                                    </td>
-
-                                    <td class="cell-type" data-label="Letter Type">
-                                        {% if "with hours" in (record.offer_letter_type or '')|lower %}
-                                            <span class="type-pill type-hours">With Hours</span>
-                                        {% elif "without hours" in (record.offer_letter_type or '')|lower %}
-                                            <span class="type-pill type-no-hours">Without Hours</span>
-                                        {% else %}
-                                            <span class="type-pill">{{ record.offer_letter_type or "-" }}</span>
+                                        <span class="domain-tag">{{ record.domain or "-" }}</span>
+                                        {% if record.duration %}
+                                            <span class="duration-badge" style="margin-left: 4px;">{{ record.duration }}</span>
                                         {% endif %}
+                                    </td>
+
+                                    <td class="cell-date" data-label="Dates">
+                                        <span style="font-size: 12px; color: var(--text-muted);">
+                                            {% if record.start_date and record.end_date %}
+                                                {{ record.start_date }} → {{ record.end_date }}
+                                            {% elif record.issued_date %}
+                                                Issued: {{ record.issued_date }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </span>
+                                    </td>
+
+                                    <td class="cell-sent-at" data-label="Sent At">
+                                        <span style="font-size: 12.5px; color: var(--text-main); font-weight: 500; white-space: nowrap;">
+                                            {{ record.sent_at_display or "—" }}
+                                        </span>
                                     </td>
 
                                     <td class="cell-status" data-label="Status" style="text-align: center;">
                                         {% if record.email_status == "sent" %}
-                                            <span class="status-icon-badge status-sent" title="Email sent successfully">
-                                                <span class="status-symbol">✔</span>
-                                            </span>
+                                            <span class="status-sym-sent" title="Successfully Sent" aria-label="Successfully Sent">✔️</span>
+                                        {% elif record.email_status == "failed" %}
+                                            <span class="status-sym-failed" title="Failed" aria-label="Failed">❌</span>
                                         {% else %}
-                                            <span class="status-icon-badge status-failed" title="Email delivery failed">
-                                                <span class="status-symbol">❌</span>
-                                            </span>
+                                            <span class="status-sym-pending" title="Pending" aria-label="Pending">⏳</span>
                                         {% endif %}
                                     </td>
 
-                                    <td class="cell-date" data-label="Sent Date">
-                                        <div
-                                            class="sent-date"
-                                            data-timestamp="{{ record.sent_at or record.created_at or '' }}"
-                                        >
-                                            <span class="sent-date-day">
-                                                {{ record.sent_at or record.created_at or "-" }}
-                                            </span>
-                                        </div>
-                                    </td>
-
                                     <td class="cell-count" data-label="Send Count" style="text-align: center;">
-                                        <span class="send-count-badge" title="Sent {{ record.send_count or 0 }} time(s)">
-                                            {{ record.send_count or 0 }}
-                                        </span>
-                                    </td>
-
-                                    <td class="cell-id" data-label="Offer Letter ID">
-                                        <span class="cell-truncate-id" title="{{ record.offer_letter_id or '-' }}">
-                                            {{ record.offer_letter_id or "-" }}
-                                        </span>
+                                        <span class="send-count-badge">{{ record.send_count or 0 }}</span>
                                     </td>
 
                                     <td class="cell-action" data-label="Action" style="text-align: center;">
-                                        <button
-                                            type="button"
-                                            class="delete-btn"
-                                            title="Delete Record"
-                                            aria-label="Delete Record"
-                                            data-record-id="{{ record.id }}"
-                                            onclick="openDeleteModal(this.dataset.recordId)"
-                                        >
-                                            <svg
-                                                class="delete-icon-svg"
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            >
-                                                <path d="M3 6h18"/>
-                                                <path d="M8 6V4h8v2"/>
-                                                <path d="M19 6l-1 14H6L5 6"/>
-                                                <path d="M10 11v6"/>
-                                                <path d="M14 11v6"/>
-                                            </svg>
-                                        </button>
+                                        <div style="display: inline-flex; align-items: center; gap: 6px; justify-content: center;">
+                                            {% if record.record_type == 'certificate' and record.document_id %}
+                                                <a
+                                                    href="/verify/{{ record.document_id }}"
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    class="view-action-btn"
+                                                    title="View Certificate"
+                                                >
+                                                    <svg class="view-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                        <circle cx="12" cy="12" r="3"></circle>
+                                                    </svg>
+                                                </a>
+                                            {% endif %}
+                                            <button type="button" class="delete-btn" onclick="openDeleteModal('{{ record.record_type }}', '{{ record.id }}', '{{ record.student_name | escape }}')" title="Delete Record">
+                                                <svg class="delete-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             {% endfor %}
@@ -389,836 +474,865 @@
                     </table>
                 </div>
 
-                <!-- =================================================
-                     PAGINATION WITH PER-PAGE SELECTOR
-                     ================================================= -->
-                <div
-                    class="pagination"
-                    id="paginationContainer"
-                    {% if not history_records %}style="display: none;"{% endif %}
-                >
-                    <div class="pagination-left">
-                        <div class="pagination-info" id="paginationInfo">
-                            Showing
-                            <strong id="paginationRange">
-                                {{ ((page - 1) * (per_page or 25)) + 1 if total_records > 0 else 0 }}–{{ [page * (per_page or 25), total_records]|min }}
-                            </strong>
-                            of
-                            <strong id="totalRecords">{{ total_records or 0 }}</strong> records
-                            <span class="pagination-page-indicator" id="paginationPageIndicator">(Page {{ page }} of {{ total_pages }})</span>
-                        </div>
-
-                        <div class="per-page-selector">
-                            <label for="historyPerPage" class="per-page-label">Show:</label>
-                            <select id="historyPerPage" class="per-page-select" title="Records per page">
-                                <option value="25" {% if per_page == 25 %}selected{% endif %}>25 / page</option>
-                                <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
-                                <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
-                            </select>
-                        </div>
+                <!-- Empty State Placeholder -->
+                <div id="emptyState" class="empty-state" {% if history_records %}style="display: none;"{% endif %}>
+                    <div class="empty-icon-ring">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
                     </div>
+                    <p class="empty-title">
+                        {% if record_type in ('certificate', 'cert') %}
+                            No Certificates Generated Yet
+                        {% elif record_type in ('ca_letter', 'ca', 'campus_ambassador') %}
+                            No CA Offer Letters Found
+                        {% elif record_type in ('offer_letter', 'offer') %}
+                            No Offer Letters Found
+                        {% elif search %}
+                            No Matching Records Found
+                        {% else %}
+                            No Records Found
+                        {% endif %}
+                    </p>
+                    <p class="empty-subtitle">
+                        {% if record_type in ('certificate', 'cert') %}
+                            You have not generated any certificates yet. Use the Certificate Generator tab to create your first certificate.
+                        {% elif record_type in ('ca_letter', 'ca', 'campus_ambassador') %}
+                            No CA offer letters found matching the active filter criteria.
+                        {% elif record_type in ('offer_letter', 'offer') %}
+                            No offer letters found matching the active filter criteria.
+                        {% elif search %}
+                            No records matching "{{ search }}" were found. Try adjusting your search query.
+                        {% else %}
+                            No history matching the active search or filter criteria was found.
+                        {% endif %}
+                    </p>
+                </div>
 
+                <!-- Dynamic Pagination Container -->
+                <div class="pagination-container" id="paginationContainer" {% if total_pages <= 1 %}style="display: none;"{% endif %}>
+                    <div class="pagination-info" id="paginationInfo">
+                        Showing page <strong>{{ page }}</strong> of <strong>{{ total_pages }}</strong> ({{ total_records }} total records)
+                    </div>
                     <div class="pagination-buttons" id="paginationButtons">
                         {% if page > 1 %}
-                            <button
-                                type="button"
-                                class="page-btn page-prev"
-                                data-page="{{ page - 1 }}"
-                                onclick="goToPage(this.dataset.page)"
-                                title="Previous page"
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                <span>Prev</span>
-                            </button>
-                        {% else %}
-                            <span class="page-btn page-prev disabled">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                    <polyline points="15 18 9 12 15 6"></polyline>
-                                </svg>
-                                <span>Prev</span>
-                            </span>
+                            <button type="button" class="page-nav-btn" data-page="1" onclick="triggerFilterFetch(1)">« First</button>
+                            <button type="button" class="page-nav-btn" data-page="{{ page - 1 }}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">‹ Prev</button>
                         {% endif %}
 
-                        {% for page_number in range(1, (total_pages or 1) + 1) %}
-                            {% if page_number <= 5 or page_number == total_pages or (page_number >= page - 1 and page_number <= page + 1) %}
-                                <button
-                                    type="button"
-                                    class="page-btn {% if page_number == page %}active{% endif %}"
-                                    data-page="{{ page_number }}"
-                                    onclick="goToPage(this.dataset.page)"
-                                >
-                                    {{ page_number }}
-                                </button>
-                            {% endif %}
-                        {% endfor %}
+                        <span class="page-pill active">{{ page }}</span>
 
                         {% if page < total_pages %}
-                            <button
-                                type="button"
-                                class="page-btn page-next"
-                                data-page="{{ page + 1 }}"
-                                onclick="goToPage(this.dataset.page)"
-                                title="Next page"
-                            >
-                                <span>Next</span>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
-                            </button>
-                        {% else %}
-                            <span class="page-btn page-next disabled">
-                                <span>Next</span>
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                    <polyline points="9 18 15 12 9 6"></polyline>
-                                </svg>
-                            </span>
+                            <button type="button" class="page-nav-btn" data-page="{{ page + 1 }}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">Next ›</button>
+                            <button type="button" class="page-nav-btn" data-page="{{ total_pages }}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">Last »</button>
                         {% endif %}
                     </div>
                 </div>
-
-                <!-- =================================================
-                     EMPTY STATE
-                     ================================================= -->
-                <div
-                    class="empty-history"
-                    id="emptyHistory"
-                    {% if history_records %}style="display: none;"{% endif %}
-                >
-                    <div class="empty-preview-graphic">
-                        <div class="empty-preview-circle">
-                            <svg class="empty-preview-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                        </div>
-                    </div>
-                    <h3>No Email History Found</h3>
-                    <p>No records match your search query or selected filters.</p>
-                    <button type="button" id="resetEmptyBtn" class="filter-btn" style="display: inline-flex; margin-top: 14px;">
-                        Reset Filters
-                    </button>
-                </div>
-
             </div>
         </section>
     </main>
 
-</div>
-
-<!-- =========================================================
-     EXPORT RECORDS MODAL
-     ========================================================= -->
-<div
-    id="exportModal"
-    class="export-modal"
-    hidden
->
-    <div class="export-modal-box">
-        <div class="modal-icon-header export-icon-bg">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
+    <!-- =====================================================
+         SINGLE RECORD DELETE MODAL
+         ===================================================== -->
+    <div id="deleteModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <button type="button" class="modal-close-btn" onclick="closeDeleteModal()">✕</button>
+            <div class="modal-header">
+                <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Delete Audit Record
+                </h3>
+            </div>
+            <div class="modal-body" style="text-align: left;">
+                <p style="margin-bottom: 8px; color: var(--text-color);">Are you sure you want to delete this record from history?</p>
+                <div style="background: var(--bg-surface, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; padding: 12px; margin-top: 8px;">
+                    <div style="font-size: 13px; color: var(--text-muted);">Student: <strong id="deleteTargetName" style="color: var(--text-color);">-</strong></div>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Type: <span id="deleteTargetType" style="text-transform: capitalize; font-weight: 600;">-</span></div>
+                </div>
+                <p style="font-size: 12px; color: #ef4444; margin-top: 10px;">This action will permanently delete this record from the database.</p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button type="button" class="modal-cancel-btn" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" id="confirmSingleDeleteBtn" class="bulk-btn-delete" style="padding: 8px 18px;" onclick="executeSingleDelete()">
+                    <span>Delete Record</span>
+                </button>
+            </div>
         </div>
+    </div>
 
-        <h3>Export Email History</h3>
-        <p>Choose filters below to export offer letter email records into a formatted CSV spreadsheet.</p>
+    <!-- =====================================================
+         BULK DELETE MODAL
+         ===================================================== -->
+    <div id="bulkDeleteModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <button type="button" class="modal-close-btn" onclick="closeBulkDeleteModal()">✕</button>
+            <div class="modal-header">
+                <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Delete Selected Records
+                </h3>
+            </div>
+            <div class="modal-body" style="text-align: left;">
+                <p style="color: var(--text-color);">Are you sure you want to delete the <strong id="bulkDeleteCount">0</strong> selected records?</p>
+                <p style="font-size: 12px; color: #ef4444; margin-top: 10px;">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button type="button" class="modal-cancel-btn" onclick="closeBulkDeleteModal()">Cancel</button>
+                <button type="button" id="confirmBulkDeleteBtn" class="bulk-btn-delete" style="padding: 8px 18px;" onclick="executeBulkDelete()">
+                    <span>Delete Selected</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
-        <div class="export-modal-form">
-            <div class="export-form-row">
-                <div class="export-field">
-                    <label for="exportDateFrom" class="export-label">From Date</label>
-                    <input type="date" id="exportDateFrom" class="export-input">
-                </div>
-                <div class="export-field">
-                    <label for="exportDateTo" class="export-label">To Date</label>
-                    <input type="date" id="exportDateTo" class="export-input">
-                </div>
+    <!-- =====================================================
+         DELETE ALL MODAL
+         ===================================================== -->
+    <div id="deleteAllModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <button type="button" class="modal-close-btn" onclick="closeDeleteAllModal()">✕</button>
+            <div class="modal-header">
+                <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    Delete All History Records
+                </h3>
+            </div>
+            <div class="modal-body" style="text-align: left;">
+                <p style="color: var(--text-color); font-weight: 500;">Warning: This will delete ALL history records matching the current record type filter (<strong id="deleteAllTypeLabel">All Records</strong>).</p>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">To prevent accidental data loss, please type <strong style="color: #ef4444;">DELETE</strong> below to confirm:</p>
+                <input type="text" id="deleteAllConfirmInput" placeholder="Type DELETE to confirm" style="width: 100%; height: 38px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 10px; font-family: monospace; text-transform: uppercase;">
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button type="button" class="modal-cancel-btn" onclick="closeDeleteAllModal()">Cancel</button>
+                <button type="button" id="confirmDeleteAllBtn" class="bulk-btn-delete" style="padding: 8px 18px;" onclick="executeDeleteAll()">
+                    <span>Delete All Records</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         EXPORT MODAL
+         ===================================================== -->
+    <div id="exportModal" class="modal-overlay" style="display: none;">
+        <div class="modal-card">
+            <button type="button" class="modal-close-btn" onclick="closeExportModal()">✕</button>
+            <div class="modal-header">
+                <h3>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export History Records
+                </h3>
             </div>
 
-            <div class="export-form-row">
-                <div class="export-field full-width">
-                    <label for="exportStatus" class="export-label">Status Filter</label>
-                    <select id="exportStatus" class="export-input">
-                        <option value="">All Status (Sent & Failed)</option>
-                        <option value="sent">✔ Successful Sent Only</option>
-                        <option value="failed">❌ Failed Emails Only</option>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; text-align: left;">
+                <div class="form-group">
+                    <label class="filter-label">Record Type</label>
+                    <select id="exportRecordType" class="filter-input-wrap" style="width: 100%; height: 38px;">
+                        <option value="all">All Records (Offer Letters + CA Letters + Certificates)</option>
+                        <option value="offer_letter">Offer Letters Only</option>
+                        <option value="ca_letter">CA Offer Letters Only</option>
+                        <option value="certificate">Certificates Only</option>
+                    </select>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="filter-label">From Date</label>
+                        <input type="date" id="exportDateFrom" style="width: 100%; height: 38px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="filter-label">To Date</label>
+                        <input type="date" id="exportDateTo" style="width: 100%; height: 38px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="filter-label">Email Status</label>
+                    <select id="exportStatus" class="filter-input-wrap" style="width: 100%; height: 38px;">
+                        <option value="">All Statuses</option>
+                        <option value="sent">Successful Only</option>
+                        <option value="failed">Failed Only</option>
+                        <option value="pending">Pending Only</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="filter-label">Export Format</label>
+                    <select id="exportFormat" class="filter-input-wrap" style="width: 100%; height: 38px;">
+                        <option value="csv">CSV Document (.csv)</option>
+                        <option value="excel">Excel Workbook (.xlsx)</option>
                     </select>
                 </div>
             </div>
-        </div>
 
-        <div class="export-modal-actions">
-            <button
-                type="button"
-                id="cancelExportBtn"
-                class="modal-cancel-btn"
-            >
-                Cancel
-            </button>
-
-            <button
-                type="button"
-                id="confirmExportBtn"
-                class="modal-confirm-btn export-download-btn"
-            >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span>Download CSV</span>
-            </button>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button type="button" class="modal-cancel-btn" onclick="closeExportModal()">Cancel</button>
+                <button type="button" id="confirmExportBtn" class="export-btn" onclick="executeExport()">
+                    <span>Export Report</span>
+                </button>
+            </div>
         </div>
     </div>
+
 </div>
 
-<!-- =========================================================
-     DELETE CONFIRMATION MODAL
-     ========================================================= -->
-<div
-    id="deleteModal"
-    class="delete-modal"
-    hidden
->
-    <div class="delete-modal-box">
-        <div class="modal-icon-header delete-icon-bg">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 6h18"/>
-                <path d="M8 6V4h8v2"/>
-                <path d="M19 6l-1 14H6L5 6"/>
-                <path d="M10 11v6"/>
-                <path d="M14 11v6"/>
-            </svg>
-        </div>
-
-        <h3>Delete History Record?</h3>
-        <p>This email history record will be permanently deleted from the database.</p>
-
-        <div class="delete-modal-actions">
-            <button
-                type="button"
-                id="cancelDeleteBtn"
-                class="modal-cancel-btn"
-            >
-                Cancel
-            </button>
-
-            <button
-                type="button"
-                id="confirmDeleteBtn"
-                class="modal-delete-btn"
-            >
-                Delete
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- =========================================================
-     TOAST & PAGE CONFIG
-     ========================================================= -->
-<div id="historyConfig" data-page="{{ page or 1 }}" data-per-page="{{ per_page or 25 }}" hidden></div>
-<div
-    id="historyToast"
-    class="history-toast"
-></div>
-
+<!-- =====================================================
+     CLIENT-SIDE LIVE SEARCH & FILTER ENGINE
+     ===================================================== -->
 <script>
+let debounceTimer = null;
+let lastFetchedData = { total_records: 0, total_offer_letters: 0, total_certificates: 0, page: 1, total_pages: 1 };
 
-/* ==========================================================
-   STATE & DOM ELEMENTS
-   ========================================================== */
-const historyConfig = document.getElementById("historyConfig");
-let currentPage = historyConfig ? (parseInt(historyConfig.dataset.page, 10) || 1) : 1;
-let currentPerPage = historyConfig ? (parseInt(historyConfig.dataset.perPage, 10) || 25) : 25;
-let searchDebounceTimer = null;
-let selectedRecordId = null;
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('historySearch');
+    const statusSelect = document.getElementById('historyStatus');
+    const datePreset = document.getElementById('historyDatePreset');
+    const dateFrom = document.getElementById('historyDateFrom');
+    const dateTo = document.getElementById('historyDateTo');
+    const monthSelect = document.getElementById('historyMonth');
+    const perPageSelect = document.getElementById('historyPerPage');
+    const clearBtn = document.getElementById('clearFiltersBtn');
+    const typePills = document.querySelectorAll('.type-filter-pill');
 
-const searchInput = document.getElementById("historySearch");
-const searchSpinner = document.getElementById("searchSpinner");
-const monthSelect = document.getElementById("historyMonth");
-const dateFromInput = document.getElementById("historyDateFrom");
-const dateToInput = document.getElementById("historyDateTo");
-const statusSelect = document.getElementById("historyStatus");
-const perPageSelect = document.getElementById("historyPerPage");
-const clearFiltersBtn = document.getElementById("clearFiltersBtn");
-const resetEmptyBtn = document.getElementById("resetEmptyBtn");
+    // Type Pills Handler
+    typePills.forEach(pill => {
+        pill.addEventListener('click', () => {
+            typePills.forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            document.getElementById('filterRecordType').value = pill.dataset.type;
+            triggerFilterFetch(1);
+        });
+    });
 
-const tableContainer = document.getElementById("tableContainer");
-const tableBody = document.getElementById("historyTableBody");
-const paginationContainer = document.getElementById("paginationContainer");
-const emptyHistory = document.getElementById("emptyHistory");
+    // Debounced Live Search
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const spinner = document.getElementById('searchSpinner');
+            if (spinner) spinner.hidden = false;
+            debounceTimer = setTimeout(() => {
+                triggerFilterFetch(1);
+            }, 350);
+        });
+    }
 
-const summaryTotalRecords = document.getElementById("summaryTotalRecords");
-const summarySentRecords = document.getElementById("summarySentRecords");
-const summaryFailedRecords = document.getElementById("summaryFailedRecords");
-const summaryPageRecords = document.getElementById("summaryPageRecords");
+    // Filter Change Listeners
+    [statusSelect, monthSelect, perPageSelect].forEach(el => {
+        if (el) el.addEventListener('change', () => {
+            triggerFilterFetch(1);
+        });
+    });
 
-const paginationRange = document.getElementById("paginationRange");
-const totalRecordsElem = document.getElementById("totalRecords");
-const paginationPageIndicator = document.getElementById("paginationPageIndicator");
-const paginationButtons = document.getElementById("paginationButtons");
+    [dateFrom, dateTo].forEach(el => {
+        if (el) el.addEventListener('change', () => {
+            triggerFilterFetch(1);
+        });
+    });
 
-// Modals
-const exportModal = document.getElementById("exportModal");
-const openExportModalBtn = document.getElementById("openExportModalBtn");
-const cancelExportBtn = document.getElementById("cancelExportBtn");
-const confirmExportBtn = document.getElementById("confirmExportBtn");
-const exportDateFrom = document.getElementById("exportDateFrom");
-const exportDateTo = document.getElementById("exportDateTo");
-const exportStatus = document.getElementById("exportStatus");
+    if (datePreset) {
+        datePreset.addEventListener('change', () => {
+            const isCustom = datePreset.value === 'custom';
+            document.getElementById('customDateFromGroup').style.display = isCustom ? 'flex' : 'none';
+            document.getElementById('customDateToGroup').style.display = isCustom ? 'flex' : 'none';
+            if (!isCustom) {
+                document.getElementById('historyDateFrom').value = '';
+                document.getElementById('historyDateTo').value = '';
+            }
+            triggerFilterFetch(1);
+        });
+    }
 
-const deleteModal = document.getElementById("deleteModal");
-const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
-const cancelDeleteBtn = document.getElementById("cancelDeleteBtn");
-const historyToast = document.getElementById("historyToast");
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            statusSelect.value = 'all';
+            datePreset.value = 'all';
+            document.getElementById('customDateFromGroup').style.display = 'none';
+            document.getElementById('customDateToGroup').style.display = 'none';
+            dateFrom.value = '';
+            dateTo.value = '';
+            monthSelect.value = 'all';
+            document.getElementById('filterRecordType').value = 'all';
+            typePills.forEach(p => p.classList.toggle('active', p.dataset.type === 'all'));
+            triggerFilterFetch(1);
+        });
+    }
+});
 
-/* ==========================================================
-   SHOW TOAST
-   ========================================================== */
-function showToast(text, type = "success") {
-    historyToast.textContent = text;
-    historyToast.className = "history-toast " + type;
-    historyToast.classList.add("show");
+async function triggerFilterFetch(page = 1) {
+    const spinner = document.getElementById('searchSpinner');
+    if (spinner) spinner.hidden = false;
 
-    setTimeout(function() {
-        historyToast.classList.remove("show");
-    }, 3200);
-}
+    const recordType = document.getElementById('filterRecordType').value;
+    const search = document.getElementById('historySearch').value;
+    const status = document.getElementById('historyStatus').value;
+    const dateFilter = document.getElementById('historyDatePreset').value;
+    const dateFrom = document.getElementById('historyDateFrom').value;
+    const dateTo = document.getElementById('historyDateTo').value;
+    const month = document.getElementById('historyMonth').value;
+    const perPage = document.getElementById('historyPerPage').value;
 
-/* ==========================================================
-   DATE FORMATTER HELPER
-   ========================================================== */
-function formatTimestamp(timestamp) {
-    if (!timestamp) return { date: "-", time: "" };
+    const params = new URLSearchParams({
+        format: 'json',
+        record_type: recordType,
+        search: search,
+        status: status,
+        date_filter: dateFilter,
+        date_from: dateFrom,
+        date_to: dateTo,
+        month: month,
+        per_page: perPage,
+        page: page
+    });
+
     try {
-        const date = new Date(timestamp);
-        if (isNaN(date.getTime())) return { date: timestamp, time: "" };
+        const response = await fetch(`/history?${params.toString()}`);
+        const data = await response.json();
 
-        const formattedDate = date.toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric"
-        });
-
-        const formattedTime = date.toLocaleTimeString("en-IN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: true
-        });
-
-        return { date: formattedDate, time: formattedTime };
-    } catch (e) {
-        return { date: timestamp, time: "" };
+        if (data.success) {
+            lastFetchedData = data;
+            updateDashboardMetrics(data);
+            renderTableRecords(data.records);
+            renderPagination(data);
+        }
+    } catch (err) {
+        console.error('Failed to fetch history:', err);
+    } finally {
+        if (spinner) spinner.hidden = true;
     }
 }
 
-function formatHistoryDates() {
-    const dateElements = document.querySelectorAll(".sent-date");
-    dateElements.forEach(function(element) {
-        const timestamp = element.dataset.timestamp;
-        if (!timestamp) return;
-        const formatted = formatTimestamp(timestamp);
-        element.innerHTML = `
-            <span class="sent-date-day">${formatted.date}</span>
-            ${formatted.time ? `<span class="sent-date-time">${formatted.time}</span>` : ''}
-        `;
-    });
+function animateCounter(element, newValue) {
+    if (!element) return;
+    const currentVal = parseInt(element.textContent.trim(), 10) || 0;
+    const targetVal = parseInt(newValue ?? 0, 10) || 0;
+
+    if (currentVal !== targetVal) {
+        element.textContent = String(targetVal);
+        element.classList.remove("count-pulse");
+        void element.offsetWidth; // trigger reflow
+        element.classList.add("count-pulse");
+        setTimeout(function () {
+            element.classList.remove("count-pulse");
+        }, 600);
+    }
 }
 
-/* ==========================================================
-   FETCH FILTERED RECORDS (AJAX / LIVE SEARCH)
-   ========================================================== */
-async function triggerFilterFetch(targetPage = 1) {
-    currentPage = targetPage;
-    currentPerPage = parseInt(perPageSelect.value, 10) || 25;
+function updateDashboardMetrics(data) {
+    animateCounter(document.getElementById('summaryTotalRecords'), data.total_records || 0);
+    animateCounter(document.getElementById('summaryTotalOffers'), data.total_offer_letters || 0);
+    animateCounter(document.getElementById('summaryTotalCaOffers'), data.total_ca_letters || 0);
+    animateCounter(document.getElementById('summaryTotalCerts'), data.total_certificates || 0);
+    animateCounter(document.getElementById('summarySentRecords'), data.total_sent || 0);
+    animateCounter(document.getElementById('summaryFailedRecords'), data.total_failed || 0);
+}
 
-    const searchValue = (searchInput.value || "").trim();
-    const monthValue = monthSelect.value || "";
-    const dateFromValue = dateFromInput.value || "";
-    const dateToValue = dateToInput.value || "";
-    const statusValue = statusSelect.value || "";
+function renderTableRecords(records) {
+    const tbody = document.getElementById('historyTableBody');
+    const tableContainer = document.getElementById('tableContainer');
+    const emptyState = document.getElementById('emptyState');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    clearAllSelections();
 
-    const params = new URLSearchParams();
-    params.set("format", "json");
-    params.set("page", currentPage);
-    params.set("per_page", currentPerPage);
+    if (!records || records.length === 0) {
+        tbody.innerHTML = '';
+        tableContainer.style.display = 'none';
 
-    if (searchValue) params.set("search", searchValue);
-    if (monthValue) params.set("month", monthValue);
-    if (dateFromValue) params.set("date_from", dateFromValue);
-    if (dateToValue) params.set("date_to", dateToValue);
-    if (statusValue) params.set("status", statusValue);
+        const emptyTitle = emptyState ? emptyState.querySelector('.empty-title') : null;
+        const emptySubtitle = emptyState ? emptyState.querySelector('.empty-subtitle') : null;
+        const activeType = document.getElementById('filterRecordType') ? document.getElementById('filterRecordType').value : 'all';
+        const activeSearch = document.getElementById('historySearch') ? document.getElementById('historySearch').value.trim() : '';
 
-    if (searchSpinner) searchSpinner.hidden = false;
-
-    try {
-        const response = await fetch(`/history?${params.toString()}`, {
-            headers: {
-                "Accept": "application/json"
+        if (emptyTitle && emptySubtitle) {
+            if (activeSearch) {
+                emptyTitle.textContent = 'No Matching Records Found';
+                emptySubtitle.textContent = `No records matching "${activeSearch}" were found. Try adjusting your search query.`;
+            } else if (activeType === 'certificate' || activeType === 'cert') {
+                emptyTitle.textContent = 'No Certificates Generated Yet';
+                emptySubtitle.textContent = 'You have not generated any certificates yet. Use the Certificate Generator tab to create your first certificate.';
+            } else if (activeType === 'ca_letter' || activeType === 'ca' || activeType === 'campus_ambassador') {
+                emptyTitle.textContent = 'No CA Offer Letters Found';
+                emptySubtitle.textContent = 'No CA offer letters found matching the active filter criteria.';
+            } else if (activeType === 'offer_letter' || activeType === 'offer') {
+                emptyTitle.textContent = 'No Offer Letters Found';
+                emptySubtitle.textContent = 'No offer letters found matching the active filter criteria.';
+            } else {
+                emptyTitle.textContent = 'No Records Found';
+                emptySubtitle.textContent = 'No history records found matching the active search or filter criteria.';
             }
-        });
-
-        if (!response.ok) {
-            throw new Error("Failed to load records.");
         }
 
-        const data = await response.json();
-        renderLiveHistory(data);
-    } catch (error) {
-        console.error("Live filter error:", error);
-        showToast("Error updating history records.", "error");
-    } finally {
-        if (searchSpinner) searchSpinner.hidden = true;
-    }
-}
-
-/* ==========================================================
-   RENDER TABLE & METRICS
-   ========================================================== */
-function escapeHtml(str) {
-    if (str === null || str === undefined) return "-";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function renderLiveHistory(data) {
-    const records = data.history_records || [];
-    const totalRecords = data.total_records || 0;
-    const totalSent = data.total_sent || 0;
-    const totalFailed = data.total_failed || 0;
-    const totalPages = data.total_pages || 1;
-    const page = data.page || 1;
-    const perPage = data.per_page || 25;
-
-    // Update global summary stats
-    if (summaryTotalRecords) summaryTotalRecords.textContent = totalRecords;
-    if (summarySentRecords) summarySentRecords.textContent = totalSent;
-    if (summaryFailedRecords) summaryFailedRecords.textContent = totalFailed;
-    if (summaryPageRecords) summaryPageRecords.textContent = records.length;
-
-    // Render table or empty state
-    if (records.length === 0) {
-        if (tableContainer) tableContainer.style.display = "none";
-        if (paginationContainer) paginationContainer.style.display = "none";
-        if (emptyHistory) emptyHistory.style.display = "block";
+        emptyState.style.display = 'block';
         return;
     }
 
-    if (emptyHistory) emptyHistory.style.display = "none";
-    if (tableContainer) tableContainer.style.display = "block";
-    if (paginationContainer) paginationContainer.style.display = "flex";
+    tableContainer.style.display = 'block';
+    emptyState.style.display = 'none';
 
-    // Build rows
-    let rowsHtml = "";
-    records.forEach((record, index) => {
-        const studentName = escapeHtml(record.student_name);
-        const studentEmail = escapeHtml(record.student_email);
-        const domain = escapeHtml(record.internship_domain);
-        const duration = escapeHtml(record.internship_duration);
-        const letterType = record.offer_letter_type || "";
-        const letterTypeLower = letterType.toLowerCase();
-        
-        let typePillHtml = `<span class="type-pill">${escapeHtml(letterType)}</span>`;
-        if (letterTypeLower.includes("with hours")) {
-            typePillHtml = `<span class="type-pill type-hours">With Hours</span>`;
-        } else if (letterTypeLower.includes("without hours")) {
-            typePillHtml = `<span class="type-pill type-no-hours">Without Hours</span>`;
+    tbody.innerHTML = records.map(record => {
+        let typeBadge = '<span class="type-badge-cert">Certificate</span>';
+        if (record.record_type === 'ca_letter') {
+            typeBadge = '<span class="type-badge-ca">CA Offer Letter</span>';
+        } else if (record.record_type === 'offer_letter') {
+            typeBadge = '<span class="type-badge-offer">Offer Letter</span>';
         }
 
-        const isSent = (record.email_status || "").toLowerCase() === "sent";
-        const statusHtml = isSent
-            ? `<span class="status-icon-badge status-sent" title="Email sent successfully">
-                   <span class="status-symbol">✔</span>
-               </span>`
-            : `<span class="status-icon-badge status-failed" title="Email delivery failed">
-                   <span class="status-symbol">❌</span>
-               </span>`;
+        const isCert = record.record_type === 'certificate';
 
-        const rawTimestamp = record.sent_at || record.created_at || "";
-        const formatted = formatTimestamp(rawTimestamp);
-        const dateHtml = `
-            <div class="sent-date" data-timestamp="${escapeHtml(rawTimestamp)}">
-                <span class="sent-date-day">${formatted.date}</span>
-                ${formatted.time ? `<span class="sent-date-time">${formatted.time}</span>` : ''}
-            </div>
-        `;
+        let statusSymbol = '<span class="status-sym-pending" title="Pending" aria-label="Pending">⏳</span>';
+        if (record.email_status === 'sent') {
+            statusSymbol = '<span class="status-sym-sent" title="Successfully Sent" aria-label="Successfully Sent">✔️</span>';
+        } else if (record.email_status === 'failed') {
+            statusSymbol = '<span class="status-sym-failed" title="Failed" aria-label="Failed">❌</span>';
+        }
 
-        const sendCount = record.send_count || 0;
-        const offerLetterId = escapeHtml(record.offer_letter_id);
-        const recordId = escapeHtml(record.id);
+        let datesDisplay = '-';
+        if (record.start_date && record.end_date) {
+            datesDisplay = `${record.start_date} → ${record.end_date}`;
+        } else if (record.issued_date) {
+            datesDisplay = `Issued: ${record.issued_date}`;
+        }
 
-        rowsHtml += `
-            <tr id="record-${recordId}" data-record-id="${recordId}" class="history-row-animate">
-                <td class="cell-name" data-label="Student Name">
-                    <span class="cell-name-text">${studentName}</span>
+        const sentAtDisplay = record.sent_at_display || (record.sent_at ? formatIstTimestampClient(record.sent_at) : '—');
+        const safeStudentName = escapeHtml(record.student_name || 'Student');
+
+        return `
+            <tr id="record-${record.record_type}-${record.id}" class="history-row-animate">
+                <td class="cell-select">
+                    <input type="checkbox" class="record-checkbox row-select-checkbox" data-type="${record.record_type}" data-id="${record.id}" onchange="updateSelectionState()">
                 </td>
-                <td class="cell-email" data-label="Email">
-                    <span class="cell-truncate-email" title="${studentEmail}">
-                        ${studentEmail}
-                    </span>
-                </td>
+                <td class="cell-type" data-label="Type">${typeBadge}</td>
+                <td class="cell-id" data-label="Document ID"><code class="cell-truncate-id" title="${record.document_id}">${record.document_id}</code></td>
+                <td class="cell-name" data-label="Student Name"><strong class="cell-name-text">${record.student_name || '-'}</strong></td>
+                <td class="cell-email" data-label="Email"><span class="cell-truncate-email" title="${record.student_email}">${record.student_email || '-'}</span></td>
                 <td class="cell-domain" data-label="Domain">
-                    <span class="domain-tag">${domain}</span>
+                    <span class="domain-tag">${record.domain || '-'}</span>
+                    ${record.duration ? `<span class="duration-badge" style="margin-left: 4px;">${record.duration}</span>` : ''}
                 </td>
-                <td class="cell-duration" data-label="Duration">
-                    <span class="duration-badge">${duration}</span>
-                </td>
-                <td class="cell-type" data-label="Letter Type">
-                    ${typePillHtml}
-                </td>
-                <td class="cell-status" data-label="Status" style="text-align: center;">
-                    ${statusHtml}
-                </td>
-                <td class="cell-date" data-label="Sent Date">
-                    ${dateHtml}
-                </td>
-                <td class="cell-count" data-label="Send Count" style="text-align: center;">
-                    <span class="send-count-badge" title="Sent ${sendCount} time(s)">
-                        ${sendCount}
-                    </span>
-                </td>
-                <td class="cell-id" data-label="Offer Letter ID">
-                    <span class="cell-truncate-id" title="${offerLetterId}">
-                        ${offerLetterId}
-                    </span>
-                </td>
+                <td class="cell-date" data-label="Dates"><span style="font-size: 12px; color: var(--text-muted);">${datesDisplay}</span></td>
+                <td class="cell-sent-at" data-label="Sent At"><span style="font-size: 12.5px; color: var(--text-main); font-weight: 500; white-space: nowrap;">${sentAtDisplay}</span></td>
+                <td class="cell-status" data-label="Status" style="text-align: center;">${statusSymbol}</td>
+                <td class="cell-count" data-label="Send Count" style="text-align: center;"><span class="send-count-badge">${record.send_count || 0}</span></td>
                 <td class="cell-action" data-label="Action" style="text-align: center;">
-                    <button
-                        type="button"
-                        class="delete-btn"
-                        title="Delete Record"
-                        aria-label="Delete Record"
-                        data-record-id="${recordId}"
-                        onclick="openDeleteModal(this.dataset.recordId)"
-                    >
-                        <svg class="delete-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18"/>
-                            <path d="M8 6V4h8v2"/>
-                            <path d="M19 6l-1 14H6L5 6"/>
-                            <path d="M10 11v6"/>
-                            <path d="M14 11v6"/>
-                        </svg>
-                    </button>
+                    <div style="display: inline-flex; align-items: center; gap: 6px; justify-content: center;">
+                        ${(isCert && record.document_id) ? `
+                            <a href="/verify/${escapeHtml(record.document_id)}" target="_blank" rel="noopener noreferrer" class="view-action-btn" title="View Certificate">
+                                <svg class="view-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </a>
+                        ` : ''}
+                        <button type="button" class="delete-btn" onclick="openDeleteModal('${record.record_type}', '${record.id}', '${safeStudentName}')" title="Delete Record">
+                            <svg class="delete-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
-    });
-
-    tableBody.innerHTML = rowsHtml;
-
-    // Update Pagination UI
-    const startRange = totalRecords > 0 ? ((page - 1) * perPage) + 1 : 0;
-    const endRange = Math.min(page * perPage, totalRecords);
-
-    if (paginationRange) paginationRange.textContent = `${startRange}–${endRange}`;
-    if (totalRecordsElem) totalRecordsElem.textContent = totalRecords;
-    if (paginationPageIndicator) paginationPageIndicator.textContent = `(Page ${page} of ${totalPages})`;
-
-    renderPaginationButtons(page, totalPages);
+    }).join('');
 }
 
-/* ==========================================================
-   RENDER PAGINATION BUTTONS
-   ========================================================== */
-function renderPaginationButtons(page, totalPages) {
-    let html = "";
+function renderPagination(data) {
+    const container = document.getElementById('paginationContainer');
+    const info = document.getElementById('paginationInfo');
+    const btnContainer = document.getElementById('paginationButtons');
 
-    // Prev Button
-    if (page > 1) {
-        html += `
-            <button type="button" class="page-btn page-prev" onclick="goToPage(${page - 1})" title="Previous page">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-                <span>Prev</span>
-            </button>
-        `;
+    if (!data.total_pages || data.total_pages <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+    info.innerHTML = `Showing page <strong>${data.page}</strong> of <strong>${data.total_pages}</strong> (${data.total_records} total records)`;
+
+    let btns = '';
+    if (data.page > 1) {
+        btns += `<button type="button" class="page-nav-btn" data-page="1" onclick="triggerFilterFetch(1)">« First</button>`;
+        btns += `<button type="button" class="page-nav-btn" data-page="${data.page - 1}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">‹ Prev</button>`;
+    }
+    btns += `<span class="page-pill active">${data.page}</span>`;
+    if (data.page < data.total_pages) {
+        btns += `<button type="button" class="page-nav-btn" data-page="${data.page + 1}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">Next ›</button>`;
+        btns += `<button type="button" class="page-nav-btn" data-page="${data.total_pages}" onclick="triggerFilterFetch(Number(this.getAttribute('data-page')))">Last »</button>`;
+    }
+    btnContainer.innerHTML = btns;
+}
+
+function escapeHtml(str) {
+    return str ? String(str).replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+}
+
+function formatIstTimestampClient(tsStr) {
+    if (!tsStr || String(tsStr).trim() === '' || ['none', 'null', '-', '—'].includes(String(tsStr).trim().toLowerCase())) {
+        return '—';
+    }
+    try {
+        let clean = String(tsStr).trim();
+        if (!clean.includes('Z') && !clean.includes('+') && !clean.includes('-') && clean.includes(' ')) {
+            clean = clean.replace(' ', 'T') + 'Z';
+        }
+        const d = new Date(clean);
+        if (isNaN(d.getTime())) return clean.slice(0, 19).replace('T', ' ');
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        }).formatToParts(d);
+
+        let day = '', month = '', year = '', hour = '', minute = '', dayPeriod = '';
+        parts.forEach(p => {
+            if (p.type === 'day') day = p.value;
+            if (p.type === 'month') month = p.value;
+            if (p.type === 'year') year = p.value;
+            if (p.type === 'hour') hour = p.value;
+            if (p.type === 'minute') minute = p.value;
+            if (p.type === 'dayPeriod') dayPeriod = p.value.toUpperCase();
+        });
+        return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
+    } catch (e) {
+        return String(tsStr).slice(0, 19).replace('T', ' ') || '—';
+    }
+}
+
+// =========================================================
+// SELECTION STATE MANAGEMENT
+// =========================================================
+let selectedItems = new Map(); // key: `${type}-${id}`, value: {record_type, id}
+
+function updateSelectionState() {
+    const checkboxes = document.querySelectorAll('.row-select-checkbox');
+    selectedItems.clear();
+
+    checkboxes.forEach(cb => {
+        const row = cb.closest('tr');
+        if (cb.checked) {
+            selectedItems.set(`${cb.dataset.type}-${cb.dataset.id}`, {
+                record_type: cb.dataset.type,
+                id: cb.dataset.id
+            });
+            if (row) row.classList.add('row-selected');
+        } else {
+            if (row) row.classList.remove('row-selected');
+        }
+    });
+
+    const toolbar = document.getElementById('bulkActionsToolbar');
+    const badge = document.getElementById('selectedCountBadge');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+
+    if (selectedItems.size > 0) {
+        toolbar.style.display = 'flex';
+        badge.textContent = selectedItems.size;
     } else {
-        html += `
-            <span class="page-btn page-prev disabled">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                </svg>
-                <span>Prev</span>
-            </span>
-        `;
+        toolbar.style.display = 'none';
     }
 
-    // Numbered Buttons
-    for (let i = 1; i <= totalPages; i++) {
-        if (i <= 5 || i === totalPages || (i >= page - 1 && i <= page + 1)) {
-            const activeClass = i === page ? "active" : "";
-            html += `
-                <button type="button" class="page-btn ${activeClass}" onclick="goToPage(${i})">
-                    ${i}
-                </button>
-            `;
-        }
-    }
-
-    // Next Button
-    if (page < totalPages) {
-        html += `
-            <button type="button" class="page-btn page-next" onclick="goToPage(${page + 1})" title="Next page">
-                <span>Next</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-            </button>
-        `;
-    } else {
-        html += `
-            <span class="page-btn page-next disabled">
-                <span>Next</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                </svg>
-            </span>
-        `;
-    }
-
-    if (paginationButtons) {
-        paginationButtons.innerHTML = html;
+    if (selectAllCheckbox && checkboxes.length > 0) {
+        selectAllCheckbox.checked = checkboxes.length === selectedItems.size;
+        selectAllCheckbox.indeterminate = selectedItems.size > 0 && selectedItems.size < checkboxes.length;
     }
 }
 
-function goToPage(page) {
-    const targetPage = parseInt(page, 10) || 1;
-    triggerFilterFetch(targetPage);
-    window.scrollTo({ top: 180, behavior: 'smooth' });
-}
-
-/* ==========================================================
-   EVENT LISTENERS: LIVE SEARCH & FILTERS
-   ========================================================== */
-if (searchInput) {
-    searchInput.addEventListener("input", function() {
-        clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(function() {
-            triggerFilterFetch(1);
-        }, 300);
+function toggleSelectAll(selectAllCheckbox) {
+    const checkboxes = document.querySelectorAll('.row-select-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = selectAllCheckbox.checked;
     });
+    updateSelectionState();
 }
 
-if (monthSelect) {
-    monthSelect.addEventListener("change", function() {
-        if (this.value) {
-            // Clear date range if month is chosen
-            if (dateFromInput) dateFromInput.value = "";
-            if (dateToInput) dateToInput.value = "";
-        }
-        triggerFilterFetch(1);
+function clearAllSelections() {
+    selectedItems.clear();
+    const checkboxes = document.querySelectorAll('.row-select-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        const row = cb.closest('tr');
+        if (row) row.classList.remove('row-selected');
     });
-}
-
-if (dateFromInput) {
-    dateFromInput.addEventListener("change", function() {
-        if (this.value && monthSelect) {
-            monthSelect.value = "";
-        }
-        triggerFilterFetch(1);
-    });
-}
-
-if (dateToInput) {
-    dateToInput.addEventListener("change", function() {
-        if (this.value && monthSelect) {
-            monthSelect.value = "";
-        }
-        triggerFilterFetch(1);
-    });
-}
-
-if (statusSelect) {
-    statusSelect.addEventListener("change", function() {
-        triggerFilterFetch(1);
-    });
-}
-
-if (perPageSelect) {
-    perPageSelect.addEventListener("change", function() {
-        triggerFilterFetch(1);
-    });
-}
-
-function resetAllFilters() {
-    if (searchInput) searchInput.value = "";
-    if (monthSelect) monthSelect.value = "";
-    if (dateFromInput) dateFromInput.value = "";
-    if (dateToInput) dateToInput.value = "";
-    if (statusSelect) statusSelect.value = "";
-    triggerFilterFetch(1);
-}
-
-if (clearFiltersBtn) {
-    clearFiltersBtn.addEventListener("click", resetAllFilters);
-}
-
-if (resetEmptyBtn) {
-    resetEmptyBtn.addEventListener("click", resetAllFilters);
-}
-
-/* ==========================================================
-   EXPORT MODAL HANDLERS
-   ========================================================== */
-function openExportModal() {
-    // Pre-populate with current filters
-    if (exportDateFrom && dateFromInput) exportDateFrom.value = dateFromInput.value;
-    if (exportDateTo && dateToInput) exportDateTo.value = dateToInput.value;
-    if (exportStatus && statusSelect) exportStatus.value = statusSelect.value;
-
-    exportModal.classList.remove("modal-closing");
-    exportModal.hidden = false;
-    document.body.style.overflow = "hidden";
-}
-
-function closeExportModal() {
-    exportModal.classList.add("modal-closing");
-    setTimeout(function() {
-        exportModal.hidden = true;
-        exportModal.classList.remove("modal-closing");
-        document.body.style.overflow = "";
-    }, 200);
-}
-
-if (openExportModalBtn) {
-    openExportModalBtn.addEventListener("click", openExportModal);
-}
-
-if (cancelExportBtn) {
-    cancelExportBtn.addEventListener("click", closeExportModal);
-}
-
-exportModal.addEventListener("click", function(event) {
-    if (event.target === exportModal) {
-        closeExportModal();
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
     }
-});
-
-if (confirmExportBtn) {
-    confirmExportBtn.addEventListener("click", function() {
-        const fromVal = (exportDateFrom.value || "").trim();
-        const toVal = (exportDateTo.value || "").trim();
-        const statVal = (exportStatus.value || "").trim();
-
-        if (fromVal && toVal && fromVal > toVal) {
-            showToast("From Date cannot be after To Date.", "error");
-            return;
-        }
-
-        const params = new URLSearchParams();
-        if (fromVal) params.set("date_from", fromVal);
-        if (toVal) params.set("date_to", toVal);
-        if (statVal) params.set("status", statVal);
-
-        showToast("Generating CSV export...", "success");
-        closeExportModal();
-
-        // Trigger direct file download
-        window.location.href = `/history/export?${params.toString()}`;
-    });
+    const toolbar = document.getElementById('bulkActionsToolbar');
+    if (toolbar) toolbar.style.display = 'none';
 }
 
-/* ==========================================================
-   DELETE MODAL HANDLERS
-   ========================================================== */
-function openDeleteModal(recordId) {
-    selectedRecordId = recordId;
-    deleteModal.classList.remove("modal-closing");
-    deleteModal.hidden = false;
-    document.body.style.overflow = "hidden";
+// =========================================================
+// SINGLE DELETE MODAL HANDLERS
+// =========================================================
+let singleDeleteTarget = null;
+
+function openDeleteModal(recordType, recordId, studentName) {
+    singleDeleteTarget = { record_type: recordType, id: recordId };
+    document.getElementById('deleteTargetName').textContent = studentName || '-';
+    let typeLabel = 'Certificate';
+    if (recordType === 'ca_letter' || recordType === 'ca' || recordType === 'campus_ambassador') {
+        typeLabel = 'CA Offer Letter';
+    } else if (recordType === 'offer_letter' || recordType === 'offer') {
+        typeLabel = 'Offer Letter';
+    }
+    document.getElementById('deleteTargetType').textContent = typeLabel;
+    document.getElementById('deleteModal').style.display = 'flex';
 }
 
 function closeDeleteModal() {
-    deleteModal.classList.add("modal-closing");
-    setTimeout(function () {
-        deleteModal.hidden = true;
-        deleteModal.classList.remove("modal-closing");
-        selectedRecordId = null;
-        document.body.style.overflow = "";
-    }, 200);
+    singleDeleteTarget = null;
+    document.getElementById('deleteModal').style.display = 'none';
 }
 
-cancelDeleteBtn.addEventListener("click", function() {
-    closeDeleteModal();
-});
+async function executeSingleDelete() {
+    if (!singleDeleteTarget) return;
 
-deleteModal.addEventListener("click", function(event) {
-    if (event.target === deleteModal) {
-        closeDeleteModal();
-    }
-});
-
-confirmDeleteBtn.addEventListener("click", async function() {
-    if (!selectedRecordId) return;
-
-    const recordId = selectedRecordId;
-    confirmDeleteBtn.disabled = true;
-    confirmDeleteBtn.textContent = "Deleting...";
+    const btn = document.getElementById('confirmSingleDeleteBtn');
+    btn.disabled = true;
+    const origText = btn.innerHTML;
+    btn.innerHTML = '<span>Deleting...</span>';
 
     try {
-        const response = await fetch(`/history/${recordId}`, {
-            method: "DELETE",
-            headers: {
-                "Content-Type": "application/json"
-            }
+        const response = await fetch(`/api/history/${singleDeleteTarget.record_type}/${singleDeleteTarget.id}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
         });
+        const result = await response.json();
 
-        let result = {};
-        try {
-            result = await response.json();
-        } catch (e) {
-            result = {};
-        }
-
-        if (!response.ok) {
-            throw new Error(result.error || result.message || "Unable to delete record.");
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to delete record.');
         }
 
         closeDeleteModal();
-        localStorage.setItem("persevex_history_updated", Date.now().toString());
-        showToast("History record deleted successfully.", "success");
+        showToast('Record deleted successfully.', 'success');
+        localStorage.setItem('persevex_history_updated', Date.now().toString());
+        triggerFilterFetch(lastFetchedData.page || 1);
+    } catch (err) {
+        console.error('Single delete error:', err);
+        showToast(err.message || 'Error deleting record.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
+}
 
-        // Refresh list dynamically without full page reload
-        triggerFilterFetch(currentPage);
+// =========================================================
+// BULK DELETE SELECTED MODAL HANDLERS
+// =========================================================
+function openBulkDeleteModal() {
+    if (selectedItems.size === 0) return;
+    document.getElementById('bulkDeleteCount').textContent = selectedItems.size;
+    document.getElementById('bulkDeleteModal').style.display = 'flex';
+}
+
+function closeBulkDeleteModal() {
+    document.getElementById('bulkDeleteModal').style.display = 'none';
+}
+
+async function executeBulkDelete() {
+    if (selectedItems.size === 0) return;
+
+    const btn = document.getElementById('confirmBulkDeleteBtn');
+    btn.disabled = true;
+    const origText = btn.innerHTML;
+    btn.innerHTML = '<span>Deleting...</span>';
+
+    try {
+        const items = Array.from(selectedItems.values());
+        const response = await fetch('/api/history/bulk-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: items })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to delete selected records.');
+        }
+
+        closeBulkDeleteModal();
+        clearAllSelections();
+        showToast(`${result.deleted_count || items.length} records deleted successfully.`, 'success');
+        localStorage.setItem('persevex_history_updated', Date.now().toString());
+        triggerFilterFetch(lastFetchedData.page || 1);
+    } catch (err) {
+        console.error('Bulk delete error:', err);
+        showToast(err.message || 'Error deleting records.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
     }
-    catch (error) {
-        console.error("Delete history error:", error);
-        showToast(error.message || "Unable to delete record.", "error");
+}
+
+// =========================================================
+// DELETE ALL MODAL HANDLERS
+// =========================================================
+function openDeleteAllModal() {
+    const currentType = document.getElementById('filterRecordType').value;
+    let label = 'All Records (Offer Letters + CA Letters + Certificates)';
+    if (currentType === 'offer_letter' || currentType === 'offer') label = 'All Offer Letters';
+    else if (currentType === 'ca_letter' || currentType === 'ca' || currentType === 'campus_ambassador') label = 'All CA Offer Letters';
+    else if (currentType === 'certificate' || currentType === 'cert') label = 'All Certificates';
+
+    document.getElementById('deleteAllTypeLabel').textContent = label;
+    document.getElementById('deleteAllConfirmInput').value = '';
+    document.getElementById('deleteAllModal').style.display = 'flex';
+}
+
+function closeDeleteAllModal() {
+    document.getElementById('deleteAllModal').style.display = 'none';
+}
+
+async function executeDeleteAll() {
+    const confirmInput = document.getElementById('deleteAllConfirmInput').value.trim();
+    if (confirmInput !== 'DELETE') {
+        showToast('Please type DELETE to confirm deletion.', 'error');
+        return;
     }
-    finally {
-        confirmDeleteBtn.disabled = false;
-        confirmDeleteBtn.textContent = "Delete";
+
+    const currentType = document.getElementById('filterRecordType').value;
+    const btn = document.getElementById('confirmDeleteAllBtn');
+    btn.disabled = true;
+    const origText = btn.innerHTML;
+    btn.innerHTML = '<span>Deleting All...</span>';
+
+    try {
+        const response = await fetch('/api/history/delete-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                confirm_phrase: 'DELETE',
+                record_type: currentType
+            })
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to delete all records.');
+        }
+
+        closeDeleteAllModal();
+        clearAllSelections();
+        showToast('All records deleted successfully.', 'success');
+        localStorage.setItem('persevex_history_updated', Date.now().toString());
+        triggerFilterFetch(1);
+    } catch (err) {
+        console.error('Delete all error:', err);
+        showToast(err.message || 'Error deleting records.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
     }
-});
+}
 
 /* ==========================================================
-   KEYBOARD SHORTCUTS (ESC)
+   TOAST NOTIFICATION ENGINE
    ========================================================== */
-document.addEventListener("keydown", function(event) {
-    if (event.key === "Escape") {
-        if (!deleteModal.hidden) closeDeleteModal();
-        if (!exportModal.hidden) closeExportModal();
+function showToast(text, type = "success") {
+    let container = document.querySelector(".toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast-message toast-${type}`;
+    const icon = type === "success" ? "✔" : (type === "error" ? "❌" : "ℹ");
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-text">${text}</span>
+        <button type="button" class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add("toast-exit");
+        setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+        }, 300);
+    }, 4000);
+}
+
+// Modal Handlers: Export
+function openExportModal() {
+    document.getElementById('exportModal').style.display = 'flex';
+}
+function closeExportModal() {
+    document.getElementById('exportModal').style.display = 'none';
+}
+document.getElementById('openExportModalBtn').addEventListener('click', openExportModal);
+
+function executeExport() {
+    const recType = document.getElementById('exportRecordType').value;
+    const dateFrom = document.getElementById('exportDateFrom').value;
+    const dateTo = document.getElementById('exportDateTo').value;
+    const status = document.getElementById('exportStatus').value;
+    const format = document.getElementById('exportFormat').value;
+
+    const btn = document.getElementById('confirmExportBtn');
+    btn.disabled = true;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span>Exporting...</span>';
+
+    const params = new URLSearchParams({
+        record_type: recType,
+        date_from: dateFrom,
+        date_to: dateTo,
+        status: status,
+        format: format
+    });
+
+    window.location.href = `/history/export?${params.toString()}`;
+    showToast('Export report generated successfully.', 'success');
+
+    setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        closeExportModal();
+    }, 1000);
+}
+
+// ESC Key listener
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeDeleteModal();
+        closeBulkDeleteModal();
+        closeDeleteAllModal();
+        closeExportModal();
     }
 });
 
-/* ==========================================================
-   INITIAL FORMATTING ON LOAD
-   ========================================================== */
-document.addEventListener("DOMContentLoaded", function() {
-    formatHistoryDates();
+window.addEventListener('focus', () => triggerFilterFetch(lastFetchedData.page || 1));
+window.addEventListener('storage', function(event) {
+    if (event.key === 'persevex_history_updated' || event.key === 'persevex_stats_updated') {
+        triggerFilterFetch(lastFetchedData.page || 1);
+    }
 });
-
 </script>
 
 </body>

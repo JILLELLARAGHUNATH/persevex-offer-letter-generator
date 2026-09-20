@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Persevex Certificate Generator</title>
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
+            </div>
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
+            </div>
+        </div>
+
+        <h1>
+            CERTIFICATE <span class="highlight">GENERATOR</span>
+        </h1>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link active" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/history" class="nav-tab-link" title="Unified History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </a>
+        </nav>
+
+        <div class="header-stats" aria-label="Certificate delivery summary">
+            <div class="header-stat success-stat" title="Total Successful Certificate Deliveries">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+                <span>
+                    Success:
+                    <strong id="successCount">{{ success_count or 0 }}</strong>
+                </span>
+            </div>
+
+            <div class="header-stat failed-stat" title="Total Failed Certificate Attempts">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+                <span>
+                    Failed:
+                    <strong id="failedCount">{{ failed_count or 0 }}</strong>
+                </span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- =====================================================
+         MODE SWITCHER: SINGLE vs BULK CERTIFICATE
+         ===================================================== -->
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <button type="button" id="tabSingleCert" class="mode-pill-btn active" onclick="switchCertificateMode('single')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                Single Certificate
+            </button>
+            <button type="button" id="tabBulkCert" class="mode-pill-btn" onclick="switchCertificateMode('bulk')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                Bulk Generate Certificates
+            </button>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         SINGLE CERTIFICATE WORKSPACE
+         ===================================================== -->
+    <main id="singleCertWorkspace">
+
+        <!-- LEFT FORM SECTION -->
+        <section class="card form-card-animate">
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="7"></circle>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                    </svg>
+                    Student & Certificate Details
+                </h2>
+                <span class="section-tag">Certificate</span>
+            </div>
+
+            <form id="certificateForm" autocomplete="off">
+                <!-- STUDENT NAME -->
+                <div class="form-group">
+                    <label for="student_name">
+                        Student Full Name <span class="required-star">*</span>
+                    </label>
+                    <input
+                        id="student_name"
+                        type="text"
+                        required
+                        placeholder="e.g. Vaikunthi Shivraj Jadhav"
+                        autocomplete="off"
+                    >
+                </div>
+
+                <!-- STUDENT EMAIL -->
+                <div class="form-group">
+                    <label for="student_email">
+                        Student Email Address <span class="required-star">*</span>
+                    </label>
+                    <input
+                        id="student_email"
+                        type="email"
+                        required
+                        placeholder="e.g. student@gmail.com"
+                        autocomplete="off"
+                    >
+                </div>
+
+                <!-- INTERNSHIP DOMAIN -->
+                <div class="form-group">
+                    <label for="domain_select">
+                        Internship Domain <span class="required-star">*</span>
+                    </label>
+                    <select id="domain_select" required>
+                        <option value="" disabled selected>Select Internship Domain</option>
+                        <option value="Data Science">Data Science</option>
+                        <option value="Full Stack Web Development">Full Stack Web Development</option>
+                        <option value="Python Development">Python Development</option>
+                        <option value="Artificial Intelligence">Artificial Intelligence</option>
+                        <option value="Machine Learning">Machine Learning</option>
+                        <option value="UI/UX Design">UI/UX Design</option>
+                        <option value="Digital Marketing">Digital Marketing</option>
+                        <option value="Cyber Security">Cyber Security</option>
+                        <option value="Cloud Computing">Cloud Computing</option>
+                        <option value="Mobile App Development">Mobile App Development</option>
+                        <option value="custom">-- Enter Custom Domain --</option>
+                    </select>
+                    <input
+                        id="custom_domain_input"
+                        type="text"
+                        placeholder="Enter domain name..."
+                        style="display: none; margin-top: 8px;"
+                    >
+                </div>
+
+                <!-- DATES ROW: START DATE & END DATE -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="start_date">
+                            Start Date <span class="required-star">*</span>
+                        </label>
+                        <input
+                            id="start_date"
+                            type="date"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="end_date">
+                            End Date <span class="required-star">*</span>
+                        </label>
+                        <input
+                            id="end_date"
+                            type="date"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <!-- ISSUED DATE -->
+                <div class="form-group">
+                    <label for="issued_date">
+                        Issued Date <span class="required-star">*</span>
+                    </label>
+                    <input
+                        id="issued_date"
+                        type="date"
+                        required
+                    >
+                </div>
+
+                <!-- ACTION BUTTON: GENERATE -->
+                <button
+                    type="submit"
+                    id="generateBtn"
+                    class="generate-btn"
+                >
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span id="generateBtnText">Generate Certificate</span>
+                </button>
+            </form>
+        </section>
+
+        <!-- RIGHT PREVIEW SECTION -->
+        <section class="card preview-card-animate">
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    Certificate Preview
+                </h2>
+                <span id="previewStatusBadge" class="section-tag">Awaiting Generation</span>
+            </div>
+
+            <div class="preview-container cert-preview-container">
+                <div id="previewPlaceholder" class="preview-placeholder">
+                    <div class="placeholder-icon-ring">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="7"></circle>
+                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                        </svg>
+                    </div>
+                    <p class="placeholder-title">No Certificate Generated Yet</p>
+                    <p class="placeholder-desc">Fill out the student details and click <strong>Generate Certificate</strong> to create the verified PDF with QR code.</p>
+                </div>
+
+                <div id="generatingState" class="generating-state" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p class="generating-title">Generating Certificate...</p>
+                    <p class="generating-subtitle">Applying template styling & creating unique verification QR code</p>
+                </div>
+
+                <iframe
+                    id="pdfPreviewFrame"
+                    class="pdf-preview-frame"
+                    style="display: none;"
+                    title="Certificate PDF Preview"
+                ></iframe>
+            </div>
+
+            <div class="preview-actions" id="previewActions" style="display: none;">
+                <a
+                    id="downloadBtn"
+                    class="action-btn download-btn"
+                    download
+                    href="#"
+                >
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span id="downloadBtnText">Download Certificate</span>
+                </a>
+
+                <button
+                    type="button"
+                    id="sendEmailBtn"
+                    class="action-btn send-btn"
+                >
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span id="sendEmailBtnText">Send Certificate Email</span>
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- =====================================================
+         BULK CERTIFICATE WORKSPACE
+         ===================================================== -->
+    <main id="bulkCertWorkspace" style="display: none; grid-template-columns: 1fr;">
+        <section class="card form-card-animate" style="max-width: 1200px; margin: 0 auto; width: 100%;">
+            <div class="card-header" style="justify-content: space-between;">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                    </svg>
+                    Bulk Certificate Generation & Email Dispatch
+                </h2>
+                <a href="/api/certificate/bulk/sample-template" class="clear-btn" style="text-decoration: none;" download>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download Sample CSV
+                </a>
+            </div>
+
+            <!-- STEP 1: UPLOAD -->
+            <div class="upload-dropzone" id="bulkDropzone" onclick="document.getElementById('bulkFileInput').click()">
+                <input type="file" id="bulkFileInput" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleBulkFileSelect(event)">
+                <div class="upload-dropzone-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </div>
+                <h3 class="upload-dropzone-title">Click or Drag & Drop Student List</h3>
+                <p class="upload-dropzone-desc">Upload a CSV or Excel spreadsheet containing Student Name, Student Email, Domain, Start Date, End Date, and Issued Date.</p>
+                <button type="button" class="export-btn" style="pointer-events: none;">Select File</button>
+            </div>
+
+            <!-- STEP 2: VALIDATION STATS (Hidden until file selected) -->
+            <div id="bulkValidationSection" style="display: none; margin-top: 24px;">
+                <div class="validation-summary-grid">
+                    <div class="val-card">
+                        <span class="val-icon">📋</span>
+                        <div class="val-info">
+                            <span class="val-label">Total Rows</span>
+                            <span class="val-val" id="bulkTotalRows">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-valid">
+                        <span class="val-icon">✔</span>
+                        <div class="val-info">
+                            <span class="val-label">Valid Records</span>
+                            <span class="val-val" id="bulkValidRows" style="color: #10b981;">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-invalid">
+                        <span class="val-icon">❌</span>
+                        <div class="val-info">
+                            <span class="val-label">Invalid Records</span>
+                            <span class="val-val" id="bulkInvalidRows" style="color: #ef4444;">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-dup">
+                        <span class="val-icon">⚠️</span>
+                        <div class="val-info">
+                            <span class="val-label">Duplicates</span>
+                            <span class="val-val" id="bulkDuplicateRows" style="color: #f59e0b;">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: PREVIEW TABLE -->
+                <div style="margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; font-size: 14px; color: var(--text-main);">Uploaded Records Preview</h4>
+                        <span id="bulkSelectionCount" style="font-size: 12.5px; color: var(--text-muted);">0 valid records ready</span>
+                    </div>
+
+                    <div class="bulk-table-wrapper">
+                        <table class="bulk-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;">
+                                        <input type="checkbox" id="bulkSelectAllCheck" checked onchange="toggleSelectAllBulk(event)">
+                                    </th>
+                                    <th>#</th>
+                                    <th>Student Name</th>
+                                    <th>Email</th>
+                                    <th>Domain</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Issued Date</th>
+                                    <th>Validation Status</th>
+                                    <th style="text-align: center; width: 95px;">Preview</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- STEP 4: ACTION CONTROLS & PROGRESS -->
+                <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                    <!-- Real-Time Progress Card -->
+                    <div id="bulkProgressArea" class="bulk-progress-card" style="display: none;">
+                        <div class="bulk-progress-header">
+                            <div class="bulk-progress-title-row">
+                                <h4 id="bulkProgressTitle" class="bulk-progress-title">Generating Certificates...</h4>
+                                <span id="bulkProgressPercent" class="bulk-progress-badge">0.0%</span>
+                            </div>
+                            <div class="bulk-progress-counter">
+                                <span id="bulkProgressCompleted">0</span> / <span id="bulkProgressTotal">0</span>
+                            </div>
+                        </div>
+
+                        <div class="bulk-progress-container">
+                            <div class="bulk-progress-bar" id="bulkProgressBar" style="width: 0%;"></div>
+                        </div>
+
+                        <div class="bulk-progress-details">
+                            <div class="bulk-progress-current">
+                                <span>Current:</span>
+                                <strong id="bulkProgressCurrentItem" class="current-value">-</strong>
+                            </div>
+                            <div class="bulk-progress-stats">
+                                <span class="stat-item stat-success">Successful: <strong id="bulkProgressSuccess">0</strong></span>
+                                <span class="stat-item stat-breakdown" id="bulkProgressBreakdown" style="font-size: 11.5px; color: var(--text-muted); display: none;">(New: <strong id="bulkProgressNew" style="color: #059669;">0</strong>, Existing: <strong id="bulkProgressExisting" style="color: #2563eb;">0</strong>)</span>
+                                <span class="stat-item stat-failed">Failed: <strong id="bulkProgressFailed">0</strong></span>
+                                <span class="stat-item stat-remaining">Remaining: <strong id="bulkProgressRemaining">0</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GENERATION FAILED RECORDS SECTION -->
+                    <div id="bulkGenerationFailedArea" class="bulk-failed-card" style="display: none;">
+                        <div class="bulk-failed-header" onclick="toggleGenerationFailedDetails()">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">⚠️</span>
+                                <strong style="color: #b91c1c; font-size: 13.5px;">Failed Certificate Generations (<span id="bulkGenFailedCountBadge">0</span>)</strong>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button type="button" class="btn-retry-action" id="bulkRetryGenBtn" onclick="event.stopPropagation(); retryFailedGenerations();">
+                                    🔄 Retry Failed Certificates
+                                </button>
+                                <span id="bulkGenFailedToggleIcon" class="failed-toggle-hint">▼ View Details</span>
+                            </div>
+                        </div>
+                        <div id="bulkGenFailedDetails" class="bulk-failed-table-wrapper" style="display: none;">
+                            <table class="bulk-failed-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 45px;">#</th>
+                                        <th>Student Name</th>
+                                        <th>Email</th>
+                                        <th>Domain</th>
+                                        <th>Dates</th>
+                                        <th>Reason / Error</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkGenFailedTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- EMAIL FAILED RECORDS SECTION -->
+                    <div id="bulkEmailFailedArea" class="bulk-failed-card" style="display: none;">
+                        <div class="bulk-failed-header" onclick="toggleEmailFailedDetails()">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">⚠️</span>
+                                <strong style="color: #b91c1c; font-size: 13.5px;">Failed Email Dispatches (<span id="bulkEmailFailedCountBadge">0</span>)</strong>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <button type="button" class="btn-retry-action" id="bulkRetryEmailBtn" onclick="event.stopPropagation(); retryFailedEmails();">
+                                    🔄 Retry Failed Emails
+                                </button>
+                                <span id="bulkEmailFailedToggleIcon" class="failed-toggle-hint">▼ View Details</span>
+                            </div>
+                        </div>
+                        <div id="bulkEmailFailedDetails" class="bulk-failed-table-wrapper" style="display: none;">
+                            <table class="bulk-failed-table">
+                                <thead>
+                                    <tr>
+                                        <th>Certificate ID</th>
+                                        <th>Student Name</th>
+                                        <th>Email</th>
+                                        <th>Domain</th>
+                                        <th>Error Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkEmailFailedTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+                        <button type="button" class="clear-btn" onclick="resetBulkWorkspace()">Cancel & Clear</button>
+
+                        <button type="button" id="bulkGenerateBtn" class="generate-btn" style="width: auto; padding: 10px 24px;" onclick="executeBulkGeneration()">
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                            <span id="bulkGenerateBtnText">Generate All Valid Certificates</span>
+                        </button>
+
+                        <button type="button" id="bulkSendEmailsBtn" class="action-btn send-btn" style="display: none;" onclick="executeBulkEmailDispatch()">
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            <span id="bulkSendEmailsBtnText">Send Certificates to Selected Students</span>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+</div>
+
+<!-- =====================================================
+     INDIVIDUAL CERTIFICATE PREVIEW MODAL (PRE-GENERATION)
+     ===================================================== -->
+<div id="bulkCertPreviewModal" class="cert-modal-overlay" style="display: none;" onclick="handleModalBackdropClick(event)">
+    <div class="cert-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="bulkPreviewModalTitle">
+        <div class="cert-modal-header">
+            <div>
+                <h3 id="bulkPreviewModalTitle" class="cert-modal-title">Certificate Preview</h3>
+                <p id="bulkPreviewModalSubtitle" class="cert-modal-subtitle">Candidate Preview</p>
+            </div>
+            <button type="button" class="cert-modal-close-btn" onclick="closeBulkPreviewModal()" title="Close Preview (Esc)">✕</button>
+        </div>
+        <div class="cert-modal-body">
+            <div id="bulkPreviewLoading" class="cert-modal-loading" style="display: flex;">
+                <div class="loading-spinner"></div>
+                <p>Rendering certificate preview...</p>
+            </div>
+            <img id="bulkPreviewImg" class="cert-modal-image" src="" alt="Certificate Preview" style="display: none;" />
+        </div>
+        <div class="cert-modal-footer">
+            <span class="cert-preview-note">ℹ Preview mode with sample verification QR. No permanent record created.</span>
+            <button type="button" class="clear-btn" onclick="closeBulkPreviewModal()">Close Preview</button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     CLIENT JAVASCRIPT
+     ===================================================== -->
+<script>
+let currentGeneratedCertificate = null;
+let currentBulkRows = [];
+let currentGeneratedBulkItems = [];
+let currentFailedGenerationItems = [];
+let currentFailedEmailItems = [];
+
+// Mode Switcher Handler
+function switchCertificateMode(mode) {
+    const isBulk = mode === 'bulk';
+    document.getElementById('singleCertWorkspace').style.display = isBulk ? 'none' : 'grid';
+    document.getElementById('bulkCertWorkspace').style.display = isBulk ? 'grid' : 'none';
+    document.getElementById('tabSingleCert').classList.toggle('active', !isBulk);
+    document.getElementById('tabBulkCert').classList.toggle('active', isBulk);
+}
+
+// Single Certificate Generation
+document.addEventListener('DOMContentLoaded', () => {
+    const domainSelect = document.getElementById('domain_select');
+    const customInput = document.getElementById('custom_domain_input');
+    const form = document.getElementById('certificateForm');
+    const sendBtn = document.getElementById('sendEmailBtn');
+
+    if (domainSelect && customInput) {
+        domainSelect.addEventListener('change', () => {
+            if (domainSelect.value === 'custom') {
+                customInput.style.display = 'block';
+                customInput.required = true;
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+                customInput.required = false;
+            }
+        });
+    }
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const genBtn = document.getElementById('generateBtn');
+            const genText = document.getElementById('generateBtnText');
+            const placeholder = document.getElementById('previewPlaceholder');
+            const generatingState = document.getElementById('generatingState');
+            const iframe = document.getElementById('pdfPreviewFrame');
+            const previewActions = document.getElementById('previewActions');
+            const badge = document.getElementById('previewStatusBadge');
+
+            let domainVal = domainSelect.value;
+            if (domainVal === 'custom') {
+                domainVal = customInput.value.trim();
+            }
+
+            const payload = {
+                student_name: document.getElementById('student_name').value.trim(),
+                student_email: document.getElementById('student_email').value.trim(),
+                domain: domainVal,
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                issued_date: document.getElementById('issued_date').value,
+            };
+
+            genBtn.disabled = true;
+            genText.textContent = 'Generating...';
+            placeholder.style.display = 'none';
+            generatingState.style.display = 'flex';
+            iframe.style.display = 'none';
+            previewActions.style.display = 'none';
+            badge.textContent = 'Generating...';
+            badge.className = 'section-tag';
+
+            try {
+                const response = await fetch('/api/certificate/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    currentGeneratedCertificate = {
+                        ...payload,
+                        filename: result.filename,
+                        certificate_id: result.certificate_id,
+                        url: result.url
+                    };
+
+                    iframe.src = result.url;
+                    iframe.style.display = 'block';
+                    generatingState.style.display = 'none';
+                    previewActions.style.display = 'flex';
+                    badge.textContent = 'Ready';
+                    badge.className = 'section-tag status-ready';
+
+                    document.getElementById('downloadBtn').href = result.url;
+                    document.getElementById('downloadBtn').setAttribute('download', result.filename);
+                    showToast('Certificate generated successfully.', 'success');
+                    localStorage.setItem('persevex_stats_updated', Date.now().toString());
+                    refreshStats();
+                } else {
+                    showToast(result.error || 'Failed to generate certificate', 'error');
+                    placeholder.style.display = 'flex';
+                    generatingState.style.display = 'none';
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('An error occurred during certificate generation.', 'error');
+                placeholder.style.display = 'flex';
+                generatingState.style.display = 'none';
+            } finally {
+                genBtn.disabled = false;
+                genText.textContent = 'Generate Certificate';
+            }
+        });
+    }
+
+    if (sendBtn) {
+        sendBtn.addEventListener('click', async () => {
+            if (!currentGeneratedCertificate) return;
+
+            const sendText = document.getElementById('sendEmailBtnText');
+            sendBtn.disabled = true;
+            sendBtn.classList.remove('is-sent', 'is-failed');
+            sendText.textContent = '⏳ Sending Certificate...';
+
+            try {
+                const response = await fetch('/api/certificate/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentGeneratedCertificate)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    sendBtn.classList.add('is-sent');
+                    sendText.textContent = '✓ Certificate Sent';
+                    showToast('Certificate email sent to student successfully.', 'success');
+                    localStorage.setItem('persevex_stats_updated', Date.now().toString());
+                    refreshStats();
+                } else {
+                    sendBtn.classList.add('is-failed');
+                    sendText.textContent = '❌ Delivery Failed';
+                    showToast(result.error || 'Failed to send certificate email', 'error');
+                    localStorage.setItem('persevex_stats_updated', Date.now().toString());
+                    refreshStats();
+                }
+            } catch (err) {
+                console.error(err);
+                sendBtn.classList.add('is-failed');
+                sendText.textContent = '❌ Delivery Error';
+                showToast('Network error during certificate email dispatch.', 'error');
+            } finally {
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('is-sent', 'is-failed');
+                    sendText.textContent = 'Send Certificate Email';
+                }, 3500);
+            }
+        });
+    }
+});
+
+/* ==========================================================
+   TOAST NOTIFICATION ENGINE
+   ========================================================== */
+function showToast(text, type = "success") {
+    let container = document.querySelector(".toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast-message toast-${type}`;
+    const icon = type === "success" ? "✔" : (type === "error" ? "❌" : "ℹ");
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-text">${text}</span>
+        <button type="button" class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add("toast-exit");
+        setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+        }, 300);
+    }, 4000);
+}
+
+function animateCounter(element, newValue) {
+    if (!element) return;
+    const currentVal = parseInt(element.textContent.trim(), 10) || 0;
+    const targetVal = parseInt(newValue ?? 0, 10) || 0;
+
+    if (currentVal !== targetVal) {
+        element.textContent = String(targetVal);
+        element.classList.remove("count-pulse");
+        void element.offsetWidth; // trigger reflow
+        element.classList.add("count-pulse");
+        setTimeout(function () {
+            element.classList.remove("count-pulse");
+        }, 600);
+    }
+}
+
+async function refreshStats() {
+    try {
+        const res = await fetch('/api/certificate/status-counts', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.success) {
+            animateCounter(document.getElementById('successCount'), data.success_count || 0);
+            animateCounter(document.getElementById('failedCount'), data.failed_count || 0);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window.addEventListener('focus', refreshStats);
+window.addEventListener('storage', function(event) {
+    if (event.key === 'persevex_stats_updated' || event.key === 'persevex_history_updated') {
+        refreshStats();
+    }
+});
+
+// Bulk Certificate Functions
+async function handleBulkFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const dropzone = document.getElementById('bulkDropzone');
+    dropzone.style.opacity = '0.6';
+
+    try {
+        const res = await fetch('/api/certificate/bulk/validate', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            currentBulkRows = data.rows || [];
+            renderBulkValidationSummary(data);
+            renderBulkPreviewTable(data.rows);
+            document.getElementById('bulkValidationSection').style.display = 'block';
+        } else {
+            alert('File validation error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Failed to parse uploaded file.');
+    } finally {
+        dropzone.style.opacity = '1';
+    }
+}
+
+function renderBulkValidationSummary(data) {
+    document.getElementById('bulkTotalRows').textContent = data.total_records || 0;
+    document.getElementById('bulkValidRows').textContent = data.valid_records_count || 0;
+    document.getElementById('bulkInvalidRows').textContent = data.invalid_records_count || 0;
+    document.getElementById('bulkDuplicateRows').textContent = data.duplicate_records_count || 0;
+    document.getElementById('bulkSelectionCount').textContent = `${data.valid_records_count || 0} valid records ready`;
+}
+
+function renderBulkPreviewTable(rows) {
+    const tbody = document.getElementById('bulkTableBody');
+    tbody.innerHTML = rows.map((r, i) => {
+        const isVal = r.is_valid;
+        const badge = isVal
+            ? '<span class="status-sym-sent" style="font-size: 13px; color: #10b981; font-weight: 700;">✔ Valid</span>'
+            : `<span class="status-sym-failed" style="font-size: 12px; color: #ef4444; font-weight: 700;" title="${r.error_message}">❌ ${r.error_message || 'Invalid'}</span>`;
+
+        const previewAction = isVal
+            ? `<button type="button" class="btn-row-preview" onclick="previewBulkRecord(${i})" title="Preview certificate for ${r.student_name || 'student'}">Preview</button>`
+            : `<span style="color: var(--text-muted); font-size: 11px;">—</span>`;
+
+        return `
+            <tr class="${isVal ? '' : 'row-invalid'}">
+                <td style="text-align: center;">
+                    <input type="checkbox" class="bulk-row-check" data-idx="${i}" ${isVal ? 'checked' : 'disabled'}>
+                </td>
+                <td>${r.row_index}</td>
+                <td><strong>${r.student_name || '-'}</strong></td>
+                <td>${r.student_email || '-'}</td>
+                <td>${r.domain || '-'}</td>
+                <td>${r.start_date || '-'}</td>
+                <td>${r.end_date || '-'}</td>
+                <td>${r.issued_date || '-'}</td>
+                <td>${badge}</td>
+                <td style="text-align: center;">${previewAction}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function toggleSelectAllBulk(event) {
+    const checked = event.target.checked;
+    document.querySelectorAll('.bulk-row-check:not([disabled])').forEach(chk => {
+        chk.checked = checked;
+    });
+}
+
+function resetBulkWorkspace() {
+    document.getElementById('bulkFileInput').value = '';
+    document.getElementById('bulkValidationSection').style.display = 'none';
+    document.getElementById('bulkProgressArea').style.display = 'none';
+    document.getElementById('bulkGenerationFailedArea').style.display = 'none';
+    document.getElementById('bulkEmailFailedArea').style.display = 'none';
+    const genBtn = document.getElementById('bulkGenerateBtn');
+    if (genBtn) {
+        genBtn.style.display = 'inline-flex';
+        genBtn.disabled = false;
+        genBtn.style.opacity = '1';
+    }
+    const sendBtn = document.getElementById('bulkSendEmailsBtn');
+    if (sendBtn) {
+        sendBtn.style.display = 'none';
+    }
+    currentBulkRows = [];
+    currentGeneratedBulkItems = [];
+    currentFailedGenerationItems = [];
+    currentFailedEmailItems = [];
+}
+
+/* ==========================================================
+   HTML ESCAPE UTILITY FOR FAILURE VISIBILITY
+   ========================================================== */
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/* ==========================================================
+   FAILURE COLLAPSE & TABLE RENDER HANDLERS
+   ========================================================== */
+function toggleGenerationFailedDetails() {
+    const details = document.getElementById('bulkGenFailedDetails');
+    const icon = document.getElementById('bulkGenFailedToggleIcon');
+    if (!details) return;
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        if (icon) icon.textContent = '▲ Hide Details';
+    } else {
+        details.style.display = 'none';
+        if (icon) icon.textContent = '▼ View Details';
+    }
+}
+
+function renderGenerationFailedTable(failedItems) {
+    const tbody = document.getElementById('bulkGenFailedTableBody');
+    const badge = document.getElementById('bulkGenFailedCountBadge');
+    const area = document.getElementById('bulkGenerationFailedArea');
+    if (!tbody || !area) return;
+
+    if (badge) badge.textContent = failedItems.length;
+
+    if (failedItems.length === 0) {
+        area.style.display = 'none';
+        tbody.innerHTML = '';
+        return;
+    }
+
+    area.style.display = 'block';
+    tbody.innerHTML = failedItems.map(item => `
+        <tr>
+            <td>${item.row_index || '-'}</td>
+            <td><strong>${escapeHtml(item.student_name || 'Unknown')}</strong></td>
+            <td>${escapeHtml(item.student_email || '-')}</td>
+            <td>${escapeHtml(item.domain || '-')}</td>
+            <td><span style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(item.start_date || '')} → ${escapeHtml(item.end_date || '')}</span></td>
+            <td><span class="failed-reason-badge" title="${escapeHtml(item.error || 'Generation error')}">❌ ${escapeHtml(item.error || 'Generation failed')}</span></td>
+        </tr>
+    `).join('');
+}
+
+function toggleEmailFailedDetails() {
+    const details = document.getElementById('bulkEmailFailedDetails');
+    const icon = document.getElementById('bulkEmailFailedToggleIcon');
+    if (!details) return;
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        if (icon) icon.textContent = '▲ Hide Details';
+    } else {
+        details.style.display = 'none';
+        if (icon) icon.textContent = '▼ View Details';
+    }
+}
+
+function renderEmailFailedTable(failedItems) {
+    const tbody = document.getElementById('bulkEmailFailedTableBody');
+    const badge = document.getElementById('bulkEmailFailedCountBadge');
+    const area = document.getElementById('bulkEmailFailedArea');
+    if (!tbody || !area) return;
+
+    if (badge) badge.textContent = failedItems.length;
+
+    if (failedItems.length === 0) {
+        area.style.display = 'none';
+        tbody.innerHTML = '';
+        return;
+    }
+
+    area.style.display = 'block';
+    tbody.innerHTML = failedItems.map(item => `
+        <tr>
+            <td><code>${escapeHtml(item.certificate_id || '-')}</code></td>
+            <td><strong>${escapeHtml(item.student_name || 'Unknown')}</strong></td>
+            <td>${escapeHtml(item.student_email || '-')}</td>
+            <td>${escapeHtml(item.domain || '-')}</td>
+            <td><span class="failed-reason-badge" title="${escapeHtml(item.error || 'Email dispatch failed')}">❌ ${escapeHtml(item.error || 'Email dispatch failed')}</span></td>
+        </tr>
+    `).join('');
+}
+
+/* ==========================================================
+   INDIVIDUAL CERTIFICATE PREVIEW (BEFORE GENERATION)
+   ========================================================== */
+async function previewBulkRecord(index) {
+    const row = currentBulkRows[index];
+    if (!row) return;
+
+    const modal = document.getElementById('bulkCertPreviewModal');
+    const title = document.getElementById('bulkPreviewModalTitle');
+    const subtitle = document.getElementById('bulkPreviewModalSubtitle');
+    const loading = document.getElementById('bulkPreviewLoading');
+    const img = document.getElementById('bulkPreviewImg');
+
+    title.textContent = `Certificate Preview — ${row.student_name || 'Student'}`;
+    subtitle.textContent = `${row.domain || 'Internship'} | ${row.start_date || ''} → ${row.end_date || ''} (Issued: ${row.issued_date || ''})`;
+
+    modal.style.display = 'flex';
+    loading.style.display = 'flex';
+    loading.innerHTML = '<div class="loading-spinner"></div><p>Rendering certificate preview...</p>';
+    img.style.display = 'none';
+    img.src = '';
+
+    try {
+        const res = await fetch('/api/certificate/preview-sample', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                student_name: row.student_name,
+                domain: row.domain,
+                start_date: row.start_date,
+                end_date: row.end_date,
+                issued_date: row.issued_date
+            })
+        });
+        const data = await res.json();
+        if (data.success && data.preview_image) {
+            img.src = data.preview_image;
+            img.style.display = 'block';
+            loading.style.display = 'none';
+        } else {
+            loading.innerHTML = `<p style="color: #ef4444; font-weight: 700;">❌ ${data.error || 'Failed to render preview.'}</p>`;
+        }
+    } catch (err) {
+        console.error('Preview error:', err);
+        loading.innerHTML = '<p style="color: #ef4444; font-weight: 700;">❌ Network error generating certificate preview.</p>';
+    }
+}
+
+function closeBulkPreviewModal() {
+    const modal = document.getElementById('bulkCertPreviewModal');
+    if (modal) modal.style.display = 'none';
+    const img = document.getElementById('bulkPreviewImg');
+    if (img) img.src = '';
+}
+
+function handleModalBackdropClick(event) {
+    if (event.target.id === 'bulkCertPreviewModal') {
+        closeBulkPreviewModal();
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeBulkPreviewModal();
+    }
+});
+
+/* ==========================================================
+   RESUME-SAFE CHUNKED BULK GENERATION ENGINE
+   ========================================================== */
+async function executeBulkGeneration(targetRows = null) {
+    let rowsToGenerate = [];
+    const isRetry = Array.isArray(targetRows);
+
+    if (isRetry) {
+        rowsToGenerate = targetRows;
+    } else {
+        const selectedIndices = [];
+        document.querySelectorAll('.bulk-row-check:checked').forEach(chk => {
+            selectedIndices.push(parseInt(chk.dataset.idx, 10));
+        });
+        rowsToGenerate = selectedIndices.map(i => currentBulkRows[i]).filter(Boolean);
+        currentGeneratedBulkItems = [];
+        currentFailedGenerationItems = [];
+    }
+
+    if (rowsToGenerate.length === 0) {
+        alert('Please select at least one valid record to generate.');
+        return;
+    }
+
+    const genBtn = document.getElementById('bulkGenerateBtn');
+    const progressArea = document.getElementById('bulkProgressArea');
+    const progressTitle = document.getElementById('bulkProgressTitle');
+    const progressBar = document.getElementById('bulkProgressBar');
+    const progressPercent = document.getElementById('bulkProgressPercent');
+    const progressCompleted = document.getElementById('bulkProgressCompleted');
+    const progressTotal = document.getElementById('bulkProgressTotal');
+    const progressCurrent = document.getElementById('bulkProgressCurrentItem');
+    const progressSuccess = document.getElementById('bulkProgressSuccess');
+    const progressNew = document.getElementById('bulkProgressNew');
+    const progressExisting = document.getElementById('bulkProgressExisting');
+    const progressBreakdown = document.getElementById('bulkProgressBreakdown');
+    const progressFailed = document.getElementById('bulkProgressFailed');
+    const progressRemaining = document.getElementById('bulkProgressRemaining');
+
+    if (genBtn) {
+        genBtn.disabled = true;
+        genBtn.style.opacity = '0.6';
+    }
+    progressArea.style.display = 'block';
+
+    if (!isRetry) {
+        document.getElementById('bulkGenerationFailedArea').style.display = 'none';
+    }
+
+    const total = rowsToGenerate.length;
+    let completed = 0;
+    let newlyGeneratedCount = 0;
+    let alreadyExistsCount = 0;
+    let failedCount = 0;
+    const batchFailedItems = [];
+
+    progressTitle.textContent = isRetry ? 'Retrying Failed Certificate Generations...' : 'Generating Certificates...';
+    progressTotal.textContent = total;
+    progressCompleted.textContent = '0';
+    progressPercent.textContent = '0.0%';
+    progressBar.style.width = '0%';
+    progressSuccess.textContent = '0';
+    if (progressNew) progressNew.textContent = '0';
+    if (progressExisting) progressExisting.textContent = '0';
+    if (progressBreakdown) progressBreakdown.style.display = 'none';
+    progressFailed.textContent = '0';
+    progressRemaining.textContent = total;
+    progressCurrent.textContent = rowsToGenerate[0]?.student_name || '-';
+
+    // Chunk size: 15 certificates per request for high speed and resume reliability
+    const CHUNK_SIZE = 15;
+    const chunks = [];
+    for (let i = 0; i < total; i += CHUNK_SIZE) {
+        chunks.push(rowsToGenerate.slice(i, i + CHUNK_SIZE));
+    }
+
+    for (let c = 0; c < chunks.length; c++) {
+        const chunk = chunks[c];
+        const firstStudent = chunk[0]?.student_name || 'Processing...';
+        progressCurrent.textContent = firstStudent;
+
+        try {
+            const response = await fetch('/api/certificate/bulk/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: chunk })
+            });
+            const result = await response.json();
+
+            if (result.success && Array.isArray(result.results)) {
+                if (typeof result.newly_generated_count === 'number') {
+                    newlyGeneratedCount += result.newly_generated_count;
+                }
+                if (typeof result.already_exists_count === 'number') {
+                    alreadyExistsCount += result.already_exists_count;
+                }
+
+                for (const item of result.results) {
+                    if (item.success) {
+                        const existsIdx = currentGeneratedBulkItems.findIndex(g => g.certificate_id === item.certificate_id);
+                        if (existsIdx >= 0) {
+                            currentGeneratedBulkItems[existsIdx] = item;
+                        } else {
+                            currentGeneratedBulkItems.push(item);
+                        }
+                    } else {
+                        failedCount++;
+                    }
+                }
+
+                if (Array.isArray(result.failed_items)) {
+                    batchFailedItems.push(...result.failed_items);
+                }
+            } else {
+                failedCount += chunk.length;
+                chunk.forEach(ch => {
+                    batchFailedItems.push({
+                        row_index: ch.row_index,
+                        student_name: ch.student_name,
+                        student_email: ch.student_email,
+                        domain: ch.domain,
+                        start_date: ch.start_date,
+                        end_date: ch.end_date,
+                        issued_date: ch.issued_date,
+                        error: result.error || 'Server processing error'
+                    });
+                });
+            }
+        } catch (err) {
+            console.error('Bulk generate chunk error:', err);
+            failedCount += chunk.length;
+            chunk.forEach(ch => {
+                batchFailedItems.push({
+                    row_index: ch.row_index,
+                    student_name: ch.student_name,
+                    student_email: ch.student_email,
+                    domain: ch.domain,
+                    start_date: ch.start_date,
+                    end_date: ch.end_date,
+                    issued_date: ch.issued_date,
+                    error: 'Network connection or server error'
+                });
+            });
+        }
+
+        completed += chunk.length;
+        const remaining = Math.max(0, total - completed);
+        const pct = Math.min(100, (completed / total) * 100);
+        const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
+
+        progressCompleted.textContent = completed;
+        progressPercent.textContent = `${pct.toFixed(1)}%`;
+        progressBar.style.width = `${pct}%`;
+        progressSuccess.textContent = totalSuccess;
+        if (progressNew) progressNew.textContent = newlyGeneratedCount;
+        if (progressExisting) progressExisting.textContent = alreadyExistsCount;
+        if (progressBreakdown) progressBreakdown.style.display = alreadyExistsCount > 0 ? 'inline' : 'none';
+        progressFailed.textContent = failedCount;
+        progressRemaining.textContent = remaining;
+    }
+
+    currentFailedGenerationItems = batchFailedItems;
+    renderGenerationFailedTable(currentFailedGenerationItems);
+
+    const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressTitle.textContent = 'Certificate Generation Completed';
+    progressCurrent.textContent = `Finished (${totalSuccess} ready [New: ${newlyGeneratedCount}, Existing: ${alreadyExistsCount}], ${failedCount} failed)`;
+    showToast(`${totalSuccess} Certificates ready (${newlyGeneratedCount} new, ${alreadyExistsCount} existing, ${failedCount} failed).`, totalSuccess > 0 ? 'success' : 'error');
+    localStorage.setItem('persevex_stats_updated', Date.now().toString());
+    refreshStats();
+
+    if (genBtn) {
+        genBtn.disabled = false;
+        genBtn.style.opacity = '1';
+    }
+
+    if (currentGeneratedBulkItems.length > 0) {
+        document.getElementById('bulkSendEmailsBtn').style.display = 'inline-flex';
+        document.getElementById('bulkSendEmailsBtnText').textContent = `Send Certificates to ${currentGeneratedBulkItems.length} Students`;
+        if (genBtn) genBtn.style.display = 'none';
+    }
+}
+
+function retryFailedGenerations() {
+    if (!currentFailedGenerationItems || currentFailedGenerationItems.length === 0) {
+        alert('No failed certificate generations to retry.');
+        return;
+    }
+    const retryList = [...currentFailedGenerationItems];
+    executeBulkGeneration(retryList);
+}
+
+/* ==========================================================
+   RESUME-SAFE CHUNKED BULK EMAIL ENGINE
+   ========================================================== */
+async function executeBulkEmailDispatch(targetItems = null) {
+    let itemsToSend = [];
+    const isRetry = Array.isArray(targetItems);
+
+    if (isRetry) {
+        itemsToSend = targetItems;
+    } else {
+        itemsToSend = currentGeneratedBulkItems;
+        currentFailedEmailItems = [];
+    }
+
+    if (!itemsToSend || itemsToSend.length === 0) return;
+
+    const sendBtn = document.getElementById('bulkSendEmailsBtn');
+    const sendText = document.getElementById('bulkSendEmailsBtnText');
+    const progressArea = document.getElementById('bulkProgressArea');
+    const progressTitle = document.getElementById('bulkProgressTitle');
+    const progressBar = document.getElementById('bulkProgressBar');
+    const progressPercent = document.getElementById('bulkProgressPercent');
+    const progressCompleted = document.getElementById('bulkProgressCompleted');
+    const progressTotal = document.getElementById('bulkProgressTotal');
+    const progressCurrent = document.getElementById('bulkProgressCurrentItem');
+    const progressSuccess = document.getElementById('bulkProgressSuccess');
+    const progressBreakdown = document.getElementById('bulkProgressBreakdown');
+    const progressFailed = document.getElementById('bulkProgressFailed');
+    const progressRemaining = document.getElementById('bulkProgressRemaining');
+
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.6';
+    }
+    if (sendText) sendText.textContent = isRetry ? 'Retrying Failed Emails...' : 'Sending Batch Emails...';
+    progressArea.style.display = 'block';
+    if (progressBreakdown) progressBreakdown.style.display = 'none';
+
+    if (!isRetry) {
+        document.getElementById('bulkEmailFailedArea').style.display = 'none';
+    }
+
+    const total = itemsToSend.length;
+    let completed = 0;
+    let sentCount = 0;
+    let failedCount = 0;
+    const batchFailedEmailItems = [];
+
+    progressTitle.textContent = isRetry ? 'Retrying Certificate Emails...' : 'Sending Certificate Emails...';
+    progressTotal.textContent = total;
+    progressCompleted.textContent = '0';
+    progressPercent.textContent = '0.0%';
+    progressBar.style.width = '0%';
+    progressSuccess.textContent = '0';
+    progressFailed.textContent = '0';
+    progressRemaining.textContent = total;
+    progressCurrent.textContent = itemsToSend[0]?.student_email || '-';
+
+    const EMAIL_CHUNK_SIZE = 5;
+    const chunks = [];
+    for (let i = 0; i < total; i += EMAIL_CHUNK_SIZE) {
+        chunks.push(itemsToSend.slice(i, i + EMAIL_CHUNK_SIZE));
+    }
+
+    for (let c = 0; c < chunks.length; c++) {
+        const chunk = chunks[c];
+        const firstEmail = chunk[0]?.student_email || 'Sending...';
+        progressCurrent.textContent = firstEmail;
+
+        try {
+            const response = await fetch('/api/certificate/bulk/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: chunk })
+            });
+            const result = await response.json();
+
+            if (result.success && Array.isArray(result.results)) {
+                for (const item of result.results) {
+                    if (item.status === 'sent') {
+                        sentCount++;
+                    } else {
+                        failedCount++;
+                    }
+                }
+                if (Array.isArray(result.failed_items)) {
+                    batchFailedEmailItems.push(...result.failed_items);
+                }
+            } else {
+                failedCount += chunk.length;
+                chunk.forEach(ch => {
+                    batchFailedEmailItems.push({
+                        certificate_id: ch.certificate_id,
+                        student_name: ch.student_name,
+                        student_email: ch.student_email,
+                        domain: ch.domain,
+                        error: result.error || 'Server email error'
+                    });
+                });
+            }
+        } catch (err) {
+            console.error('Bulk email chunk error:', err);
+            failedCount += chunk.length;
+            chunk.forEach(ch => {
+                batchFailedEmailItems.push({
+                    certificate_id: ch.certificate_id,
+                    student_name: ch.student_name,
+                    student_email: ch.student_email,
+                    domain: ch.domain,
+                    error: 'Network connection or SMTP dispatch error'
+                });
+            });
+        }
+
+        completed += chunk.length;
+        const remaining = Math.max(0, total - completed);
+        const pct = Math.min(100, (completed / total) * 100);
+
+        progressCompleted.textContent = completed;
+        progressPercent.textContent = `${pct.toFixed(1)}%`;
+        progressBar.style.width = `${pct}%`;
+        progressSuccess.textContent = sentCount;
+        progressFailed.textContent = failedCount;
+        progressRemaining.textContent = remaining;
+    }
+
+    currentFailedEmailItems = batchFailedEmailItems;
+    renderEmailFailedTable(currentFailedEmailItems);
+
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    progressTitle.textContent = 'Email Dispatch Completed';
+    progressCurrent.textContent = `Finished (${sentCount} sent, ${failedCount} failed)`;
+    if (sendText) sendText.textContent = `Completed (${sentCount} Sent)`;
+    if (sendBtn) {
+        sendBtn.style.background = sentCount > 0 ? '#059669' : '#ef4444';
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+    }
+    showToast(`Bulk email finished: ${sentCount} sent, ${failedCount} failed.`, sentCount > 0 ? 'success' : 'error');
+    localStorage.setItem('persevex_stats_updated', Date.now().toString());
+    refreshStats();
+}
+
+function retryFailedEmails() {
+    if (!currentFailedEmailItems || currentFailedEmailItems.length === 0) {
+        alert('No failed emails to retry.');
+        return;
+    }
+    const retryList = [...currentFailedEmailItems];
+    executeBulkEmailDispatch(retryList);
+}
+</script>
+
+</body>
+</html>

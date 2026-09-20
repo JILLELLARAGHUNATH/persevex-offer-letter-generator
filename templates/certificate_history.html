@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate History | Persevex LLP</title>
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
+            </div>
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
+            </div>
+        </div>
+
+        <h1>
+            CERTIFICATE <span class="highlight">HISTORY</span>
+        </h1>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/history" class="nav-tab-link" title="Offer Letter History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>Offer History</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/certificate-history" class="nav-tab-link active" title="Certificate History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                <span>Cert History</span>
+            </a>
+        </nav>
+
+        <div class="header-actions">
+            <a href="/certificate" class="history-btn" title="Back to Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Generate Cert</span>
+            </a>
+
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- =====================================================
+         MAIN HISTORY
+         ===================================================== -->
+    <main class="history-main">
+        <section class="card history-card-animate">
+
+            <div class="card-header">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="7"></circle>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                    </svg>
+                    Issued Certificates Directory
+                </h2>
+                <span class="section-tag">Audit Log</span>
+            </div>
+
+            <!-- =================================================
+                 DASHBOARD SUMMARY METRICS (GLOBAL COUNTS)
+                 ================================================= -->
+            <div class="history-summary-grid">
+                <div class="summary-stat-card stat-total">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Certificates</span>
+                        <span class="stat-value" id="summaryTotalRecords">{{ total_records or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card stat-page">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 14 14"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Total Generated</span>
+                        <span class="stat-value" id="summaryGeneratedRecords">{{ total_records or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card stat-success">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Successfully Sent</span>
+                        <span class="stat-value" id="summarySentRecords">{{ total_sent or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card stat-failed">
+                    <div class="stat-icon-wrapper">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Failed Emails</span>
+                        <span class="stat-value" id="summaryFailedRecords">{{ total_failed or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {% if error %}
+                <div class="error-message">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span>{{ error }}</span>
+                </div>
+            {% endif %}
+
+            <!-- =================================================
+                 LIVE SEARCH + FILTERS TOOLBAR
+                 ================================================= -->
+            <form id="filterForm" class="history-controls-toolbar" method="GET" action="/certificate-history">
+                <!-- LIVE SEARCH INPUT -->
+                <div class="filter-search-group">
+                    <div class="search-input-wrapper">
+                        <svg class="search-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input
+                            type="text"
+                            id="liveSearchInput"
+                            name="search"
+                            value="{{ search }}"
+                            placeholder="Live search by student, email, domain, or Cert ID..."
+                            autocomplete="off"
+                        >
+                        <button type="button" id="clearSearchBtn" class="clear-search-btn" {% if not search %}style="display: none;"{% endif %} title="Clear search">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MONTH FILTER -->
+                <div class="filter-select-group">
+                    <select id="monthSelect" name="month" aria-label="Filter by month">
+                        <option value="">All Months</option>
+                        {% for m in available_months %}
+                            <option value="{{ m.value }}" {% if month_filter == m.value %}selected{% endif %}>
+                                {{ m.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- DOMAIN FILTER -->
+                <div class="filter-select-group">
+                    <select id="domainSelect" name="domain" aria-label="Filter by domain">
+                        <option value="">All Domains</option>
+                        {% for d in available_domains %}
+                            <option value="{{ d }}" {% if domain_filter == d %}selected{% endif %}>
+                                {{ d }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- STATUS FILTER -->
+                <div class="filter-select-group">
+                    <select id="statusSelect" name="status" aria-label="Filter by status">
+                        <option value="">All Statuses</option>
+                        <option value="sent" {% if status_filter == 'sent' %}selected{% endif %}>✔ Sent</option>
+                        <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>❌ Failed</option>
+                        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>⏳ Pending</option>
+                    </select>
+                </div>
+
+                <!-- DATE RANGE INPUTS -->
+                <div class="filter-date-group">
+                    <input
+                        type="date"
+                        id="dateFromInput"
+                        name="date_from"
+                        value="{{ date_from }}"
+                        title="From Date"
+                        aria-label="From Date"
+                    >
+                    <span class="date-range-separator">to</span>
+                    <input
+                        type="date"
+                        id="dateToInput"
+                        name="date_to"
+                        value="{{ date_to }}"
+                        title="To Date"
+                        aria-label="To Date"
+                    >
+                </div>
+
+                <!-- PER PAGE SELECTOR -->
+                <div class="filter-select-group per-page-group">
+                    <select id="perPageSelect" name="per_page" aria-label="Records per page">
+                        <option value="10" {% if per_page == 10 %}selected{% endif %}>10 / page</option>
+                        <option value="20" {% if per_page == 20 %}selected{% endif %}>20 / page</option>
+                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25 / page</option>
+                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50 / page</option>
+                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100 / page</option>
+                    </select>
+                </div>
+
+                <!-- TOOLBAR BUTTONS -->
+                <div class="filter-actions-group">
+                    <button type="button" id="openExportModalBtn" class="toolbar-btn export-btn" title="Export Filtered Certificates to CSV">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Export CSV</span>
+                    </button>
+
+                    <button type="button" id="resetFiltersBtn" class="toolbar-btn reset-btn" title="Reset all filters">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                            <path d="M3 3v5h5"></path>
+                        </svg>
+                        <span>Reset</span>
+                    </button>
+                </div>
+            </form>
+
+            <!-- =================================================
+                 CERTIFICATE RECORDS TABLE
+                 ================================================= -->
+            <div class="table-responsive">
+                <table class="history-table" id="certHistoryTable">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Email</th>
+                            <th>Domain</th>
+                            <th>Duration</th>
+                            <th>Issued Date</th>
+                            <th>Certificate ID</th>
+                            <th>Status</th>
+                            <th>Send Count</th>
+                            <th class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        {% if history_records and history_records|length > 0 %}
+                            {% for r in history_records %}
+                                <tr data-id="{{ r.id }}" data-cert-id="{{ r.certificate_id }}">
+                                    <!-- Student Name -->
+                                    <td>
+                                        <div class="student-name-cell">
+                                            <span class="student-name-text">{{ r.student_name }}</span>
+                                        </div>
+                                    </td>
+
+                                    <!-- Student Email -->
+                                    <td>
+                                        <span class="student-email-text">{{ r.student_email }}</span>
+                                    </td>
+
+                                    <!-- Domain -->
+                                    <td>
+                                        <span class="domain-tag">{{ r.internship_domain }}</span>
+                                    </td>
+
+                                    <!-- Duration -->
+                                    <td>
+                                        <span class="date-cell-text">{{ r.start_date }} to {{ r.end_date }}</span>
+                                    </td>
+
+                                    <!-- Issued Date -->
+                                    <td>
+                                        <span class="date-cell-text">{{ r.issued_date }}</span>
+                                    </td>
+
+                                    <!-- Certificate ID -->
+                                    <td>
+                                        <a href="/verify/{{ r.certificate_id }}" target="_blank" class="cert-id-link" title="Open Public Verification Page">
+                                            <code>{{ r.certificate_id }}</code>
+                                        </a>
+                                    </td>
+
+                                    <!-- Email Status (Symbols Only) -->
+                                    <td>
+                                        {% set st = (r.email_status or 'pending')|lower %}
+                                        {% if st == 'sent' %}
+                                            <span class="status-symbol success-symbol" title="Email Delivered Successfully">✔</span>
+                                        {% elif st == 'failed' %}
+                                            <span class="status-symbol failed-symbol" title="Email Delivery Failed: {{ r.error_message or 'Unknown error' }}">❌</span>
+                                        {% else %}
+                                            <span class="status-symbol pending-symbol" title="Certificate Generated - Not yet sent by email">⏳</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Send Count -->
+                                    <td>
+                                        <span class="send-count-badge">{{ r.send_count or 0 }}</span>
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td class="text-right">
+                                        <div class="table-actions">
+                                            <!-- View Certificate Action -->
+                                            <a
+                                                href="/verify/{{ r.certificate_id }}"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                class="action-icon-btn view-cert-btn"
+                                                title="View Certificate"
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                                    <circle cx="12" cy="12" r="3"></circle>
+                                                </svg>
+                                            </a>
+
+                                            <!-- Resend Email -->
+                                            <button
+                                                type="button"
+                                                class="action-icon-btn resend-cert-btn"
+                                                data-filename="{{ r.pdf_filename }}"
+                                                data-email="{{ r.student_email }}"
+                                                data-student="{{ r.student_name }}"
+                                                data-domain="{{ r.internship_domain }}"
+                                                data-cert-id="{{ r.certificate_id }}"
+                                                title="Send / Resend Certificate Email"
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                                </svg>
+                                            </button>
+
+                                            <!-- Delete Record -->
+                                            <button
+                                                type="button"
+                                                class="action-icon-btn delete-cert-btn"
+                                                data-id="{{ r.id }}"
+                                                data-cert-id="{{ r.certificate_id }}"
+                                                data-student="{{ r.student_name }}"
+                                                title="Delete Record"
+                                            >
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id="noRecordsRow">
+                                <td colspan="9" class="text-center empty-table-cell">
+                                    <div class="empty-state-wrapper">
+                                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="8" r="7"></circle>
+                                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                                        </svg>
+                                        <p>No certificate records found matching your criteria.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- =================================================
+                 PAGINATION BAR
+                 ================================================= -->
+            <div class="history-pagination-wrapper">
+                <div class="pagination-info" id="paginationInfo">
+                    Showing page <strong id="currentPageNum">{{ page }}</strong> of <strong id="totalPagesNum">{{ total_pages }}</strong>
+                    (<span id="totalFilteredCount">{{ total_filtered or total_records or 0 }}</span> filtered records)
+                </div>
+
+                <div class="pagination-controls" id="paginationControls">
+                    <button
+                        type="button"
+                        class="page-nav-btn prev-page-btn"
+                        id="prevPageBtn"
+                        {% if page <= 1 %}disabled{% endif %}
+                    >
+                        ← Prev
+                    </button>
+
+                    <div class="page-numbers-group" id="pageNumbersGroup">
+                        <!-- Dynamic page buttons -->
+                        {% for p in range(1, total_pages + 1) %}
+                            {% if p == page or (p >= page - 2 and p <= page + 2) or p == 1 or p == total_pages %}
+                                <button
+                                    type="button"
+                                    class="page-num-btn {% if p == page %}active{% endif %}"
+                                    data-page="{{ p }}"
+                                >
+                                    {{ p }}
+                                </button>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <button
+                        type="button"
+                        class="page-nav-btn next-page-btn"
+                        id="nextPageBtn"
+                        {% if page >= total_pages %}disabled{% endif %}
+                    >
+                        Next →
+                    </button>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+</div>
+
+<!-- =====================================================
+     CSV EXPORT DATE-RANGE MODAL
+     ===================================================== -->
+<div id="exportModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <div class="modal-icon-wrapper">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </div>
+            <h3>Export Certificates to CSV</h3>
+        </div>
+
+        <p class="modal-body-text">
+            Select a date range to export specific certificate records, or leave empty to export all records.
+        </p>
+
+        <form id="exportModalForm">
+            <div class="form-row" style="margin-bottom: 16px;">
+                <div class="form-group" style="flex: 1;">
+                    <label for="modalExportFrom">From Date</label>
+                    <input type="date" id="modalExportFrom">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label for="modalExportTo">To Date</label>
+                    <input type="date" id="modalExportTo">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="cancelExportModalBtn" class="modal-btn modal-btn-secondary">Cancel</button>
+                <button type="submit" class="modal-btn modal-btn-primary">Download CSV</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- =====================================================
+     PDF PREVIEW MODAL
+     ===================================================== -->
+<div id="pdfModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card modal-large">
+        <div class="modal-header" style="justify-content: space-between;">
+            <h3 id="pdfModalTitle">Certificate Preview</h3>
+            <button type="button" id="closePdfModalBtn" class="modal-close-x">✕</button>
+        </div>
+        <div class="modal-pdf-container">
+            <iframe id="modalPdfFrame" src="" title="PDF Preview"></iframe>
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+            <a id="modalDownloadPdfBtn" href="#" download class="modal-btn modal-btn-primary">Download PDF</a>
+            <button type="button" id="closePdfModalBottomBtn" class="modal-btn modal-btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST FEEDBACK NOTIFICATION -->
+<div id="toastNotification" class="toast-notification" style="display: none;"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let currentPage = parseInt("{{ page or 1 }}", 10) || 1;
+    let debounceTimer = null;
+
+    // Elements
+    const filterForm = document.getElementById("filterForm");
+    const liveSearchInput = document.getElementById("liveSearchInput");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
+    const monthSelect = document.getElementById("monthSelect");
+    const domainSelect = document.getElementById("domainSelect");
+    const statusSelect = document.getElementById("statusSelect");
+    const dateFromInput = document.getElementById("dateFromInput");
+    const dateToInput = document.getElementById("dateToInput");
+    const perPageSelect = document.getElementById("perPageSelect");
+    const resetFiltersBtn = document.getElementById("resetFiltersBtn");
+    const historyTableBody = document.getElementById("historyTableBody");
+
+    // Modal elements
+    const exportModal = document.getElementById("exportModal");
+    const openExportModalBtn = document.getElementById("openExportModalBtn");
+    const cancelExportModalBtn = document.getElementById("cancelExportModalBtn");
+    const exportModalForm = document.getElementById("exportModalForm");
+    const modalExportFrom = document.getElementById("modalExportFrom");
+    const modalExportTo = document.getElementById("modalExportTo");
+
+    const pdfModal = document.getElementById("pdfModal");
+    const modalPdfFrame = document.getElementById("modalPdfFrame");
+    const pdfModalTitle = document.getElementById("pdfModalTitle");
+    const modalDownloadPdfBtn = document.getElementById("modalDownloadPdfBtn");
+    const closePdfModalBtn = document.getElementById("closePdfModalBtn");
+    const closePdfModalBottomBtn = document.getElementById("closePdfModalBottomBtn");
+
+    const toast = document.getElementById("toastNotification");
+
+    function showToast(message, type = "success") {
+        toast.className = `toast-notification ${type}`;
+        toast.innerHTML = `<span>${type === 'success' ? '✔' : '❌'}</span> <span>${message}</span>`;
+        toast.style.display = "flex";
+        setTimeout(() => {
+            toast.style.display = "none";
+        }, 5000);
+    }
+
+    // LIVE FETCH & RENDER TABLE
+    function fetchCertificateHistory(page = 1) {
+        currentPage = page;
+        const search = liveSearchInput.value.trim();
+        const month = monthSelect.value;
+        const domain = domainSelect.value;
+        const status = statusSelect.value;
+        const dateFrom = dateFromInput.value;
+        const dateTo = dateToInput.value;
+        const perPage = perPageSelect.value;
+
+        clearSearchBtn.style.display = search ? "flex" : "none";
+
+        const params = new URLSearchParams({
+            format: "json",
+            page: page,
+            search: search,
+            month: month,
+            domain: domain,
+            status: status,
+            date_from: dateFrom,
+            date_to: dateTo,
+            per_page: perPage
+        });
+
+        fetch(`/certificate-history?${params.toString()}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    renderTable(data);
+                    updateStats(data);
+                    updatePagination(data);
+                }
+            })
+            .catch(err => {
+                console.error("Live fetch error:", err);
+            });
+    }
+
+    function renderTable(data) {
+        const records = data.records || [];
+        if (records.length === 0) {
+            historyTableBody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center empty-table-cell">
+                        <div class="empty-state-wrapper">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="8" r="7"></circle>
+                                <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                            </svg>
+                            <p>No certificate records found matching your criteria.</p>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = "";
+        records.forEach(r => {
+            const st = (r.email_status || "pending").toLowerCase();
+            let statusBadge = `<span class="status-symbol pending-symbol" title="Generated - Not yet sent">⏳</span>`;
+            if (st === "sent") {
+                statusBadge = `<span class="status-symbol success-symbol" title="Email Sent Successfully">✔</span>`;
+            } else if (st === "failed") {
+                statusBadge = `<span class="status-symbol failed-symbol" title="Email Delivery Failed: ${r.error_message || 'Error'}">❌</span>`;
+            }
+
+            html += `
+                <tr data-id="${r.id}" data-cert-id="${r.certificate_id}">
+                    <td><div class="student-name-cell"><span class="student-name-text">${r.student_name}</span></div></td>
+                    <td><span class="student-email-text">${r.student_email}</span></td>
+                    <td><span class="domain-tag">${r.internship_domain}</span></td>
+                    <td><span class="date-cell-text">${r.start_date} to ${r.end_date}</span></td>
+                    <td><span class="date-cell-text">${r.issued_date}</span></td>
+                    <td>
+                        <a href="/verify/${r.certificate_id}" target="_blank" class="cert-id-link" title="Open Public Verification Page">
+                            <code>${r.certificate_id}</code>
+                        </a>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td><span class="send-count-badge">${r.send_count || 0}</span></td>
+                    <td class="text-right">
+                        <div class="table-actions">
+                            <a href="/verify/${r.certificate_id}" target="_blank" rel="noopener noreferrer" class="action-icon-btn view-cert-btn" title="View Certificate">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </a>
+                            <button type="button" class="action-icon-btn resend-cert-btn" data-filename="${r.pdf_filename || ''}" data-email="${r.student_email}" data-student="${r.student_name}" data-domain="${r.internship_domain}" data-cert-id="${r.certificate_id}" title="Send / Resend Certificate Email">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                            </button>
+                            <button type="button" class="action-icon-btn delete-cert-btn" data-id="${r.id}" data-cert-id="${r.certificate_id}" data-student="${r.student_name}" title="Delete Record">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+
+        historyTableBody.innerHTML = html;
+        bindActionButtons();
+    }
+
+    function updateStats(data) {
+        const total = document.getElementById("summaryTotalRecords");
+        const gen = document.getElementById("summaryGeneratedRecords");
+        const sent = document.getElementById("summarySentRecords");
+        const failed = document.getElementById("summaryFailedRecords");
+
+        if (total) total.textContent = data.total_records || 0;
+        if (gen) gen.textContent = data.total_records || 0;
+        if (sent) sent.textContent = data.total_sent || 0;
+        if (failed) failed.textContent = data.total_failed || 0;
+    }
+
+    function updatePagination(data) {
+        const curPage = data.page || 1;
+        const totalPages = data.total_pages || 1;
+        const totalFiltered = data.total_filtered || 0;
+
+        document.getElementById("currentPageNum").textContent = curPage;
+        document.getElementById("totalPagesNum").textContent = totalPages;
+        document.getElementById("totalFilteredCount").textContent = totalFiltered;
+
+        const prevBtn = document.getElementById("prevPageBtn");
+        const nextBtn = document.getElementById("nextPageBtn");
+
+        prevBtn.disabled = curPage <= 1;
+        nextBtn.disabled = curPage >= totalPages;
+
+        let numHtml = "";
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === curPage || (p >= curPage - 2 && p <= curPage + 2) || p === 1 || p === totalPages) {
+                numHtml += `<button type="button" class="page-num-btn ${p === curPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+            }
+        }
+        document.getElementById("pageNumbersGroup").innerHTML = numHtml;
+
+        // Bind page number clicks
+        document.querySelectorAll(".page-num-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const pageTarget = parseInt(this.getAttribute("data-page"));
+                fetchCertificateHistory(pageTarget);
+            });
+        });
+    }
+
+    // LIVE SEARCH EVENT LISTENERS
+    liveSearchInput.addEventListener("input", function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            fetchCertificateHistory(1);
+        }, 250);
+    });
+
+    clearSearchBtn.addEventListener("click", function() {
+        liveSearchInput.value = "";
+        clearSearchBtn.style.display = "none";
+        fetchCertificateHistory(1);
+    });
+
+    [monthSelect, domainSelect, statusSelect, dateFromInput, dateToInput, perPageSelect].forEach(elem => {
+        elem.addEventListener("change", function() {
+            fetchCertificateHistory(1);
+        });
+    });
+
+    resetFiltersBtn.addEventListener("click", function() {
+        liveSearchInput.value = "";
+        monthSelect.value = "";
+        domainSelect.value = "";
+        statusSelect.value = "";
+        dateFromInput.value = "";
+        dateToInput.value = "";
+        perPageSelect.value = "20";
+        clearSearchBtn.style.display = "none";
+        fetchCertificateHistory(1);
+    });
+
+    document.getElementById("prevPageBtn").addEventListener("click", () => {
+        if (currentPage > 1) fetchCertificateHistory(currentPage - 1);
+    });
+    document.getElementById("nextPageBtn").addEventListener("click", () => {
+        fetchCertificateHistory(currentPage + 1);
+    });
+
+    // TABLE ACTION BUTTONS BINDING
+    function bindActionButtons() {
+        // Preview Modal
+        document.querySelectorAll(".preview-cert-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const filename = this.getAttribute("data-filename");
+                const student = this.getAttribute("data-student");
+                const certId = this.getAttribute("data-cert-id");
+
+                if (!filename) {
+                    showToast("PDF file is not available for preview.", "error");
+                    return;
+                }
+
+                pdfModalTitle.textContent = `${student} — Certificate (${certId})`;
+                modalPdfFrame.src = `/generated/${filename}?t=${Date.now()}`;
+                modalDownloadPdfBtn.href = `/generated/${filename}`;
+                modalDownloadPdfBtn.setAttribute("download", filename);
+                pdfModal.style.display = "flex";
+            });
+        });
+
+        // Resend Email
+        document.querySelectorAll(".resend-cert-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const filename = this.getAttribute("data-filename");
+                const email = this.getAttribute("data-email");
+                const student = this.getAttribute("data-student");
+                const domain = this.getAttribute("data-domain");
+                const certId = this.getAttribute("data-cert-id");
+
+                if (!filename || !email) {
+                    showToast("Cannot resend email: missing file or recipient email.", "error");
+                    return;
+                }
+
+                if (!confirm(`Are you sure you want to send the certificate email to ${student} (${email})?`)) {
+                    return;
+                }
+
+                btn.disabled = true;
+                showToast(`Sending certificate email to ${email}...`);
+
+                fetch("/api/certificate/send-email", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        filename: filename,
+                        student_email: email,
+                        student_name: student,
+                        domain: domain,
+                        certificate_id: certId,
+                        send_again: true
+                    })
+                })
+                .then(async res => {
+                    const r = await res.json();
+                    if (!res.ok) throw new Error(r.error || "Failed to send email");
+                    return r;
+                })
+                .then(r => {
+                    showToast(`✔ Certificate sent successfully to ${email}`);
+                    fetchCertificateHistory(currentPage);
+                })
+                .catch(err => {
+                    showToast(`❌ Failed to send certificate: ${err.message}`, "error");
+                    fetchCertificateHistory(currentPage);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                });
+            });
+        });
+
+        // Delete Record
+        document.querySelectorAll(".delete-cert-btn").forEach(btn => {
+            btn.addEventListener("click", function() {
+                const recordId = this.getAttribute("data-id") || this.getAttribute("data-cert-id");
+                const student = this.getAttribute("data-student");
+
+                if (!confirm(`Are you sure you want to delete the certificate record for "${student}"? This cannot be undone.`)) {
+                    return;
+                }
+
+                fetch(`/api/certificate-history/${recordId}`, {
+                    method: "DELETE"
+                })
+                .then(async res => {
+                    const r = await res.json();
+                    if (!res.ok) throw new Error(r.error || "Failed to delete record");
+                    return r;
+                })
+                .then(() => {
+                    showToast(`Record for "${student}" deleted successfully.`);
+                    fetchCertificateHistory(currentPage);
+                })
+                .catch(err => {
+                    showToast(`❌ Delete failed: ${err.message}`, "error");
+                });
+            });
+        });
+    }
+
+    // Modal Close Listeners
+    closePdfModalBtn.addEventListener("click", () => { pdfModal.style.display = "none"; modalPdfFrame.src = ""; });
+    closePdfModalBottomBtn.addEventListener("click", () => { pdfModal.style.display = "none"; modalPdfFrame.src = ""; });
+
+    // Export Modal Listeners
+    openExportModalBtn.addEventListener("click", () => {
+        modalExportFrom.value = dateFromInput.value;
+        modalExportTo.value = dateToInput.value;
+        exportModal.style.display = "flex";
+    });
+
+    cancelExportModalBtn.addEventListener("click", () => {
+        exportModal.style.display = "none";
+    });
+
+    exportModalForm.addEventListener("submit", function(e) {
+        e.preventDefault();
+        const fromVal = modalExportFrom.value;
+        const toVal = modalExportTo.value;
+        const statusVal = statusSelect.value;
+        const domainVal = domainSelect.value;
+
+        if (fromVal && toVal && fromVal > toVal) {
+            alert("From Date cannot be later than To Date.");
+            return;
+        }
+
+        const params = new URLSearchParams({
+            date_from: fromVal,
+            date_to: toVal,
+            status: statusVal,
+            domain: domainVal
+        });
+
+        exportModal.style.display = "none";
+        showToast("Generating CSV export...");
+        window.location.href = `/certificate-history/export?${params.toString()}`;
+    });
+
+    // Initial binding of action buttons
+    bindActionButtons();
+});
+</script>
+
+</body>
+</html>

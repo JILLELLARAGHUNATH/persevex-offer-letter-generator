@@ -1,0 +1,1453 @@
+import os
+import re
+import sqlite3
+import tempfile
+import uuid
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from dotenv import load_dotenv
+
+from database.config import (
+    DATABASE_TYPE,
+    SQLITE_DB_PATH,
+    SUPABASE_URL,
+    SUPABASE_KEY,
+)
+
+load_dotenv()
+
+# Global Supabase client singleton
+_supabase_client = None
+
+
+def get_supabase_client():
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            from supabase import create_client
+            _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            return _supabase_client
+        except Exception as exc:
+            print("SUPABASE CLIENT INIT WARNING (will use local fallback):", repr(exc))
+    return None
+
+
+PERSISTENT_CERT_DIR = Path(tempfile.gettempdir()) / "persevex_certificates"
+try:
+    PERSISTENT_CERT_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
+
+
+def init_database_tables():
+    """Ensure all local SQLite fallback tables exist with proper schemas."""
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+
+        # 1. Offer Letters table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS email_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_name TEXT NOT NULL,
+                student_email TEXT NOT NULL,
+                phone_number TEXT,
+                college_name TEXT,
+                internship_domain TEXT,
+                internship_duration TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                offer_letter_type TEXT,
+                email_status TEXT DEFAULT 'pending',
+                sent_at TEXT,
+                created_at TEXT,
+                offer_letter_id TEXT,
+                pdf_filename TEXT,
+                send_count INTEGER DEFAULT 0,
+                error_message TEXT
+            )
+        """)
+
+        # 2. Certificate table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS certificate_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                certificate_id TEXT UNIQUE NOT NULL,
+                student_name TEXT NOT NULL,
+                student_email TEXT,
+                internship_domain TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                issued_date TEXT,
+                generated_date TEXT,
+                created_at TEXT,
+                certificate_status TEXT DEFAULT 'active',
+                email_status TEXT DEFAULT 'pending',
+                sent_at TEXT,
+                send_count INTEGER DEFAULT 0,
+                pdf_filename TEXT,
+                error_message TEXT,
+                template_version TEXT DEFAULT 'v1'
+            )
+        """)
+
+        # Migration: ensure certificate_status and template_version exist if table was created previously
+        cursor.execute("PRAGMA table_info(certificate_history)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "certificate_status" not in columns:
+            cursor.execute("ALTER TABLE certificate_history ADD COLUMN certificate_status TEXT DEFAULT 'active'")
+        if "template_version" not in columns:
+            cursor.execute("ALTER TABLE certificate_history ADD COLUMN template_version TEXT DEFAULT 'v1'")
+
+        # 3. Bulk Job history table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bulk_job_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT UNIQUE NOT NULL,
+                job_type TEXT NOT NULL,
+                total_records INTEGER DEFAULT 0,
+                successful_count INTEGER DEFAULT 0,
+                failed_count INTEGER DEFAULT 0,
+                created_at TEXT,
+                completed_at TEXT,
+                status TEXT DEFAULT 'completed',
+                details TEXT
+            )
+        """)
+
+        # 4. Campus Ambassador table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS campus_ambassador_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_name TEXT NOT NULL,
+                student_email TEXT NOT NULL,
+                phone_number TEXT,
+                college_name TEXT,
+                internship_domain TEXT DEFAULT 'Campus Ambassador',
+                internship_duration TEXT DEFAULT 'Tenure',
+                start_date TEXT,
+                end_date TEXT,
+                offer_letter_type TEXT DEFAULT 'campus_ambassador',
+                email_status TEXT DEFAULT 'pending',
+                sent_at TEXT,
+                created_at TEXT,
+                offer_letter_id TEXT,
+                pdf_filename TEXT,
+                send_count INTEGER DEFAULT 0,
+                error_message TEXT
+            )
+        """)
+
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB INIT ERROR:", repr(exc))
+
+
+init_database_tables()
+
+
+# ============================================================
+# CAMPUS AMBASSADOR STORAGE
+# ============================================================
+def save_campus_ambassador_record(record_data):
+    """
+    Save Campus Ambassador record to dedicated campus_ambassador_history table in Supabase & local SQLite.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not record_data.get("created_at"):
+        record_data["created_at"] = now_iso
+    if not record_data.get("internship_domain"):
+        record_data["internship_domain"] = "Campus Ambassador"
+    if not record_data.get("internship_duration"):
+        record_data["internship_duration"] = "Tenure"
+    if not record_data.get("offer_letter_type"):
+        record_data["offer_letter_type"] = "campus_ambassador"
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            sb.table("campus_ambassador_history").insert(record_data).execute()
+        except Exception as exc:
+            print("SUPABASE SAVE CA RECORD ERROR (using local DB):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO campus_ambassador_history (
+                student_name, student_email, phone_number, college_name,
+                internship_domain, internship_duration, start_date, end_date,
+                offer_letter_type, email_status, sent_at, created_at,
+                offer_letter_id, pdf_filename, send_count, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            record_data.get("student_name"),
+            record_data.get("student_email"),
+            record_data.get("phone_number"),
+            record_data.get("college_name"),
+            record_data.get("internship_domain", "Campus Ambassador"),
+            record_data.get("internship_duration", "Tenure"),
+            record_data.get("start_date"),
+            record_data.get("end_date"),
+            record_data.get("offer_letter_type", "campus_ambassador"),
+            record_data.get("email_status", "pending"),
+            record_data.get("sent_at"),
+            record_data.get("created_at"),
+            record_data.get("offer_letter_id"),
+            record_data.get("pdf_filename"),
+            record_data.get("send_count", 0),
+            record_data.get("error_message")
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB SAVE CA RECORD ERROR:", repr(exc))
+
+    return True
+
+
+def delete_campus_ambassador_record(record_id, document_id=None):
+    """
+    Delete a Campus Ambassador record from campus_ambassador_history table.
+    Targets ONLY exact numeric ID or exact offer_letter_id.
+    Never deletes from email_history.
+    """
+    deleted = False
+    sb = get_supabase_client()
+    identifiers = set()
+    if record_id is not None and str(record_id).strip():
+        identifiers.add(str(record_id).strip())
+    if document_id is not None and str(document_id).strip():
+        identifiers.add(str(document_id).strip())
+
+    if sb and identifiers:
+        for ident in identifiers:
+            if ident.isdigit():
+                try:
+                    sb.table("campus_ambassador_history").delete().eq("id", int(ident)).execute()
+                    deleted = True
+                except Exception as exc:
+                    print("SUPABASE DELETE CA ID ERROR:", repr(exc))
+            else:
+                try:
+                    sb.table("campus_ambassador_history").delete().eq("offer_letter_id", ident).execute()
+                    deleted = True
+                except Exception:
+                    pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        for ident in identifiers:
+            if ident.isdigit():
+                cursor.execute("DELETE FROM campus_ambassador_history WHERE id = ?", (int(ident),))
+            else:
+                cursor.execute("DELETE FROM campus_ambassador_history WHERE offer_letter_id = ?", (ident,))
+        conn.commit()
+        conn.close()
+        deleted = True
+    except Exception as exc:
+        print("LOCAL DB DELETE CA ERROR:", repr(exc))
+
+    return deleted
+
+
+# ============================================================
+# OFFER LETTER STORAGE
+# ============================================================
+def save_offer_letter_record(record_data):
+    """
+    Save or update Offer Letter record in Supabase and local SQLite.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not record_data.get("created_at"):
+        record_data["created_at"] = now_iso
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            sb.table("email_history").insert(record_data).execute()
+        except Exception as exc:
+            print("SUPABASE SAVE OFFER LETTER ERROR (using local DB):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO email_history (
+                student_name, student_email, phone_number, college_name,
+                internship_domain, internship_duration, start_date, end_date,
+                offer_letter_type, email_status, sent_at, created_at,
+                offer_letter_id, pdf_filename, send_count, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            record_data.get("student_name"),
+            record_data.get("student_email"),
+            record_data.get("phone_number"),
+            record_data.get("college_name"),
+            record_data.get("internship_domain"),
+            record_data.get("internship_duration"),
+            record_data.get("start_date"),
+            record_data.get("end_date"),
+            record_data.get("offer_letter_type"),
+            record_data.get("email_status", "pending"),
+            record_data.get("sent_at"),
+            record_data.get("created_at"),
+            record_data.get("offer_letter_id"),
+            record_data.get("pdf_filename"),
+            record_data.get("send_count", 0),
+            record_data.get("error_message")
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB SAVE OFFER LETTER ERROR:", repr(exc))
+
+    return True
+
+
+def get_previous_offer_letter_by_email(email):
+    """Check if an offer letter already exists for this email."""
+    if not email:
+        return None
+    email_clean = email.strip().lower()
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("email_history")
+                .select("*")
+                .eq("student_email", email_clean)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if res.data and len(res.data) > 0:
+                return res.data[0]
+        except Exception:
+            pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM email_history WHERE LOWER(student_email) = ? ORDER BY id DESC LIMIT 1",
+            (email_clean,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as exc:
+        print("LOCAL DB GET OFFER LETTER BY EMAIL ERROR:", repr(exc))
+
+    return None
+
+
+def delete_offer_letter_record(record_id, document_id=None):
+    """
+    Delete an offer letter record from history.
+    Targets ONLY exact numeric ID or exact offer_letter_id (e.g. OL-123 or document filename stem).
+    Never deletes by email address to prevent accidental cascades.
+    """
+    deleted = False
+    sb = get_supabase_client()
+    identifiers = set()
+    if record_id is not None and str(record_id).strip():
+        identifiers.add(str(record_id).strip())
+    if document_id is not None and str(document_id).strip():
+        identifiers.add(str(document_id).strip())
+
+    if sb and identifiers:
+        for ident in identifiers:
+            if ident.isdigit():
+                try:
+                    sb.table("email_history").delete().eq("id", int(ident)).execute()
+                    deleted = True
+                except Exception as exc:
+                    print("SUPABASE DELETE ID ERROR:", repr(exc))
+            else:
+                try:
+                    sb.table("email_history").delete().eq("offer_letter_id", ident).execute()
+                    deleted = True
+                except Exception:
+                    pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        for ident in identifiers:
+            if ident.isdigit():
+                cursor.execute("DELETE FROM email_history WHERE id = ?", (int(ident),))
+            else:
+                cursor.execute("DELETE FROM email_history WHERE offer_letter_id = ?", (ident,))
+        conn.commit()
+        conn.close()
+        deleted = True
+    except Exception as exc:
+        print("LOCAL DB DELETE OFFER LETTER ERROR:", repr(exc))
+
+    return deleted
+
+
+# ============================================================
+# CERTIFICATE STORAGE
+# ============================================================
+def save_certificate_record(record_data):
+    """
+    Save or update Certificate record in Supabase and local SQLite.
+    CRITICAL: Performs field-preserving merge so updating email_status,
+    sent_at, send_count, or error_message NEVER wipes out start_date,
+    end_date, issued_date, student_name, or domain!
+    """
+    cert_id = record_data.get("certificate_id")
+    if not cert_id:
+        return False
+
+    cert_clean = str(cert_id).strip()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # 1. Look up existing record in local SQLite or Supabase to merge fields
+    existing = None
+    try:
+        existing = get_certificate_by_id(cert_clean)
+    except Exception:
+        existing = None
+
+    existing = existing or {}
+
+    # 2. Merge non-empty fields with existing values
+    merged_student_name = str(record_data.get("student_name") or existing.get("student_name") or "").strip()
+    merged_student_email = str(record_data.get("student_email") or existing.get("student_email") or "").strip()
+    merged_domain = str(record_data.get("internship_domain") or existing.get("internship_domain") or record_data.get("domain") or "").strip()
+    merged_start_date = str(record_data.get("start_date") or existing.get("start_date") or "").strip()
+    merged_end_date = str(record_data.get("end_date") or existing.get("end_date") or "").strip()
+    merged_issued_date = str(record_data.get("issued_date") or existing.get("issued_date") or "").strip()
+    merged_generated_date = str(record_data.get("generated_date") or existing.get("generated_date") or now_iso).strip()
+    merged_created_at = str(record_data.get("created_at") or existing.get("created_at") or now_iso).strip()
+    merged_certificate_status = str(record_data.get("certificate_status") or existing.get("certificate_status") or "active").strip().lower()
+    merged_email_status = str(record_data.get("email_status") or existing.get("email_status") or "pending").strip().lower()
+    merged_sent_at = record_data.get("sent_at") or existing.get("sent_at")
+
+    # send_count handling
+    if "send_count" in record_data and record_data.get("send_count") is not None:
+        merged_send_count = int(record_data.get("send_count"))
+    else:
+        merged_send_count = int(existing.get("send_count") or 0)
+
+    merged_pdf_filename = str(record_data.get("pdf_filename") or existing.get("pdf_filename") or "").strip()
+    merged_template_version = str(record_data.get("template_version") or existing.get("template_version") or "v1").strip()
+
+    if "error_message" in record_data:
+        merged_error_message = record_data.get("error_message")
+    else:
+        merged_error_message = existing.get("error_message")
+
+    # 3. Save to Supabase
+    sb = get_supabase_client()
+    if sb:
+        payload_full = {
+            "certificate_id": cert_clean,
+            "student_name": merged_student_name,
+            "student_email": merged_student_email,
+            "internship_domain": merged_domain,
+            "start_date": merged_start_date,
+            "end_date": merged_end_date,
+            "issued_date": merged_issued_date,
+            "generated_date": merged_generated_date,
+            "created_at": merged_created_at,
+            "certificate_status": merged_certificate_status,
+            "email_status": merged_email_status,
+            "sent_at": merged_sent_at,
+            "send_count": merged_send_count,
+            "pdf_filename": merged_pdf_filename,
+            "error_message": merged_error_message,
+            "template_version": merged_template_version,
+        }
+        def _safe_supabase_mutate(action, payload):
+            current_payload = dict(payload)
+            for _ in range(5):
+                try:
+                    if action == "update":
+                        return sb.table("certificate_history").update(current_payload).eq("certificate_id", cert_clean).execute()
+                    else:
+                        return sb.table("certificate_history").insert(current_payload).execute()
+                except Exception as mut_exc:
+                    err_str = str(mut_exc)
+                    match = re.search(r"Could not find the '([^']+)' column", err_str)
+                    if match:
+                        col_to_drop = match.group(1)
+                        if col_to_drop in current_payload:
+                            current_payload.pop(col_to_drop, None)
+                            continue
+                    raise mut_exc
+
+        try:
+            # Check if row exists in Supabase
+            existing_sb = sb.table("certificate_history").select("id").eq("certificate_id", cert_clean).limit(1).execute()
+            if existing_sb.data and len(existing_sb.data) > 0:
+                _safe_supabase_mutate("update", payload_full)
+            else:
+                _safe_supabase_mutate("insert", payload_full)
+        except Exception as exc:
+            print("SUPABASE SAVE CERTIFICATE WARNING (will use local fallback):", repr(exc))
+
+    # 4. Save to local SQLite (always kept in sync)
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM certificate_history WHERE certificate_id = ? LIMIT 1", (cert_clean,))
+        row = cursor.fetchone()
+        if row:
+            cursor.execute("""
+                UPDATE certificate_history SET
+                    student_name = ?,
+                    student_email = ?,
+                    internship_domain = ?,
+                    start_date = ?,
+                    end_date = ?,
+                    issued_date = ?,
+                    generated_date = ?,
+                    created_at = ?,
+                    certificate_status = ?,
+                    email_status = ?,
+                    sent_at = ?,
+                    send_count = ?,
+                    pdf_filename = ?,
+                    error_message = ?,
+                    template_version = ?
+                WHERE certificate_id = ?
+            """, (
+                merged_student_name,
+                merged_student_email,
+                merged_domain,
+                merged_start_date,
+                merged_end_date,
+                merged_issued_date,
+                merged_generated_date,
+                merged_created_at,
+                merged_certificate_status,
+                merged_email_status,
+                merged_sent_at,
+                merged_send_count,
+                merged_pdf_filename,
+                merged_error_message,
+                merged_template_version,
+                cert_clean
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO certificate_history (
+                    certificate_id, student_name, student_email, internship_domain,
+                    start_date, end_date, issued_date, generated_date, created_at,
+                    certificate_status, email_status, sent_at, send_count,
+                    pdf_filename, error_message, template_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                cert_clean,
+                merged_student_name,
+                merged_student_email,
+                merged_domain,
+                merged_start_date,
+                merged_end_date,
+                merged_issued_date,
+                merged_generated_date,
+                merged_created_at,
+                merged_certificate_status,
+                merged_email_status,
+                merged_sent_at,
+                merged_send_count,
+                merged_pdf_filename,
+                merged_error_message,
+                merged_template_version
+            ))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB SAVE CERTIFICATE ERROR:", repr(exc))
+
+    return True
+
+
+def bulk_save_certificate_records(records_list):
+    """
+    Save or update a batch of Certificate records in Supabase and local SQLite in bulk.
+    Significantly improves bulk generation speed by executing batch operations.
+    """
+    if not records_list:
+        return True
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    clean_records = []
+    for r in records_list:
+        cid = str(r.get("certificate_id") or "").strip()
+        if not cid:
+            continue
+        clean_records.append({
+            "certificate_id": cid,
+            "student_name": str(r.get("student_name") or "").strip(),
+            "student_email": str(r.get("student_email") or "").strip(),
+            "internship_domain": str(r.get("internship_domain") or r.get("domain") or "").strip(),
+            "start_date": str(r.get("start_date") or "").strip(),
+            "end_date": str(r.get("end_date") or "").strip(),
+            "issued_date": str(r.get("issued_date") or "").strip(),
+            "generated_date": str(r.get("generated_date") or now_iso).strip(),
+            "created_at": str(r.get("created_at") or now_iso).strip(),
+            "certificate_status": str(r.get("certificate_status") or "active").strip().lower(),
+            "email_status": str(r.get("email_status") or "pending").strip().lower(),
+            "sent_at": r.get("sent_at"),
+            "send_count": int(r.get("send_count") or 0),
+            "pdf_filename": str(r.get("pdf_filename") or "").strip(),
+            "error_message": r.get("error_message"),
+            "template_version": str(r.get("template_version") or "v1").strip(),
+        })
+
+    if not clean_records:
+        return True
+
+    # 1. Supabase Bulk Upsert with automatic schema adaptation
+    sb = get_supabase_client()
+    if sb:
+        current_payloads = [dict(p) for p in clean_records]
+        for _ in range(5):
+            try:
+                sb.table("certificate_history").upsert(current_payloads, on_conflict="certificate_id").execute()
+                break
+            except Exception as mut_exc:
+                err_str = str(mut_exc)
+                match = re.search(r"Could not find the '([^']+)' column", err_str)
+                if match:
+                    col_to_drop = match.group(1)
+                    for p in current_payloads:
+                        p.pop(col_to_drop, None)
+                    continue
+                else:
+                    print("SUPABASE BULK UPSERT WARNING (falling back to per-record save):", repr(mut_exc))
+                    for rec in clean_records:
+                        try:
+                            save_certificate_record(rec)
+                        except Exception:
+                            pass
+                    break
+
+
+    # 2. Local SQLite Bulk Upsert
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        tuples = [
+            (
+                r["certificate_id"],
+                r["student_name"],
+                r["student_email"],
+                r["internship_domain"],
+                r["start_date"],
+                r["end_date"],
+                r["issued_date"],
+                r["generated_date"],
+                r["created_at"],
+                r["certificate_status"],
+                r["email_status"],
+                r["sent_at"],
+                r["send_count"],
+                r["pdf_filename"],
+                r["error_message"],
+                r["template_version"],
+            )
+            for r in clean_records
+        ]
+        cursor.executemany("""
+            INSERT OR REPLACE INTO certificate_history (
+                certificate_id, student_name, student_email, internship_domain,
+                start_date, end_date, issued_date, generated_date, created_at,
+                certificate_status, email_status, sent_at, send_count,
+                pdf_filename, error_message, template_version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, tuples)
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB BULK SAVE ERROR:", repr(exc))
+
+    return True
+
+
+def find_existing_certificates_batch(candidate_rows, supabase_client=None):
+    """
+    Efficient batch lookup to detect active certificates that already exist for a batch of candidate records.
+    Authoritative source of truth: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or unavailable).
+    Returns: dict mapping candidate identity key -> existing certificate dict
+    """
+    if not candidate_rows:
+        return {}
+
+    # Extract clean unique candidate emails
+    emails = list(set(
+        str(r.get("student_email") or "").strip().lower()
+        for r in candidate_rows
+        if r.get("student_email")
+    ))
+
+    if not emails:
+        return {}
+
+    existing_records = []
+    supabase_success = False
+
+    # 1. Authoritative batch query to Supabase
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("certificate_history")
+                .select("*")
+                .in_("student_email", emails)
+                .execute()
+            )
+            if res.data is not None:
+                supabase_success = True
+                for row in res.data:
+                    rec = dict(row)
+                    if str(rec.get("certificate_status") or "").lower() != "revoked":
+                        existing_records.append(rec)
+        except Exception as exc:
+            print("SUPABASE FIND EXISTING CERTIFICATES WARNING (falling back to local DB):", repr(exc))
+            supabase_success = False
+
+    # 2. Local SQLite fallback query — ONLY used if Supabase is unconfigured or query failed
+    if not supabase_success:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in emails)
+            cursor.execute(
+                f"SELECT * FROM certificate_history WHERE LOWER(student_email) IN ({placeholders}) AND (certificate_status IS NULL OR certificate_status != 'revoked')",
+                emails
+            )
+            for row in cursor.fetchall():
+                rec = dict(row)
+                existing_records.append(rec)
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB FIND EXISTING CERTIFICATES ERROR:", repr(exc))
+
+    # Build lookup map for fast O(1) matching using exact 4-tuple identity key
+    lookup = {}
+    for cert in existing_records:
+        email_clean = str(cert.get("student_email") or "").strip().lower()
+        domain_clean = str(cert.get("internship_domain") or cert.get("domain") or "").strip().lower()
+        start_clean = str(cert.get("start_date") or "").strip()
+        end_clean = str(cert.get("end_date") or "").strip()
+
+        key_full = (email_clean, domain_clean, start_clean, end_clean)
+        lookup[key_full] = cert
+
+    return lookup
+
+
+
+
+def get_certificate_by_id(cert_id, return_error_detail=False):
+    """
+    Retrieve certificate record by ID.
+    Queries Supabase first, falls back to local SQLite.
+    Returns: dict representing record, or None (or tuple (None, error_str) if return_error_detail=True)
+    """
+    if not cert_id:
+        return (None, "empty_id") if return_error_detail else None
+
+    cert_clean = str(cert_id).strip()
+    db_error = None
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("certificate_history").select("*").eq("certificate_id", cert_clean).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                rec = dict(res.data[0])
+                if not rec.get("certificate_status"):
+                    rec["certificate_status"] = "active"
+                if not rec.get("template_version"):
+                    rec["template_version"] = "v1"
+                return (rec, None) if return_error_detail else rec
+        except Exception as exc:
+            db_error = repr(exc)
+            # Fall through to check local fallback
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM certificate_history WHERE certificate_id = ? LIMIT 1", (cert_clean,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            rec = dict(row)
+            if not rec.get("certificate_status"):
+                rec["certificate_status"] = "active"
+            if not rec.get("template_version"):
+                rec["template_version"] = "v1"
+            return (rec, None) if return_error_detail else rec
+    except Exception as exc:
+        print("LOCAL DB GET CERT ERROR:", repr(exc))
+        if not db_error:
+            db_error = repr(exc)
+
+    if return_error_detail:
+        return (None, db_error)
+    return None
+
+
+def revoke_certificate_record(cert_id, reason="Revoked by administrator"):
+    """
+    Explicitly revoke a certificate.
+    Sets certificate_status = 'revoked' and stores revocation reason.
+    """
+    if not cert_id:
+        return False
+    cert_clean = str(cert_id).strip()
+    return save_certificate_record({
+        "certificate_id": cert_clean,
+        "certificate_status": "revoked",
+        "error_message": reason
+    })
+
+
+def delete_certificate_record(record_id, document_id=None):
+    """
+    Delete a certificate record from history.
+    Targets ONLY exact ID or exact certificate_id (PXL-CERT-...).
+    Never deletes by email address to prevent accidental cascades.
+    """
+    deleted = False
+    sb = get_supabase_client()
+    identifiers = set()
+    if record_id is not None and str(record_id).strip():
+        identifiers.add(str(record_id).strip())
+    if document_id is not None and str(document_id).strip():
+        identifiers.add(str(document_id).strip())
+
+    if sb and identifiers:
+        for ident in identifiers:
+            if ident.isdigit():
+                try:
+                    sb.table("certificate_history").delete().eq("id", int(ident)).execute()
+                    deleted = True
+                except Exception as exc:
+                    print("SUPABASE DELETE CERT ID ERROR:", repr(exc))
+            if ident.startswith("PXL-CERT-") or "CERT" in ident:
+                try:
+                    sb.table("certificate_history").delete().eq("certificate_id", ident).execute()
+                    deleted = True
+                except Exception as exc:
+                    print("SUPABASE DELETE CERTIFICATE_ID ERROR:", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        for ident in identifiers:
+            if ident.isdigit():
+                cursor.execute("DELETE FROM certificate_history WHERE id = ?", (int(ident),))
+            if ident.startswith("PXL-CERT-") or "CERT" in ident:
+                cursor.execute("DELETE FROM certificate_history WHERE certificate_id = ?", (ident,))
+        conn.commit()
+        conn.close()
+        deleted = True
+    except Exception as exc:
+        print("LOCAL DB DELETE CERTIFICATE ERROR:", repr(exc))
+
+    return deleted
+
+
+def bulk_delete_records(items):
+    """
+    Safely delete multiple records from email_history, campus_ambassador_history, and certificate_history.
+    items is a list of dicts: [{'record_type': 'offer_letter'|'ca_letter'|'certificate', 'id': ..., 'document_id': ...}, ...]
+    Returns: dict with total_deleted, offer_letters_deleted, ca_letters_deleted, certificates_deleted.
+    """
+    if not items or not isinstance(items, list):
+        return {"success": False, "error": "No items provided for deletion.", "total_deleted": 0}
+
+    offer_items_to_delete = []
+    ca_items_to_delete = []
+    cert_items_to_delete = []
+
+    for item in items:
+        if isinstance(item, dict):
+            rec_type = str(item.get("record_type") or "").strip().lower()
+            rec_id = item.get("id") or item.get("record_id")
+            doc_id = item.get("document_id") or item.get("certificate_id") or item.get("offer_letter_id")
+            if not rec_id and not doc_id:
+                continue
+            if rec_type in ("ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+                ca_items_to_delete.append((rec_id, doc_id))
+            elif rec_type in ("offer_letter", "offer", "email_history"):
+                offer_items_to_delete.append((rec_id, doc_id))
+            elif rec_type in ("certificate", "cert", "certificate_history"):
+                cert_items_to_delete.append((rec_id, doc_id))
+        elif isinstance(item, (int, str)):
+            item_str = str(item).strip()
+            if item_str.startswith("PXL-CERT-") or item_str.startswith("CERT-"):
+                cert_items_to_delete.append((None, item_str))
+            else:
+                offer_items_to_delete.append((item_str, None))
+
+    deleted_offers = 0
+    deleted_cas = 0
+    deleted_certs = 0
+
+    for rec_id, doc_id in offer_items_to_delete:
+        if delete_offer_letter_record(rec_id, doc_id):
+            deleted_offers += 1
+
+    for rec_id, doc_id in ca_items_to_delete:
+        if delete_campus_ambassador_record(rec_id, doc_id):
+            deleted_cas += 1
+
+    for rec_id, doc_id in cert_items_to_delete:
+        if delete_certificate_record(rec_id, doc_id):
+            deleted_certs += 1
+
+    return {
+        "success": True,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs,
+        "offer_letters_deleted": deleted_offers,
+        "ca_letters_deleted": deleted_cas,
+        "certificates_deleted": deleted_certs,
+    }
+
+
+def delete_all_history_records(record_type="all"):
+    """
+    Safely purge all records from email_history, campus_ambassador_history, and/or certificate_history.
+    """
+    rec_type = str(record_type or "all").strip().lower()
+    sb = get_supabase_client()
+    deleted_offers = 0
+    deleted_cas = 0
+    deleted_certs = 0
+
+    # 1. Purge Offer Letters if requested
+    if rec_type in ("all", "offer_letter", "offer", "offer_letters"):
+        if sb:
+            try:
+                sb.table("email_history").delete().neq("id", -999999).execute()
+            except Exception as exc:
+                print("SUPABASE DELETE ALL OFFER LETTERS ERROR:", repr(exc))
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM email_history")
+            deleted_offers = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM email_history")
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB DELETE ALL OFFER LETTERS ERROR:", repr(exc))
+
+    # 2. Purge CA Offer Letters if requested
+    if rec_type in ("all", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+        if sb:
+            try:
+                sb.table("campus_ambassador_history").delete().neq("id", -999999).execute()
+            except Exception as exc:
+                print("SUPABASE DELETE ALL CA LETTERS ERROR:", repr(exc))
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM campus_ambassador_history")
+            deleted_cas = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM campus_ambassador_history")
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB DELETE ALL CA LETTERS ERROR:", repr(exc))
+
+    # 3. Purge Certificates if requested
+    if rec_type in ("all", "certificate", "cert", "certificate_history", "certificates"):
+        if sb:
+            try:
+                sb.table("certificate_history").delete().neq("id", -999999).execute()
+            except Exception as exc:
+                print("SUPABASE DELETE ALL CERTIFICATES ERROR:", repr(exc))
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT count(*) FROM certificate_history")
+            deleted_certs = cursor.fetchone()[0]
+            cursor.execute("DELETE FROM certificate_history")
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB DELETE ALL CERTIFICATES ERROR:", repr(exc))
+
+    return {
+        "success": True,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs,
+        "offer_letters_deleted": deleted_offers,
+        "ca_letters_deleted": deleted_cas,
+        "certificates_deleted": deleted_certs,
+    }
+
+
+# ============================================================
+# BULK JOB HISTORY
+# ============================================================
+def save_bulk_job_record(job_data):
+    job_id = job_data.get("job_id") or f"JOB-{uuid.uuid4().hex[:8].upper()}"
+    job_data["job_id"] = job_id
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if not job_data.get("created_at"):
+        job_data["created_at"] = now_iso
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO bulk_job_history (
+                job_id, job_type, total_records, successful_count,
+                failed_count, created_at, completed_at, status, details
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            job_id,
+            job_data.get("job_type", "certificate_bulk"),
+            job_data.get("total_records", 0),
+            job_data.get("successful_count", 0),
+            job_data.get("failed_count", 0),
+            job_data.get("created_at"),
+            job_data.get("completed_at"),
+            job_data.get("status", "completed"),
+            str(job_data.get("details", ""))
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        print("LOCAL DB SAVE BULK JOB ERROR:", repr(exc))
+
+    return job_id
+
+
+# ============================================================
+# UNIFIED HISTORY ENGINE
+# ============================================================
+def _fetch_all_raw_offer_letters():
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("email_history").select("*").order("created_at", desc=True).execute()
+            if res.data is not None:
+                return res.data
+        except Exception as exc:
+            print("SUPABASE FETCH OFFER LETTERS ERROR (using fallback):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM email_history ORDER BY id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        print("LOCAL DB FETCH OFFER LETTERS ERROR:", repr(exc))
+        return []
+
+
+def _fetch_all_raw_campus_ambassador():
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("campus_ambassador_history").select("*").order("created_at", desc=True).execute()
+            if res.data is not None:
+                return res.data
+        except Exception as exc:
+            print("SUPABASE FETCH CA ERROR (using fallback):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM campus_ambassador_history ORDER BY id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        print("LOCAL DB FETCH CA ERROR:", repr(exc))
+        return []
+
+
+def _fetch_all_raw_certificates():
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("certificate_history").select("*").order("created_at", desc=True).execute()
+            if res.data is not None:
+                return res.data
+        except Exception as exc:
+            print("SUPABASE FETCH CERTIFICATES ERROR (using fallback):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM certificate_history ORDER BY id DESC")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as exc:
+        print("LOCAL DB FETCH CERTIFICATES ERROR:", repr(exc))
+        return []
+
+
+def get_campus_ambassador_stats():
+    """
+    Get live success and failed counts querying ONLY campus_ambassador_history.
+    """
+    raw_cas = _fetch_all_raw_campus_ambassador()
+    successful = 0
+    failed = 0
+    for r in raw_cas:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        if status_raw in ("sent", "success", "successful"):
+            successful += 1
+        elif status_raw in ("failed", "failure", "error"):
+            failed += 1
+    return {
+        "success": True,
+        "successful": successful,
+        "failed": failed,
+        "total": successful + failed,
+    }
+
+
+def format_ist_timestamp(ts_str):
+    """Format ISO timestamp into Indian Standard Time (IST): DD Mon YYYY, hh:mm AM/PM."""
+    if not ts_str or not str(ts_str).strip() or str(ts_str).strip().lower() in ("none", "null", "-", "—", ""):
+        return "—"
+    ts_clean = str(ts_str).strip()
+    try:
+        if ts_clean.endswith("Z"):
+            dt = datetime.fromisoformat(ts_clean.replace("Z", "+00:00"))
+        elif "+" in ts_clean or ("-" in ts_clean[10:] and len(ts_clean) > 10):
+            dt = datetime.fromisoformat(ts_clean)
+        else:
+            dt = datetime.fromisoformat(ts_clean.replace(" ", "T")).replace(tzinfo=timezone.utc)
+
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        ist_dt = dt.astimezone(ist_tz)
+        return ist_dt.strftime("%d %b %Y, %I:%M %p")
+    except Exception:
+        return ts_clean[:19].replace("T", " ") if ts_clean else "—"
+
+
+def get_unified_history(
+    search="",
+    record_type="all",  # 'all', 'offer_letter', 'certificate'
+    status_filter="all",  # 'all', 'sent', 'failed', 'pending'
+    month_filter="",  # YYYY-MM
+    date_filter="all",  # 'today', 'week', 'month', 'custom'
+    date_from="",  # YYYY-MM-DD
+    date_to="",  # YYYY-MM-DD
+    page=1,
+    per_page=25,
+):
+    """
+    Unified query across Offer Letters and Certificates.
+    Returns:
+      - paginated list of unified records
+      - global summary counts (calculated on ALL matching database records)
+      - pagination metadata
+      - available dynamic months
+    """
+    raw_offers = _fetch_all_raw_offer_letters()
+    raw_cas = _fetch_all_raw_campus_ambassador()
+    raw_certs = _fetch_all_raw_certificates()
+
+    unified_list = []
+
+    # 1. Transform Offer Letters (from email_history)
+    for r in raw_offers:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        if status_raw in ("sent", "success", "successful"):
+            status_clean = "sent"
+        elif status_raw in ("failed", "failure", "error"):
+            status_clean = "failed"
+        else:
+            # Generated-only / unsent records must NOT inflate counts or sent history
+            continue
+
+        created_ts = str(r.get("created_at") or r.get("sent_at") or "")
+        sent_ts = str(r.get("sent_at") or "")
+        filename = r.get("pdf_filename") or ""
+        doc_id = r.get("offer_letter_id") or (Path(filename).stem if filename else f"OL-{r.get('id')}")
+
+        l_type = str(r.get("offer_letter_type") or "").strip().lower()
+        domain_val = str(r.get("internship_domain") or "").strip()
+        # Backward compatibility for legacy CA records prior to manual SQL migration
+        is_ca = l_type in ("campus_ambassador", "ca_letter") or domain_val.lower() == "campus ambassador"
+        rec_type = "ca_letter" if is_ca else "offer_letter"
+        type_lbl = "CA Offer Letter" if is_ca else "Offer Letter"
+        letter_disp = "Campus Ambassador" if is_ca else (r.get("offer_letter_type") or "Offer Letter")
+
+        unified_list.append({
+            "id": r.get("id"),
+            "record_type": rec_type,
+            "type_label": type_lbl,
+            "document_id": doc_id,
+            "offer_letter_id": doc_id,
+            "student_name": r.get("student_name") or "",
+            "student_email": r.get("student_email") or "",
+            "domain": r.get("internship_domain") or ("Campus Ambassador" if is_ca else ""),
+            "duration": r.get("internship_duration") or "",
+            "start_date": r.get("start_date") or "",
+            "end_date": r.get("end_date") or "",
+            "issued_date": "",
+            "letter_type": letter_disp,
+            "email_status": status_clean,
+            "sent_at": sent_ts,
+            "sent_at_display": format_ist_timestamp(sent_ts),
+            "created_at": created_ts,
+            "send_count": r.get("send_count") or 0,
+            "pdf_filename": filename,
+            "download_url": f"/generated/{filename}" if filename else "",
+            "error_message": r.get("error_message") or "",
+            "sort_key": created_ts or sent_ts or "0"
+        })
+
+    # 2. Transform Dedicated Campus Ambassador Letters (from campus_ambassador_history)
+    for r in raw_cas:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        if status_raw in ("sent", "success", "successful"):
+            status_clean = "sent"
+        elif status_raw in ("failed", "failure", "error"):
+            status_clean = "failed"
+        else:
+            continue
+
+        created_ts = str(r.get("created_at") or r.get("sent_at") or "")
+        sent_ts = str(r.get("sent_at") or "")
+        filename = r.get("pdf_filename") or ""
+        doc_id = r.get("offer_letter_id") or (Path(filename).stem if filename else f"CA-{r.get('id')}")
+
+        unified_list.append({
+            "id": r.get("id"),
+            "record_type": "ca_letter",
+            "type_label": "CA Offer Letter",
+            "document_id": doc_id,
+            "offer_letter_id": doc_id,
+            "student_name": r.get("student_name") or "",
+            "student_email": r.get("student_email") or "",
+            "domain": r.get("internship_domain") or "Campus Ambassador",
+            "duration": r.get("internship_duration") or "Tenure",
+            "start_date": r.get("start_date") or "",
+            "end_date": r.get("end_date") or "",
+            "issued_date": "",
+            "letter_type": "Campus Ambassador",
+            "email_status": status_clean,
+            "sent_at": sent_ts,
+            "sent_at_display": format_ist_timestamp(sent_ts),
+            "created_at": created_ts,
+            "send_count": r.get("send_count") or 0,
+            "pdf_filename": filename,
+            "download_url": f"/generated/{filename}" if filename else "",
+            "error_message": r.get("error_message") or "",
+            "sort_key": created_ts or sent_ts or "0"
+        })
+
+    # 3. Transform Certificates (from certificate_history)
+    for r in raw_certs:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        if status_raw in ("sent", "success", "successful"):
+            status_clean = "sent"
+        elif status_raw in ("failed", "failure", "error"):
+            status_clean = "failed"
+        else:
+            status_clean = "pending"
+
+        created_ts = str(r.get("created_at") or r.get("generated_date") or r.get("sent_at") or "")
+        sent_ts = str(r.get("sent_at") or "")
+        filename = r.get("pdf_filename") or ""
+        doc_id = r.get("certificate_id") or f"CERT-{r.get('id')}"
+
+        # On-demand download URL for certificates
+        cert_dl_url = f"/verify/{doc_id}/download" if doc_id else (f"/generated/{filename}" if filename else "")
+
+        unified_list.append({
+            "id": r.get("id"),
+            "record_type": "certificate",
+            "type_label": "Certificate",
+            "document_id": doc_id,
+            "certificate_id": doc_id,
+            "student_name": r.get("student_name") or "",
+            "student_email": r.get("student_email") or "",
+            "domain": r.get("internship_domain") or "",
+            "duration": "",
+            "start_date": r.get("start_date") or "",
+            "end_date": r.get("end_date") or "",
+            "issued_date": r.get("issued_date") or "",
+            "letter_type": "Certificate",
+            "email_status": status_clean,
+            "sent_at": sent_ts,
+            "sent_at_display": format_ist_timestamp(sent_ts),
+            "created_at": created_ts,
+            "send_count": r.get("send_count") or 0,
+            "pdf_filename": filename,
+            "download_url": cert_dl_url,
+            "error_message": r.get("error_message") or "",
+            "sort_key": created_ts or sent_ts or "0"
+        })
+
+    # Sort descending by sort_key
+    unified_list.sort(key=lambda x: x.get("sort_key", ""), reverse=True)
+
+    # Dynamic Month Extraction
+    month_set = set()
+    for rec in unified_list:
+        ts = str(rec.get("created_at") or rec.get("sent_at") or "")
+        if len(ts) >= 7 and ts[:4].isdigit() and ts[5:7].isdigit():
+            month_set.add(ts[:7])
+
+    now_ym = datetime.now().strftime("%Y-%m")
+    month_set.add(now_ym)
+    sorted_yms = sorted(list(month_set), reverse=True)
+    available_months = []
+    for ym in sorted_yms:
+        try:
+            dt_obj = datetime.strptime(ym, "%Y-%m")
+            available_months.append({"value": ym, "label": dt_obj.strftime("%B %Y")})
+        except Exception:
+            available_months.append({"value": ym, "label": ym})
+
+    # Apply Filters
+    records = list(unified_list)
+
+    # 1. Filter: Record Type
+    if record_type and record_type != "all":
+        rec_type_clean = record_type.strip().lower()
+        if rec_type_clean in ("offer", "offer_letter", "offer_letters"):
+            records = [r for r in records if r["record_type"] == "offer_letter"]
+        elif rec_type_clean in ("ca", "ca_letter", "ca_offer", "ca_offer_letter", "ca_offer_letters", "campus_ambassador"):
+            records = [r for r in records if r["record_type"] == "ca_letter"]
+        elif rec_type_clean in ("cert", "certificate", "certificates"):
+            records = [r for r in records if r["record_type"] == "certificate"]
+
+    # 2. Filter: Live Search
+    if search:
+        s_low = search.strip().lower()
+        records = [
+            r for r in records
+            if (
+                s_low in str(r.get("student_name") or "").lower()
+                or s_low in str(r.get("student_email") or "").lower()
+                or s_low in str(r.get("domain") or "").lower()
+                or s_low in str(r.get("document_id") or "").lower()
+            )
+        ]
+
+    # 3. Filter: Status
+    if status_filter and status_filter != "all":
+        st_clean = status_filter.strip().lower()
+        records = [r for r in records if r["email_status"] == st_clean]
+
+    # 4. Filter: Month (YYYY-MM)
+    if month_filter and month_filter != "all":
+        mf_clean = month_filter.strip()
+        records = [
+            r for r in records
+            if (
+                str(r.get("created_at") or "").startswith(mf_clean)
+                or str(r.get("sent_at") or "").startswith(mf_clean)
+            )
+        ]
+
+    # 5. Filter: Date Pre-sets & Custom Range
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if date_filter == "today":
+        records = [
+            r for r in records
+            if (
+                str(r.get("created_at") or "")[:10] == today_str
+                or str(r.get("sent_at") or "")[:10] == today_str
+            )
+        ]
+    elif date_filter == "week":
+        week_ago_str = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        records = [
+            r for r in records
+            if (
+                (str(r.get("created_at") or "")[:10] >= week_ago_str and str(r.get("created_at") or "")[:10] <= today_str)
+                or (str(r.get("sent_at") or "")[:10] >= week_ago_str and str(r.get("sent_at") or "")[:10] <= today_str)
+            )
+        ]
+    elif date_filter == "month":
+        records = [
+            r for r in records
+            if (
+                str(r.get("created_at") or "").startswith(now_ym)
+                or str(r.get("sent_at") or "").startswith(now_ym)
+            )
+        ]
+    elif date_from or date_to:
+        filtered_by_range = []
+        for r in records:
+            rec_date = str(r.get("created_at") or r.get("sent_at") or "")[:10]
+            if date_from and rec_date and rec_date < date_from:
+                continue
+            if date_to and rec_date and rec_date > date_to:
+                continue
+            filtered_by_range.append(r)
+        records = filtered_by_range
+
+    # Global Summary Counts calculated across ALL matching records (not just this page!)
+    total_records = len(records)
+    total_offer_letters = sum(1 for r in records if r["record_type"] == "offer_letter")
+    total_ca_letters = sum(1 for r in records if r["record_type"] == "ca_letter")
+    total_certificates = sum(1 for r in records if r["record_type"] == "certificate")
+    total_sent = sum(1 for r in records if r["email_status"] == "sent")
+    total_failed = sum(1 for r in records if r["email_status"] == "failed")
+    total_pending = sum(1 for r in records if r["email_status"] == "pending")
+
+    # Pagination
+    try:
+        per_page = int(per_page)
+        if per_page not in (10, 25, 50, 100, 200, 100000):
+            per_page = 25
+    except Exception:
+        per_page = 25
+
+    total_pages = max(1, (total_records + per_page - 1) // per_page)
+    try:
+        page = int(page)
+    except Exception:
+        page = 1
+    if page < 1:
+        page = 1
+    if page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_records = records[start_idx:end_idx]
+
+    return {
+        "records": paginated_records,
+        "all_filtered_records": records,
+        "total_records": total_records,
+        "total_offer_letters": total_offer_letters,
+        "total_ca_letters": total_ca_letters,
+        "total_certificates": total_certificates,
+        "total_sent": total_sent,
+        "total_failed": total_failed,
+        "total_pending": total_pending,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "available_months": available_months,
+    }

@@ -1,0 +1,1360 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bulk Campus Ambassador Offer Letters - Persevex</title>
+    <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper">
+                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
+            </div>
+            <div class="brand-text-block">
+                <div class="brand">
+                    persevex <span class="brand-llp">LLP</span>
+                </div>
+                <div class="tagline">
+                    LEARN, GROW, SUCCEED
+                </div>
+            </div>
+        </div>
+
+        <h1>
+            BULK CAMPUS AMBASSADOR <span class="highlight">OFFER LETTERS</span>
+        </h1>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador" class="nav-tab-link active" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/history" class="nav-tab-link" title="Unified History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </a>
+        </nav>
+
+        <div class="header-stats" aria-label="Email delivery summary">
+            <div class="header-stat success-stat" title="Total Successful Email Deliveries">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+                <span>
+                    Success:
+                    <strong id="successCount">{{ success_count }}</strong>
+                </span>
+            </div>
+
+            <div class="header-stat failed-stat" title="Total Failed Email Attempts">
+                <div class="stat-icon-wrapper">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+                <span>
+                    Failed:
+                    <strong id="failedCount">{{ failed_count }}</strong>
+                </span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- =====================================================
+         MODE SWITCHER: SINGLE vs BULK CA OFFER LETTER
+         ===================================================== -->
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <a href="/campus-ambassador/single" id="tabSingleCA" class="mode-pill-btn" style="text-decoration: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>Single CA Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador/bulk" id="tabBulkCA" class="mode-pill-btn active" style="text-decoration: none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>Bulk CA Offer Letters</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         MAIN BULK CA WORKSPACE
+         ===================================================== -->
+    <main class="ca-bulk-main">
+        <div class="ca-bulk-container">
+
+            <!-- BULK INPUT FORM CARD -->
+            <section class="card ca-bulk-form-card">
+                <div class="card-header">
+                    <h2>
+                        <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        Bulk Campus Ambassador Details
+                    </h2>
+                    <span class="section-tag">Strict Line-by-Line Matching</span>
+                </div>
+
+                <form id="caBulkForm" autocomplete="off" onsubmit="return false;">
+
+                    <!-- COMPACT EXCEL / CSV UPLOAD CONTROL -->
+                    <div class="bulk-upload-compact-bar">
+                        <div class="bulk-upload-btn-wrap">
+                            <label for="caFileInput" class="bulk-upload-btn">
+                                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                <span>📁 Upload Excel / CSV</span>
+                            </label>
+                            <input type="file" id="caFileInput" accept=".csv, .xlsx, .xls" style="display: none;">
+                            <span class="bulk-upload-formats-hint">Supported: <strong>.csv</strong> • <strong>.xlsx</strong> • <strong>.xls</strong></span>
+                        </div>
+                        <div id="bulkUploadInfo" class="bulk-upload-info-tag" style="display: none;"></div>
+                    </div>
+
+                    <!-- TWO-COLUMN TEXTAREA GRID -->
+                    <div class="bulk-textareas-grid">
+
+                        <!-- CANDIDATE NAMES -->
+                        <div class="bulk-field-wrapper">
+                            <div class="bulk-field-header">
+                                <label for="candidateNames">Candidate Names</label>
+                                <span class="bulk-counter-badge" id="namesCountBadge">
+                                    <span id="namesCount">0</span> names
+                                </span>
+                            </div>
+                            <textarea
+                                id="candidateNames"
+                                class="bulk-textarea"
+                                rows="12"
+                                placeholder="Paste Candidate Names here (one per line):&#10;Rahul Kumar&#10;Priya Sharma&#10;Arjun Reddy&#10;..."
+                                spellcheck="false"
+                                autocomplete="off"
+                            ></textarea>
+                            <div class="bulk-field-hint">One full candidate name per line.</div>
+                        </div>
+
+                        <!-- EMAIL ADDRESSES -->
+                        <div class="bulk-field-wrapper">
+                            <div class="bulk-field-header">
+                                <label for="emailAddresses">Email Addresses</label>
+                                <span class="bulk-counter-badge" id="emailsCountBadge">
+                                    <span id="emailsCount">0</span> emails
+                                </span>
+                            </div>
+                            <textarea
+                                id="emailAddresses"
+                                class="bulk-textarea"
+                                rows="12"
+                                placeholder="Paste Email Addresses here (one per line):&#10;rahul@gmail.com&#10;priya@gmail.com&#10;arjun@gmail.com&#10;..."
+                                spellcheck="false"
+                                autocomplete="off"
+                            ></textarea>
+                            <div class="bulk-field-hint">One email address per line, strictly matching line-by-line.</div>
+                        </div>
+
+                    </div>
+
+                    <!-- OFFER LETTER DATE (COMMON FIELD) -->
+                    <div class="form-group bulk-date-group">
+                        <label for="offerLetterDate">
+                            Offer Letter Date
+                        </label>
+                        <input
+                            id="offerLetterDate"
+                            type="date"
+                            required
+                            value="{{ today_iso }}"
+                        >
+                        <div class="hours-note" style="margin-top: 6px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            Defaults to today's date (<strong>{{ today_formatted }}</strong>). Applies to all Campus Ambassador letters in this bulk operation.
+                        </div>
+                    </div>
+
+                    <!-- MATCHING & VALIDATION SUMMARY BAR -->
+                    <div class="bulk-matching-summary" id="bulkMatchingBar">
+                        <div class="bulk-matching-stats">
+                            <div class="matching-stat-item">
+                                <span class="matching-stat-label">Candidates:</span>
+                                <strong class="matching-stat-val" id="summaryNamesCount">0</strong>
+                            </div>
+                            <div class="matching-stat-divider">•</div>
+                            <div class="matching-stat-item">
+                                <span class="matching-stat-label">Emails:</span>
+                                <strong class="matching-stat-val" id="summaryEmailsCount">0</strong>
+                            </div>
+                            <div class="matching-stat-divider">•</div>
+                            <div class="matching-stat-item">
+                                <span class="matching-stat-label">Matched:</span>
+                                <strong class="matching-stat-val" id="summaryMatchedCount">0</strong>
+                            </div>
+                        </div>
+                        <div class="bulk-match-status-badge" id="matchStatusBadge">
+                            Enter names and emails to begin
+                        </div>
+                    </div>
+
+                    <!-- EVALUATION RESULTS CARD -->
+                    <div id="evaluationSection" class="bulk-eval-card" style="display: none;">
+                        <div class="eval-card-header">
+                            <div class="eval-header-title">
+                                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                <span>Bulk CA Evaluation Results</span>
+                            </div>
+                            <span id="evalStatusBadge" class="eval-status-badge">Evaluation Passed</span>
+                        </div>
+
+                        <!-- Metrics Grid -->
+                        <div class="eval-metrics-grid">
+                            <div class="eval-metric-box">
+                                <span class="eval-metric-label">Total Rows</span>
+                                <strong class="eval-metric-val" id="evalTotalRows">0</strong>
+                            </div>
+                            <div class="eval-metric-box eval-box-valid">
+                                <span class="eval-metric-label">Valid Candidates</span>
+                                <strong class="eval-metric-val" id="evalValidCandidates">0</strong>
+                            </div>
+                            <div class="eval-metric-box eval-box-invalid">
+                                <span class="eval-metric-label">Invalid Rows</span>
+                                <strong class="eval-metric-val" id="evalInvalidRows">0</strong>
+                            </div>
+                            <div class="eval-metric-box">
+                                <span class="eval-metric-label">Emails Found</span>
+                                <strong class="eval-metric-val" id="evalEmailsFound">0</strong>
+                            </div>
+                            <div class="eval-metric-box eval-box-matched">
+                                <span class="eval-metric-label">Matched</span>
+                                <strong class="eval-metric-val" id="evalMatched">0</strong>
+                            </div>
+                        </div>
+
+                        <!-- Duplicate Warning Banner -->
+                        <div id="evalDuplicateBanner" class="eval-duplicate-banner" style="display: none;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            <span id="evalDuplicateText">Notice: Duplicate candidate records detected. Uploaded row order preserved.</span>
+                        </div>
+
+                        <!-- Invalid Rows Table -->
+                        <div id="evalInvalidSection" class="eval-invalid-table-wrap" style="display: none;">
+                            <div class="eval-invalid-title">Invalid Rows Breakdown:</div>
+                            <table class="eval-invalid-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70px;">Row #</th>
+                                        <th>Candidate Name</th>
+                                        <th>Email Address</th>
+                                        <th>Reason / Error</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="evalInvalidTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ERROR BANNER -->
+                    <div id="bulkErrorBanner" class="bulk-error-alert" style="display: none;">
+                        <svg class="bulk-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <div class="bulk-alert-text" id="bulkErrorMessage">
+                            Number of candidate names and email addresses must be the same. Please check your lists.
+                        </div>
+                    </div>
+
+                    <!-- 3-STEP ACTION BUTTONS BAR -->
+                    <div class="bulk-form-actions">
+                        <!-- STEP 1: EVALUATE -->
+                        <button
+                            type="button"
+                            id="evaluateBtn"
+                            class="bulk-action-btn evaluate-btn"
+                        >
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span>Evaluate Candidates</span>
+                        </button>
+
+                        <!-- STEP 2: GENERATE -->
+                        <button
+                            type="button"
+                            id="generateBtn"
+                            class="bulk-action-btn generate-btn"
+                            disabled
+                        >
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            <span>Generate CA Letters</span>
+                        </button>
+
+                        <!-- STEP 3: SEND -->
+                        <button
+                            type="button"
+                            id="sendBtn"
+                            class="bulk-action-btn send-btn"
+                            disabled
+                        >
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            <span>Send CA Letters</span>
+                        </button>
+
+                        <!-- CLEAR -->
+                        <button
+                            type="button"
+                            id="clearListsBtn"
+                            class="secondary"
+                            onclick="clearBulkInputs()"
+                        >
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            <span>Clear Lists</span>
+                        </button>
+                    </div>
+
+                </form>
+            </section>
+
+            <!-- =====================================================
+                 REAL-TIME PROGRESS SECTION
+                 ===================================================== -->
+            <section id="bulkProgressSection" class="card ca-bulk-progress-card" style="display: none;">
+                <div class="card-header">
+                    <h2>
+                        <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Bulk CA Offer Letter Progress
+                    </h2>
+                    <span class="section-tag" id="progressStatusTag">Processing...</span>
+                </div>
+
+                <!-- PROGRESS STATS GRID -->
+                <div class="bulk-stats-grid">
+                    <div class="bulk-stat-box stat-total">
+                        <div class="stat-box-title">Total</div>
+                        <div class="stat-box-num" id="statTotal">0</div>
+                    </div>
+                    <div class="bulk-stat-box stat-completed">
+                        <div class="stat-box-title" id="statCompletedLabel">Completed</div>
+                        <div class="stat-box-num" id="statCompleted">0</div>
+                    </div>
+                    <div class="bulk-stat-box stat-sent">
+                        <div class="stat-box-title" id="statSuccessLabel">Success</div>
+                        <div class="stat-box-num" id="statSent">0</div>
+                    </div>
+                    <div class="bulk-stat-box stat-failed">
+                        <div class="stat-box-title">Failed</div>
+                        <div class="stat-box-num" id="statFailed">0</div>
+                    </div>
+                    <div class="bulk-stat-box stat-remaining">
+                        <div class="stat-box-title">Remaining</div>
+                        <div class="stat-box-num" id="statRemaining">0</div>
+                    </div>
+                </div>
+
+                <!-- PROGRESS BAR -->
+                <div class="bulk-progress-bar-container">
+                    <div class="bulk-progress-bar-track">
+                        <div class="bulk-progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="bulk-progress-bar-labels">
+                        <span id="progressPercentageLabel">0%</span>
+                        <span id="progressCountLabel">0 / 0 processed</span>
+                    </div>
+                </div>
+
+                <!-- CURRENT CANDIDATE ACTIVE BOX -->
+                <div class="bulk-current-candidate-card" id="currentCandidateBox">
+                    <div class="current-candidate-spinner">
+                        <span class="spinner-ring"></span>
+                    </div>
+                    <div class="current-candidate-info">
+                        <div class="current-candidate-label" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span>Currently Processing:</span>
+                            <span id="currentCandidateStep" style="background: rgba(37, 99, 235, 0.1); color: var(--brand-primary); padding: 2px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 700;">Generating...</span>
+                        </div>
+                        <div class="current-candidate-name" id="currentCandidateName">Starting...</div>
+                        <div class="current-candidate-email" id="currentCandidateEmail"></div>
+                    </div>
+                </div>
+
+                <!-- COMPLETION SUMMARY BANNER -->
+                <div id="bulkCompletionCard" class="bulk-completion-card" style="display: none;">
+                    <div class="completion-icon-wrapper" id="completionIconWrapper">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                    <div class="completion-details">
+                        <h3 id="completionTitle">Generation Complete</h3>
+                        <p id="completionMessage">All offer letters processed.</p>
+                    </div>
+                </div>
+
+                <!-- FAILED CANDIDATES SECTION -->
+                <div id="bulkFailedSection" class="bulk-failed-container" style="display: none;">
+                    <div class="bulk-failed-header">
+                        <div class="failed-header-title">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            <span>Failed Records (<span id="failedListCount">0</span>)</span>
+                        </div>
+                        <button type="button" id="retryFailedBtn" class="retry-failed-btn" onclick="retryFailedRecords()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                            <span>Retry Failed (<span id="retryBtnCount">0</span>)</span>
+                        </button>
+                    </div>
+
+                    <div class="failed-table-wrapper">
+                        <table class="failed-records-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>Candidate Name</th>
+                                    <th>Email Address</th>
+                                    <th>Reason / Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="failedTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+        </div>
+    </main>
+
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<!-- BULK JAVASCRIPT LOGIC -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // Inputs & Upload
+    const fileInput = document.getElementById("caFileInput");
+    const bulkUploadInfo = document.getElementById("bulkUploadInfo");
+    const namesInput = document.getElementById("candidateNames");
+    const emailsInput = document.getElementById("emailAddresses");
+    const dateInput = document.getElementById("offerLetterDate");
+
+    // Action Buttons
+    const evaluateBtn = document.getElementById("evaluateBtn");
+    const generateBtn = document.getElementById("generateBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const clearListsBtn = document.getElementById("clearListsBtn");
+
+    // Badges & Counters
+    const namesCountBadge = document.getElementById("namesCount");
+    const emailsCountBadge = document.getElementById("emailsCount");
+    const summaryNamesCount = document.getElementById("summaryNamesCount");
+    const summaryEmailsCount = document.getElementById("summaryEmailsCount");
+    const summaryMatchedCount = document.getElementById("summaryMatchedCount");
+    const matchStatusBadge = document.getElementById("matchStatusBadge");
+    const bulkErrorBanner = document.getElementById("bulkErrorBanner");
+    const bulkErrorMessage = document.getElementById("bulkErrorMessage");
+    const toastContainer = document.getElementById("toastContainer");
+
+    // Evaluation Card Elements
+    const evaluationSection = document.getElementById("evaluationSection");
+    const evalStatusBadge = document.getElementById("evalStatusBadge");
+    const evalTotalRows = document.getElementById("evalTotalRows");
+    const evalValidCandidates = document.getElementById("evalValidCandidates");
+    const evalInvalidRows = document.getElementById("evalInvalidRows");
+    const evalEmailsFound = document.getElementById("evalEmailsFound");
+    const evalMatched = document.getElementById("evalMatched");
+    const evalDuplicateBanner = document.getElementById("evalDuplicateBanner");
+    const evalDuplicateText = document.getElementById("evalDuplicateText");
+    const evalInvalidSection = document.getElementById("evalInvalidSection");
+    const evalInvalidTableBody = document.getElementById("evalInvalidTableBody");
+
+    // Progress Elements
+    const progressSection = document.getElementById("bulkProgressSection");
+    const progressStatusTag = document.getElementById("progressStatusTag");
+    const statTotalEl = document.getElementById("statTotal");
+    const statCompletedLabel = document.getElementById("statCompletedLabel");
+    const statCompletedEl = document.getElementById("statCompleted");
+    const statSuccessLabel = document.getElementById("statSuccessLabel");
+    const statSentEl = document.getElementById("statSent");
+    const statFailedEl = document.getElementById("statFailed");
+    const statRemainingEl = document.getElementById("statRemaining");
+    const progressBarFill = document.getElementById("progressBarFill");
+    const progressPercentageLabel = document.getElementById("progressPercentageLabel");
+    const progressCountLabel = document.getElementById("progressCountLabel");
+    const currentCandidateBox = document.getElementById("currentCandidateBox");
+    const currentCandidateName = document.getElementById("currentCandidateName");
+    const currentCandidateEmail = document.getElementById("currentCandidateEmail");
+    const currentCandidateStep = document.getElementById("currentCandidateStep");
+
+    // Completion and Failed elements
+    const bulkCompletionCard = document.getElementById("bulkCompletionCard");
+    const completionTitle = document.getElementById("completionTitle");
+    const completionMessage = document.getElementById("completionMessage");
+    const bulkFailedSection = document.getElementById("bulkFailedSection");
+    const failedTableBody = document.getElementById("failedTableBody");
+    const failedListCount = document.getElementById("failedListCount");
+    const retryBtnCount = document.getElementById("retryBtnCount");
+    const retryFailedBtn = document.getElementById("retryFailedBtn");
+
+    // State Variables
+    let isProcessing = false;
+    let isEvaluated = false;
+    let validCandidatesList = [];
+    let generatedRecordsList = [];
+    let failedRecordsList = [];
+    let failedPhase = "generation"; // "generation" or "send"
+
+    function showToast(text, type = "success") {
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                ${type === "success"
+                    ? '<polyline points="20 6 9 17 4 12"></polyline>'
+                    : '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>'}
+            </svg>
+            <div class="toast-text">${text}</div>
+            <button type="button" class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add("fade-out");
+            setTimeout(() => toast.remove(), 400);
+        }, 5000);
+    }
+
+    function parseLines(raw) {
+        if (!raw) return [];
+        return raw.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0);
+    }
+
+    function isValidEmail(email) {
+        if (!email) return false;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function updateLiveSummary() {
+        if (isProcessing) return;
+
+        const names = parseLines(namesInput.value);
+        const emails = parseLines(emailsInput.value);
+
+        const namesCount = names.length;
+        const emailsCount = emails.length;
+
+        namesCountBadge.textContent = namesCount;
+        emailsCountBadge.textContent = emailsCount;
+        summaryNamesCount.textContent = namesCount;
+        summaryEmailsCount.textContent = emailsCount;
+
+        // Reset evaluation and generate/send if text changed
+        if (isEvaluated) {
+            isEvaluated = false;
+            generateBtn.disabled = true;
+            sendBtn.disabled = true;
+            evaluationSection.style.display = "none";
+        }
+
+        if (namesCount === 0 && emailsCount === 0) {
+            summaryMatchedCount.textContent = "0";
+            matchStatusBadge.className = "bulk-match-status-badge";
+            matchStatusBadge.textContent = "Enter names and emails to begin";
+            bulkErrorBanner.style.display = "none";
+            return;
+        }
+
+        if (namesCount !== emailsCount) {
+            summaryMatchedCount.textContent = "0";
+            matchStatusBadge.className = "bulk-match-status-badge badge-mismatch";
+            matchStatusBadge.textContent = `⚠ Mismatch: ${namesCount} names vs ${emailsCount} emails`;
+            bulkErrorMessage.textContent = `Number of candidate names (${namesCount}) and email addresses (${emailsCount}) must be the same. Please check your lists.`;
+            bulkErrorBanner.style.display = "flex";
+            return;
+        }
+
+        // Names == Emails > 0
+        summaryMatchedCount.textContent = namesCount;
+        matchStatusBadge.className = "bulk-match-status-badge badge-matched";
+        matchStatusBadge.textContent = `✓ ${namesCount} / ${namesCount} records aligned`;
+        bulkErrorBanner.style.display = "none";
+    }
+
+    namesInput.addEventListener("input", updateLiveSummary);
+    emailsInput.addEventListener("input", updateLiveSummary);
+
+    // =====================================================
+    // 1. FILE UPLOAD HANDLER
+    // =====================================================
+    fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!["csv", "xlsx", "xls"].includes(ext)) {
+            showToast("Please upload a CSV or Excel file (.csv, .xlsx, .xls).", "error");
+            fileInput.value = "";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            showToast(`Uploading and reading ${file.name}...`, "info");
+            const response = await fetch("/api/campus-ambassador/parse-upload", {
+                method: "POST",
+                body: formData
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                const errorMsg = data.error || "Failed to read file.";
+                bulkErrorMessage.textContent = errorMsg;
+                bulkErrorBanner.style.display = "flex";
+                showToast(errorMsg, "error");
+                bulkUploadInfo.style.display = "none";
+                fileInput.value = "";
+                return;
+            }
+
+            // Populate existing textareas
+            namesInput.value = data.names_text || "";
+            emailsInput.value = data.emails_text || "";
+
+            // Show compact upload info tag
+            bulkUploadInfo.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span><strong>${escapeHtml(data.filename)}</strong> • ${data.total_rows} rows detected • ${data.valid_count} names • ${data.valid_count} emails • ${data.valid_count} matched</span>
+            `;
+            bulkUploadInfo.style.display = "inline-flex";
+            bulkErrorBanner.style.display = "none";
+
+            updateLiveSummary();
+
+            // Run evaluation display using server parsed data
+            displayEvaluationResults({
+                total_rows: data.total_rows,
+                valid_count: data.valid_count,
+                invalid_count: data.invalid_count,
+                duplicate_count: data.duplicate_count,
+                candidates: data.candidates || [],
+                invalid_rows: data.invalid_rows || []
+            });
+
+            showToast(`Loaded ${data.valid_count} candidate records from ${file.name}!`, "success");
+
+        } catch (err) {
+            showToast("Network error uploading file: " + err.message, "error");
+        } finally {
+            fileInput.value = "";
+        }
+    });
+
+    // =====================================================
+    // 2. EVALUATION LOGIC
+    // =====================================================
+    function runClientEvaluation() {
+        const names = parseLines(namesInput.value);
+        const emails = parseLines(emailsInput.value);
+
+        if (names.length === 0 || emails.length === 0) {
+            showToast("Please provide candidate names and email addresses first.", "error");
+            evaluationSection.style.display = "none";
+            generateBtn.disabled = true;
+            sendBtn.disabled = true;
+            return;
+        }
+
+        if (names.length !== emails.length) {
+            bulkErrorMessage.textContent = `Candidate names count (${names.length}) does not match email addresses count (${emails.length}). Line-by-line matching requires equal counts.`;
+            bulkErrorBanner.style.display = "flex";
+            showToast("Line count mismatch!", "error");
+
+            displayEvaluationResults({
+                total_rows: Math.max(names.length, emails.length),
+                valid_count: 0,
+                invalid_count: Math.abs(names.length - emails.length),
+                duplicate_count: 0,
+                candidates: [],
+                invalid_rows: [{
+                    row_num: "—",
+                    name: `${names.length} names provided`,
+                    email: `${emails.length} emails provided`,
+                    reason: "Count mismatch: Candidate names and emails must have equal number of lines."
+                }],
+                forceFail: true
+            });
+            return;
+        }
+
+        const validCandidates = [];
+        const invalidRows = [];
+        const seenPairs = new Set();
+        let duplicateCount = 0;
+
+        for (let i = 0; i < names.length; i++) {
+            const rowNum = i + 1;
+            const rawName = names[i].trim();
+            const rawEmail = emails[i].trim();
+
+            const isNameOk = rawName.length > 0;
+            const isEmailOk = isValidEmail(rawEmail);
+
+            if (isNameOk && isEmailOk) {
+                const pair = `${rawName.toLowerCase()}|${rawEmail.toLowerCase()}`;
+                if (seenPairs.has(pair)) {
+                    duplicateCount++;
+                } else {
+                    seenPairs.add(pair);
+                }
+
+                validCandidates.push({
+                    row_num: rowNum,
+                    name: rawName,
+                    email: rawEmail.toLowerCase()
+                });
+            } else {
+                const reasons = [];
+                if (!isNameOk) reasons.push("Candidate Name is missing");
+                if (!rawEmail) reasons.push("Email address is missing");
+                else if (!isEmailOk) reasons.push(`Invalid email format: '${rawEmail}'`);
+
+                invalidRows.push({
+                    row_num: rowNum,
+                    name: rawName || "—",
+                    email: rawEmail || "—",
+                    reason: reasons.join(" & ")
+                });
+            }
+        }
+
+        displayEvaluationResults({
+            total_rows: names.length,
+            valid_count: validCandidates.length,
+            invalid_count: invalidRows.length,
+            duplicate_count: duplicateCount,
+            candidates: validCandidates,
+            invalid_rows: invalidRows
+        });
+    }
+
+    function displayEvaluationResults(results) {
+        const isPassed = !results.forceFail && results.invalid_count === 0 && results.valid_count > 0;
+        isEvaluated = isPassed;
+
+        evalTotalRows.textContent = results.total_rows;
+        evalValidCandidates.textContent = results.valid_count;
+        evalInvalidRows.textContent = results.invalid_count;
+        evalEmailsFound.textContent = results.valid_count;
+        evalMatched.textContent = results.valid_count;
+
+        if (isPassed) {
+            evalStatusBadge.className = "eval-status-badge";
+            evalStatusBadge.textContent = `✓ Evaluation Passed (${results.valid_count} Valid)`;
+            evalInvalidSection.style.display = "none";
+            generateBtn.disabled = false;
+            sendBtn.disabled = true;
+            validCandidatesList = results.candidates;
+        } else {
+            evalStatusBadge.className = "eval-status-badge eval-badge-failed";
+            evalStatusBadge.textContent = `⚠ Evaluation Failed (${results.invalid_count} Invalid)`;
+            generateBtn.disabled = true;
+            sendBtn.disabled = true;
+            validCandidatesList = [];
+
+            // Populate invalid table
+            evalInvalidTableBody.innerHTML = "";
+            (results.invalid_rows || []).forEach(inv => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight: 700; color: #dc2626;">${inv.row_num}</td>
+                    <td style="font-weight: 600;">${escapeHtml(inv.name)}</td>
+                    <td style="color: var(--brand-primary);">${escapeHtml(inv.email)}</td>
+                    <td style="color: #991b1b;"><span class="failed-reason-badge">${escapeHtml(inv.reason)}</span></td>
+                `;
+                evalInvalidTableBody.appendChild(tr);
+            });
+            evalInvalidSection.style.display = "block";
+        }
+
+        // Duplicate Banner
+        if (results.duplicate_count > 0) {
+            evalDuplicateText.textContent = `Notice: ${results.duplicate_count} duplicate candidate record(s) detected. Uploaded row order is preserved.`;
+            evalDuplicateBanner.style.display = "flex";
+        } else {
+            evalDuplicateBanner.style.display = "none";
+        }
+
+        evaluationSection.style.display = "block";
+        evaluationSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    evaluateBtn.addEventListener("click", () => {
+        if (isProcessing) return;
+        runClientEvaluation();
+    });
+
+    // =====================================================
+    // 3. GENERATION HANDLER (PDF ONLY, NO EMAILS SENT)
+    // =====================================================
+    generateBtn.addEventListener("click", async () => {
+        if (isProcessing || !isEvaluated || validCandidatesList.length === 0) return;
+
+        const letterDate = dateInput.value.trim();
+        if (!letterDate) {
+            showToast("Please select an Offer Letter Date.", "error");
+            return;
+        }
+
+        const confirmGen = confirm(`Generate ${validCandidatesList.length} Campus Ambassador Offer Letter PDFs?\n\nNote: No emails will be sent during this step.`);
+        if (!confirmGen) return;
+
+        await runGenerationProcessing(validCandidatesList, letterDate);
+    });
+
+    async function runGenerationProcessing(candidates, letterDate) {
+        isProcessing = true;
+        failedPhase = "generation";
+        evaluateBtn.disabled = true;
+        generateBtn.disabled = true;
+        sendBtn.disabled = true;
+        clearListsBtn.disabled = true;
+        namesInput.disabled = true;
+        emailsInput.disabled = true;
+        dateInput.disabled = true;
+
+        progressSection.style.display = "block";
+        progressSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        bulkCompletionCard.style.display = "none";
+        bulkFailedSection.style.display = "none";
+
+        statCompletedLabel.textContent = "Generated";
+        statSuccessLabel.textContent = "PDFs Ready";
+
+        const total = candidates.length;
+        let completed = 0;
+        let generated = 0;
+        let failed = 0;
+        const generatedItems = [];
+        const failedItems = [];
+
+        statTotalEl.textContent = total;
+        statCompletedEl.textContent = "0";
+        statSentEl.textContent = "0";
+        statFailedEl.textContent = "0";
+        statRemainingEl.textContent = total;
+        progressBarFill.style.width = "0%";
+        progressPercentageLabel.textContent = "0%";
+        progressCountLabel.textContent = `0 / ${total} generated`;
+        progressStatusTag.textContent = "Generating PDFs...";
+        currentCandidateBox.style.display = "flex";
+
+        for (let i = 0; i < total; i++) {
+            const item = candidates[i];
+            const candidateNum = i + 1;
+
+            currentCandidateStep.textContent = "Generating...";
+            currentCandidateStep.style.background = "rgba(124, 58, 237, 0.1)";
+            currentCandidateStep.style.color = "#7c3aed";
+            currentCandidateName.textContent = `${item.name} [${candidateNum}/${total}]`;
+            currentCandidateEmail.textContent = item.email;
+
+            try {
+                const response = await fetch("/api/campus-ambassador/bulk-generate-item", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        student_name: item.name,
+                        student_email: item.email,
+                        date: letterDate
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    generated++;
+                    generatedItems.push({
+                        index: item.row_num || candidateNum,
+                        name: item.name,
+                        email: item.email,
+                        date: letterDate,
+                        filename: result.filename
+                    });
+                } else {
+                    failed++;
+                    failedItems.push({
+                        index: item.row_num || candidateNum,
+                        name: item.name,
+                        email: item.email,
+                        date: letterDate,
+                        error: result.error || `HTTP ${response.status} Error`
+                    });
+                }
+            } catch (err) {
+                failed++;
+                failedItems.push({
+                    index: item.row_num || candidateNum,
+                    name: item.name,
+                    email: item.email,
+                    date: letterDate,
+                    error: err.message || "Network Error"
+                });
+            }
+
+            completed++;
+            const remaining = total - completed;
+            const pct = Math.round((completed / total) * 100);
+
+            statCompletedEl.textContent = completed;
+            statSentEl.textContent = generated;
+            statFailedEl.textContent = failed;
+            statRemainingEl.textContent = remaining;
+            progressBarFill.style.width = `${pct}%`;
+            progressPercentageLabel.textContent = `${pct}%`;
+            progressCountLabel.textContent = `${completed} / ${total} generated`;
+        }
+
+        isProcessing = false;
+        evaluateBtn.disabled = false;
+        clearListsBtn.disabled = false;
+        namesInput.disabled = false;
+        emailsInput.disabled = false;
+        dateInput.disabled = false;
+
+        currentCandidateBox.style.display = "none";
+        progressStatusTag.textContent = "Generation Complete";
+
+        generatedRecordsList = generatedItems;
+        failedRecordsList = failedItems;
+
+        // Render Failed Table if any
+        if (failedRecordsList.length > 0) {
+            failedTableBody.innerHTML = "";
+            failedRecordsList.forEach((fRec, idx) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
+                    <td style="font-weight: 700; color: var(--text-main);">${escapeHtml(fRec.name)}</td>
+                    <td style="color: var(--brand-primary);">${escapeHtml(fRec.email)}</td>
+                    <td><span class="failed-reason-badge" title="${escapeHtml(fRec.error)}">${escapeHtml(fRec.error)}</span></td>
+                `;
+                failedTableBody.appendChild(tr);
+            });
+            failedListCount.textContent = failedRecordsList.length;
+            retryBtnCount.textContent = failedRecordsList.length;
+            bulkFailedSection.style.display = "block";
+            if (retryFailedBtn) retryFailedBtn.disabled = false;
+        } else {
+            bulkFailedSection.style.display = "none";
+        }
+
+        // Render Completion Banner & Enable Send Button
+        bulkCompletionCard.style.display = "flex";
+        if (failed === 0) {
+            bulkCompletionCard.className = "bulk-completion-card success-completion";
+            completionTitle.textContent = "Generation Complete";
+            completionMessage.textContent = `Total: ${total} • Generated: ${generated} • Failed: 0. Ready to send emails.`;
+            showToast(`All ${total} CA Offer Letters generated! Click 'Send CA Letters' to dispatch.`, "success");
+            sendBtn.disabled = false;
+        } else {
+            bulkCompletionCard.className = "bulk-completion-card warning-completion";
+            completionTitle.textContent = "Generation Complete with Failures";
+            completionMessage.textContent = `Total: ${total} • Generated: ${generated} • Failed: ${failed}. You can retry failed records or send the generated letters.`;
+            showToast(`${generated} generated, ${failed} failed.`, "error");
+            if (generated > 0) {
+                sendBtn.disabled = false;
+            }
+        }
+    }
+
+    // =====================================================
+    // 4. EMAIL SENDING HANDLER (EXPLICIT USER CLICK)
+    // =====================================================
+    sendBtn.addEventListener("click", async () => {
+        if (isProcessing || generatedRecordsList.length === 0) return;
+
+        const confirmSend = confirm(`Are you sure you want to send CA Offer Letter emails to ${generatedRecordsList.length} candidate(s)?`);
+        if (!confirmSend) return;
+
+        await runEmailSending(generatedRecordsList);
+    });
+
+    async function runEmailSending(recordsToSend, isRetry = false) {
+        isProcessing = true;
+        failedPhase = "send";
+        evaluateBtn.disabled = true;
+        generateBtn.disabled = true;
+        sendBtn.disabled = true;
+        clearListsBtn.disabled = true;
+        namesInput.disabled = true;
+        emailsInput.disabled = true;
+        dateInput.disabled = true;
+        if (retryFailedBtn) retryFailedBtn.disabled = true;
+
+        progressSection.style.display = "block";
+        progressSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        bulkCompletionCard.style.display = "none";
+
+        statCompletedLabel.textContent = "Processed";
+        statSuccessLabel.textContent = "Sent";
+
+        const total = recordsToSend.length;
+        let completed = 0;
+        let sent = 0;
+        let failed = 0;
+        const currentFailed = [];
+
+        if (!isRetry) {
+            failedRecordsList = [];
+            failedTableBody.innerHTML = "";
+            bulkFailedSection.style.display = "none";
+        }
+
+        statTotalEl.textContent = total;
+        statCompletedEl.textContent = "0";
+        statSentEl.textContent = "0";
+        statFailedEl.textContent = "0";
+        statRemainingEl.textContent = total;
+        progressBarFill.style.width = "0%";
+        progressPercentageLabel.textContent = "0%";
+        progressCountLabel.textContent = `0 / ${total} sent`;
+        progressStatusTag.textContent = isRetry ? "Retrying Emails..." : "Sending Emails...";
+        currentCandidateBox.style.display = "flex";
+
+        const successCountEl = document.getElementById("successCount");
+        const failedCountEl = document.getElementById("failedCount");
+
+        for (let i = 0; i < total; i++) {
+            const item = recordsToSend[i];
+            const candidateNum = i + 1;
+
+            currentCandidateStep.textContent = "Sending...";
+            currentCandidateStep.style.background = "rgba(5, 150, 105, 0.1)";
+            currentCandidateStep.style.color = "#059669";
+            currentCandidateName.textContent = `${item.name} [${candidateNum}/${total}]`;
+            currentCandidateEmail.textContent = item.email;
+
+            try {
+                const response = await fetch("/api/campus-ambassador/bulk-send-item", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        filename: item.filename,
+                        student_name: item.name,
+                        student_email: item.email,
+                        date: item.date
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    sent++;
+                    if (successCountEl) {
+                        successCountEl.textContent = (parseInt(successCountEl.textContent, 10) || 0) + 1;
+                        successCountEl.classList.remove("count-pulse");
+                        void successCountEl.offsetWidth;
+                        successCountEl.classList.add("count-pulse");
+                    }
+                } else {
+                    failed++;
+                    currentFailed.push({
+                        index: item.index || candidateNum,
+                        name: item.name,
+                        email: item.email,
+                        date: item.date,
+                        filename: item.filename,
+                        error: result.error || `HTTP ${response.status} Error`
+                    });
+                    if (failedCountEl) {
+                        failedCountEl.textContent = (parseInt(failedCountEl.textContent, 10) || 0) + 1;
+                        failedCountEl.classList.remove("count-pulse");
+                        void failedCountEl.offsetWidth;
+                        failedCountEl.classList.add("count-pulse");
+                    }
+                }
+            } catch (err) {
+                failed++;
+                currentFailed.push({
+                    index: item.index || candidateNum,
+                    name: item.name,
+                    email: item.email,
+                    date: item.date,
+                    filename: item.filename,
+                    error: err.message || "Network/Server Connection Error"
+                });
+                if (failedCountEl) {
+                    failedCountEl.textContent = (parseInt(failedCountEl.textContent, 10) || 0) + 1;
+                    failedCountEl.classList.remove("count-pulse");
+                    void failedCountEl.offsetWidth;
+                    failedCountEl.classList.add("count-pulse");
+                }
+            }
+
+            completed++;
+            const remaining = total - completed;
+            const pct = Math.round((completed / total) * 100);
+
+            statCompletedEl.textContent = completed;
+            statSentEl.textContent = sent;
+            statFailedEl.textContent = failed;
+            statRemainingEl.textContent = remaining;
+            progressBarFill.style.width = `${pct}%`;
+            progressPercentageLabel.textContent = `${pct}%`;
+            progressCountLabel.textContent = `${completed} / ${total} sent`;
+        }
+
+        isProcessing = false;
+        evaluateBtn.disabled = false;
+        clearListsBtn.disabled = false;
+        namesInput.disabled = false;
+        emailsInput.disabled = false;
+        dateInput.disabled = false;
+
+        currentCandidateBox.style.display = "none";
+        progressStatusTag.textContent = "Delivery Finished";
+
+        failedRecordsList = currentFailed;
+
+        // Render Failed Table if any
+        if (failedRecordsList.length > 0) {
+            failedTableBody.innerHTML = "";
+            failedRecordsList.forEach((fRec, idx) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: var(--text-muted);">${idx + 1}</td>
+                    <td style="font-weight: 700; color: var(--text-main);">${escapeHtml(fRec.name)}</td>
+                    <td style="color: var(--brand-primary);">${escapeHtml(fRec.email)}</td>
+                    <td><span class="failed-reason-badge" title="${escapeHtml(fRec.error)}">${escapeHtml(fRec.error)}</span></td>
+                `;
+                failedTableBody.appendChild(tr);
+            });
+            failedListCount.textContent = failedRecordsList.length;
+            retryBtnCount.textContent = failedRecordsList.length;
+            bulkFailedSection.style.display = "block";
+            if (retryFailedBtn) retryFailedBtn.disabled = false;
+        } else {
+            bulkFailedSection.style.display = "none";
+        }
+
+        // Render Completion Card
+        bulkCompletionCard.style.display = "flex";
+        if (failed === 0) {
+            bulkCompletionCard.className = "bulk-completion-card success-completion";
+            completionTitle.textContent = "Bulk CA Offer Letters Delivered Successfully!";
+            completionMessage.textContent = `All ${total} Campus Ambassador offer letters were successfully delivered.`;
+            showToast(`All ${total} CA offer letters sent successfully!`, "success");
+        } else {
+            bulkCompletionCard.className = "bulk-completion-card warning-completion";
+            completionTitle.textContent = "Bulk CA Delivery Completed with Failures";
+            completionMessage.textContent = `${sent} sent successfully, ${failed} failed out of ${total} total. You can retry the failed records below.`;
+            showToast(`${sent} sent, ${failed} failed. Check the failed list below.`, "error");
+        }
+    }
+
+    // =====================================================
+    // 5. RETRY FAILED HANDLER
+    // =====================================================
+    window.retryFailedRecords = async function() {
+        if (isProcessing || failedRecordsList.length === 0) return;
+
+        const confirmRetry = confirm(`Retry ${failedRecordsList.length} failed record(s)?`);
+        if (!confirmRetry) return;
+
+        const recordsToRetry = [...failedRecordsList];
+        if (failedPhase === "generation") {
+            const letterDate = dateInput.value.trim();
+            await runGenerationProcessing(recordsToRetry, letterDate);
+        } else {
+            await runEmailSending(recordsToRetry, true);
+        }
+    };
+
+    // =====================================================
+    // 6. CLEAR INPUTS
+    // =====================================================
+    window.clearBulkInputs = function() {
+        if (isProcessing) return;
+        namesInput.value = "";
+        emailsInput.value = "";
+        fileInput.value = "";
+        bulkUploadInfo.style.display = "none";
+        evaluationSection.style.display = "none";
+        progressSection.style.display = "none";
+        isEvaluated = false;
+        validCandidatesList = [];
+        generatedRecordsList = [];
+        failedRecordsList = [];
+        generateBtn.disabled = true;
+        sendBtn.disabled = true;
+        updateLiveSummary();
+    };
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    // Initial check
+    updateLiveSummary();
+});
+</script>
+
+<style>
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    font-size: 14px;
+    animation: slideIn 0.3s ease;
+    border-left: 4px solid #3b82f6;
+}
+.toast.success { border-left-color: #10b981; }
+.toast.error { border-left-color: #ef4444; }
+.toast.info { border-left-color: #3b82f6; }
+.toast-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.toast.success .toast-icon { color: #10b981; }
+.toast.error .toast-icon { color: #ef4444; }
+.toast.info .toast-icon { color: #3b82f6; }
+.toast-text { flex: 1; font-weight: 500; }
+.toast-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.toast-close:hover { color: #fff; }
+.fade-out {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.4s ease;
+}
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+</body>
+</html>

@@ -30,6 +30,7 @@ instance/
 
 # Generated files
 *.log
+*.db
 
 # IDE settings
 .vscode/
@@ -38,3 +39,6 @@ instance/
 # OS files
 .DS_Store
 Thumbs.db
+
+generated_certificates/
+scratch/

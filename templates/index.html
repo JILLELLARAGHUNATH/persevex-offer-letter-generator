@@ -33,6 +33,40 @@
             OFFER LETTER <span class="highlight">GENERATOR</span>
         </h1>
 
+        <!-- Navigation Tabs -->
+        <nav class="nav-links-wrapper">
+            <a href="/" class="nav-tab-link active" title="Offer Letter Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Offer Letter</span>
+            </a>
+            <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span>CA Letter</span>
+            </a>
+            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                <span>Certificate</span>
+            </a>
+            <a href="/history" class="nav-tab-link" title="Unified History">
+                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span>History</span>
+            </a>
+        </nav>
+
         <div class="header-stats" aria-label="Email delivery summary">
             <div class="header-stat success-stat" title="Total Successful Email Deliveries">
                 <div class="stat-icon-wrapper">
@@ -61,14 +95,6 @@
         </div>
 
         <div class="header-actions">
-            <a href="/history" class="history-btn" title="View Email Dispatch History">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span>History</span>
-            </a>
-
             <a href="/logout" class="logout-btn" title="Sign out of Persevex">
                 <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -781,6 +807,7 @@ form.addEventListener("submit", async function (event) {
         }, 600);
 
         message.textContent = "Letter generated successfully.";
+        showToast("Offer letter generated successfully.", "success");
     }
     catch (error) {
         console.error(error);
@@ -789,6 +816,7 @@ form.addEventListener("submit", async function (event) {
         }
         emptyPreview.hidden = false;
         message.textContent = error.message || "Generation failed.";
+        showToast(error.message || "Generation failed.", "error");
         sendBtn.disabled = true;
         disableDownload();
     }
@@ -851,15 +879,46 @@ function closeResendModal() {
 }
 
 /* ==========================================================
+   TOAST NOTIFICATION ENGINE
+   ========================================================== */
+function showToast(text, type = "success") {
+    let container = document.querySelector(".toast-container");
+    if (!container) {
+        container = document.createElement("div");
+        container.className = "toast-container";
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast-message toast-${type}`;
+    const icon = type === "success" ? "✔" : (type === "error" ? "❌" : "ℹ");
+
+    toast.innerHTML = `
+        <span class="toast-icon">${icon}</span>
+        <span class="toast-text">${text}</span>
+        <button type="button" class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add("toast-exit");
+        setTimeout(() => {
+            if (toast.parentElement) toast.remove();
+        }, 300);
+    }, 4000);
+}
+
+/* ==========================================================
    UPDATE EMAIL STATUS COUNTS LIVE (WITH SMOOTH NUMBER PULSE)
    ========================================================== */
 function animateCounter(element, newValue) {
     if (!element) return;
-    const currentVal = element.textContent.trim();
-    const formattedNewVal = String(newValue ?? 0);
+    const currentVal = parseInt(element.textContent.trim(), 10) || 0;
+    const targetVal = parseInt(newValue ?? 0, 10) || 0;
     
-    if (currentVal !== formattedNewVal) {
-        element.textContent = formattedNewVal;
+    if (currentVal !== targetVal) {
+        element.textContent = String(targetVal);
         element.classList.remove("count-pulse");
         void element.offsetWidth; // trigger reflow
         element.classList.add("count-pulse");
@@ -895,6 +954,14 @@ async function updateEmailStatusCounts() {
         console.error("EMAIL COUNT UPDATE ERROR:", error);
     }
 }
+
+window.addEventListener("focus", updateEmailStatusCounts);
+window.addEventListener("storage", function(event) {
+    if (event.key === "persevex_stats_updated" || event.key === "persevex_history_updated") {
+        updateEmailStatusCounts();
+    }
+});
+
 
 /* ==========================================================
    SEND EMAIL FUNCTION (WITH NOTICEABLE ANIMATIONS)
@@ -991,8 +1058,10 @@ async function sendEmail(sendAgain = false) {
 
         if (result.resent) {
             message.textContent = "Email sent again successfully.";
+            showToast("Email sent again successfully.", "success");
         } else {
             message.textContent = "Email sent successfully.";
+            showToast("Email sent to student successfully.", "success");
         }
 
         setTimeout(function () {
@@ -1012,6 +1081,7 @@ async function sendEmail(sendAgain = false) {
         await updateEmailStatusCounts();
 
         message.textContent = error.message || "Email failed.";
+        showToast(error.message || "Email failed to send.", "error");
 
         sendBtn.classList.remove("is-sending");
         sendBtn.classList.add("is-error");

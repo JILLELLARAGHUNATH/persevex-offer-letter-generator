@@ -9,9 +9,18 @@ import smtplib
 from datetime import datetime, timezone
 from email.message import EmailMessage
 import imaplib
+import urllib.parse
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
+
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from flask import (
     Flask,
@@ -26,6 +35,10 @@ from flask import (
 )
 
 import pymupdf
+import certificate_service
+import database.repository as repository
+import services.bulk_certificate_service as bulk_certificate_service
+from services.ca_bulk_service import parse_ca_file
 
 
 # ============================================================
@@ -192,7 +205,7 @@ def format_date(value):
 
 def normalize_duration(value):
 
-    value = str(value).strip()
+    value = str(value).strip().lower()
 
     if not value:
         return ""
@@ -2295,6 +2308,118 @@ def generate_pdf(
 
 
 # ============================================================
+# CAMPUS AMBASSADOR OFFER LETTER GENERATOR
+# ============================================================
+
+def format_ca_date(date_val):
+    """
+    Format any date representation into 'Month DD, YYYY' matching the CA template.
+    Defaults to current date if missing or invalid.
+    """
+    if not date_val:
+        return datetime.now().strftime("%B %d, %Y")
+    date_val = str(date_val).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%B %d, %Y", "%d %B %Y", "%B %d %Y", "%Y/%m/%d"):
+        try:
+            dt = datetime.strptime(date_val, fmt)
+            return dt.strftime("%B %d, %Y")
+        except ValueError:
+            pass
+    return date_val
+
+
+_CA_TEMPLATE_BYTES = None
+
+def get_ca_template_bytes():
+    global _CA_TEMPLATE_BYTES
+    if _CA_TEMPLATE_BYTES is None:
+        template = TEMPLATE_DIR / "campus_ambassador_template.pdf"
+        if not template.exists():
+            raise FileNotFoundError(
+                f"Campus Ambassador PDF template not found:\n{template}"
+            )
+        _CA_TEMPLATE_BYTES = template.read_bytes()
+    return _CA_TEMPLATE_BYTES
+
+
+def edit_campus_ambassador(data):
+    """
+    Generate the Campus Ambassador Offer Letter.
+    Preserves 2-page master template exactly.
+    Redacts and replaces ONLY:
+      1. Candidate Name (after 'Dear ')
+      2. Date (below 'Date :')
+    Page 2 is 100% untouched.
+    """
+    t_bytes = get_ca_template_bytes()
+    doc = pymupdf.open(stream=t_bytes, filetype="pdf")
+    try:
+        page = doc[0]
+
+        # Redact candidate name text area (after 'Dear ')
+        name_rect = pymupdf.Rect(105.0, 220.0, 380.0, 252.0)
+        page.add_redact_annot(name_rect, fill=(1, 1, 1))
+
+        # Redact date text area (strictly below y=233.5 to preserve 'Date :')
+        date_rect = pymupdf.Rect(410.0, 234.0, 555.0, 252.0)
+        page.add_redact_annot(date_rect, fill=(1, 1, 1))
+
+        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE)
+
+        # Insert Candidate Name
+        student_name = (data.get("student_name") or "").strip()
+        page.insert_text(
+            pymupdf.Point(108.0, 244.2),
+            student_name,
+            fontsize=18,
+            fontname="helv",
+            color=(0, 0, 0),
+        )
+
+        # Insert Date formatted as 'Month DD, YYYY'
+        raw_date = data.get("date") or data.get("issue_date") or data.get("start_date")
+        date_str = format_ca_date(raw_date)
+        font_size = 14
+        text_w = pymupdf.get_text_length(date_str, fontname="helv", fontsize=font_size)
+        date_x = 528.0 - text_w
+        page.insert_text(
+            pymupdf.Point(date_x, 246.0),
+            date_str,
+            fontsize=font_size,
+            fontname="helv",
+            color=(0, 0, 0),
+        )
+
+        return doc
+    except Exception:
+        doc.close()
+        raise
+
+
+def generate_ca_pdf(data):
+    doc = edit_campus_ambassador(data)
+    student_name = (data.get("student_name") or "Student").strip()
+    filename = f"{safe_filename(student_name)}_Campus_Ambassador_Offer_Letter.pdf"
+    output = GENERATED_DIR / filename
+    if output.exists():
+        try:
+            output.unlink()
+        except OSError:
+            pass
+
+    try:
+        doc.save(
+            output,
+            garbage=4,
+            deflate=True,
+        )
+    finally:
+        doc.close()
+
+    return filename
+
+
+# ============================================================
 # LOGIN PROTECTION
 # ============================================================
 
@@ -2303,15 +2428,20 @@ def require_login():
     allowed_endpoints = {
         "login",
         "static",
+        "verify_certificate",
+        "generated",
     }
 
     if request.endpoint in allowed_endpoints:
         return None
 
+    if request.path.startswith("/verify") or request.path.startswith("/static"):
+        return None
+
     if session.get("authenticated") is True:
         return None
 
-    if request.path.startswith("/generate") or request.path.startswith("/send-email"):
+    if request.path.startswith("/generate") or request.path.startswith("/send-email") or request.path.startswith("/api/"):
         return jsonify({
             "error": "Login required. Please log in first."
         }), 401
@@ -2359,24 +2489,9 @@ def logout():
 @app.get("/")
 def index():
     try:
-        response = (
-            supabase
-            .table("email_history")
-            .select("email_status")
-            .execute()
-        )
-        records = response.data or []
-
-        success_count = sum(
-            1
-            for record in records
-            if str(record.get("email_status") or "").lower() == "sent"
-        )
-        failed_count = sum(
-            1
-            for record in records
-            if str(record.get("email_status") or "").lower() == "failed"
-        )
+        history_data = repository.get_unified_history(record_type="offer_letter", page=1, per_page=1)
+        success_count = history_data.get("total_sent", 0)
+        failed_count = history_data.get("total_failed", 0)
     except Exception as exc:
         print("HEADER STATUS COUNT ERROR:", repr(exc))
         success_count = 0
@@ -2394,49 +2509,19 @@ def index():
 
 @app.get("/api/email-status-counts")
 def email_status_counts():
-
     try:
-
-        response = (
-            supabase
-            .table("email_history")
-            .select("email_status")
-            .execute()
-        )
-
-        records = response.data or []
-
-        success_count = sum(
-            1
-            for record in records
-            if str(
-                record.get("email_status") or ""
-            ).lower() == "sent"
-        )
-
-        failed_count = sum(
-            1
-            for record in records
-            if str(
-                record.get("email_status") or ""
-            ).lower() == "failed"
-        )
-
+        history_data = repository.get_unified_history(record_type="offer_letter", page=1, per_page=1)
         return jsonify({
             "success": True,
-            "success_count": success_count,
-            "failed_count": failed_count
+            "total_count": history_data.get("total_offer_letters", 0),
+            "success_count": history_data.get("total_sent", 0),
+            "failed_count": history_data.get("total_failed", 0),
         })
-
     except Exception as exc:
-
-        print(
-            "LIVE STATUS COUNT ERROR:",
-            repr(exc)
-        )
-
+        print("LIVE STATUS COUNT ERROR:", repr(exc))
         return jsonify({
             "success": False,
+            "total_count": 0,
             "success_count": 0,
             "failed_count": 0
         }), 500
@@ -3231,220 +3316,656 @@ Warm regards,<br>
         "success": True,
         "message": "Email sent successfully."
     })
+
+
 # ============================================================
-# EMAIL HISTORY
+# CAMPUS AMBASSADOR OFFER LETTER ROUTES
+# ============================================================
+
+@app.get("/campus-ambassador")
+def campus_ambassador_menu_page():
+    try:
+        history_data = repository.get_unified_history(record_type="campus_ambassador", page=1, per_page=1)
+        success_count = history_data.get("total_sent", 0)
+        failed_count = history_data.get("total_failed", 0)
+    except Exception as exc:
+        print("CA HEADER STATUS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
+
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+    today_formatted = datetime.now().strftime("%B %d, %Y")
+
+    return render_template(
+        "campus_ambassador.html",
+        today_iso=today_iso,
+        today_formatted=today_formatted,
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
+@app.get("/campus-ambassador/single")
+def campus_ambassador_single_page():
+    try:
+        history_data = repository.get_unified_history(record_type="campus_ambassador", page=1, per_page=1)
+        success_count = history_data.get("total_sent", 0)
+        failed_count = history_data.get("total_failed", 0)
+    except Exception as exc:
+        print("CA HEADER STATUS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
+
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+    today_formatted = datetime.now().strftime("%B %d, %Y")
+
+    return render_template(
+        "campus_ambassador.html",
+        today_iso=today_iso,
+        today_formatted=today_formatted,
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
+@app.get("/campus-ambassador/bulk")
+def campus_ambassador_bulk_page():
+    try:
+        history_data = repository.get_unified_history(record_type="campus_ambassador", page=1, per_page=1)
+        success_count = history_data.get("total_sent", 0)
+        failed_count = history_data.get("total_failed", 0)
+    except Exception as exc:
+        print("CA HEADER STATUS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
+
+    today_iso = datetime.now().strftime("%Y-%m-%d")
+    today_formatted = datetime.now().strftime("%B %d, %Y")
+
+    return render_template(
+        "campus_ambassador_bulk.html",
+        today_iso=today_iso,
+        today_formatted=today_formatted,
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
+@app.get("/api/campus-ambassador/stats")
+def campus_ambassador_stats():
+    try:
+        stats = repository.get_campus_ambassador_stats()
+        return jsonify({
+            "success": True,
+            "success_count": stats.get("successful", 0),
+            "failed_count": stats.get("failed", 0),
+        })
+    except Exception as exc:
+        print("CA STATS API ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+
+@app.post("/api/campus-ambassador/generate")
+def campus_ambassador_generate():
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = (data.get("student_name") or "").strip()
+        student_email = (data.get("student_email") or "").strip().lower()
+        raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+
+        if not student_name:
+            return jsonify({"success": False, "error": "Candidate Name is required."}), 400
+
+        if not student_email:
+            return jsonify({"success": False, "error": "Candidate Email is required."}), 400
+
+        date_formatted = format_ca_date(raw_date)
+
+        data_payload = {
+            "student_name": student_name,
+            "student_email": student_email,
+            "date": date_formatted,
+            "domain": "Campus Ambassador",
+            "offer_letter_type": "campus_ambassador",
+        }
+
+        filename = generate_ca_pdf(data_payload)
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "url": f"/generated/{filename}",
+            "student_name": student_name,
+            "student_email": student_email,
+            "date": date_formatted,
+        })
+    except Exception as exc:
+        print("CAMPUS AMBASSADOR GENERATION ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+def get_ca_email_html(student_name):
+    """
+    Generate clean, professional business email HTML for Campus Ambassador Offer Letters.
+    Left-aligned, standard typography, natural email width, no webpage/card/box borders.
+    """
+    return f"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b; margin: 0; padding: 10px 0; background-color: #ffffff;">
+  <div style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">
+    <p style="margin-top: 0; margin-bottom: 16px; color: #0f172a; font-weight: bold; font-size: 15px;">Dear {student_name},</p>
+    <p style="margin-top: 0; margin-bottom: 16px;">Greetings from Persevex!</p>
+    <p style="margin-top: 0; margin-bottom: 16px;">We are excited to officially welcome you as a Campus Ambassador at Persevex. Please find attached your appointment letter, which outlines your key responsibilities, benefits, and the impact you can make as part of our team.</p>
+    <p style="margin-top: 0; margin-bottom: 16px;">As a Campus Ambassador, you will play a vital role in building brand awareness, promoting our programs, and fostering student engagement at your institution. Your energy and initiative will be instrumental in expanding Persevex’s mission to empower learners across campuses.</p>
+    <p style="margin-top: 0; margin-bottom: 16px;">If you have any questions or need further clarification, feel free to reach out to us at 📧 <a href="mailto:support@persevex.com" style="color: #2563eb; text-decoration: none;">support@persevex.com</a>.</p>
+    <p style="margin-top: 0; margin-bottom: 16px;">We look forward to seeing your contributions and success in this role.</p>
+    <p style="margin-top: 0; margin-bottom: 24px;">📣 Feel free to share this exciting opportunity on LinkedIn by posting about your new role, tagging @Persevex and using hashtags such as #Persevex #CampusAmbassador #Leadership #StudentOpportunity #EmpoweringLearners.</p>
+    <p style="margin-top: 0; margin-bottom: 4px;">Best regards,</p>
+    <p style="margin-top: 0; margin-bottom: 0;">
+      <strong>Team Persevex</strong><br>
+      📧 <a href="mailto:support@persevex.com" style="color: #2563eb; text-decoration: none;">support@persevex.com</a><br>
+      🌐 <a href="https://www.persevex.com" style="color: #2563eb; text-decoration: none;">www.persevex.com</a>
+    </p>
+  </div>
+</body>
+</html>"""
+
+
+@app.post("/api/campus-ambassador/send-email")
+def campus_ambassador_send_email():
+    data = request.get_json(force=True) or {}
+    filename = data.get("filename") or ""
+    recipient = (data.get("student_email") or "").strip().lower()
+    student_name = (data.get("student_name") or "Candidate").strip()
+    raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+    date_formatted = format_ca_date(raw_date)
+
+    if not filename:
+        return jsonify({"success": False, "error": "Generated PDF filename is required."}), 400
+
+    if not recipient:
+        return jsonify({"success": False, "error": "Candidate email is required."}), 400
+
+    filename = Path(filename).name
+    pdf_path = GENERATED_DIR / filename
+
+    if not pdf_path.exists():
+        return jsonify({
+            "success": False,
+            "error": "Generated PDF not found on server. Please generate the letter again."
+        }), 404
+
+    safe_fn = Path(filename).name
+    doc_id = Path(safe_fn).stem
+
+    def build_ca_history_data(status, sent_at=None, send_count=1, error_message=None):
+        return {
+            "student_name": student_name,
+            "student_email": recipient,
+            "internship_domain": "Campus Ambassador",
+            "internship_duration": "Tenure",
+            "start_date": date_formatted,
+            "end_date": None,
+            "offer_letter_type": "campus_ambassador",
+            "email_status": status,
+            "sent_at": sent_at,
+            "offer_letter_id": doc_id,
+            "pdf_filename": safe_fn,
+            "send_count": send_count,
+            "error_message": error_message,
+        }
+
+    try:
+        message = EmailMessage()
+        message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+        message["To"] = recipient
+
+        html_content = get_ca_email_html(student_name)
+
+        plain_text = (
+            f"Dear {student_name},\n\n"
+            "Greetings from Persevex!\n\n"
+            "We are excited to officially welcome you as a Campus Ambassador at Persevex. Please find attached your appointment letter, which outlines your key responsibilities, benefits, and the impact you can make as part of our team.\n\n"
+            "As a Campus Ambassador, you will play a vital role in building brand awareness, promoting our programs, and fostering student engagement at your institution. Your energy and initiative will be instrumental in expanding Persevex’s mission to empower learners across campuses.\n\n"
+            "If you have any questions or need further clarification, feel free to reach out to us at 📧 support@persevex.com.\n\n"
+            "We look forward to seeing your contributions and success in this role.\n\n"
+            "📣 Feel free to share this exciting opportunity on LinkedIn by posting about your new role, tagging @Persevex and using hashtags such as #Persevex #CampusAmbassador #Leadership #StudentOpportunity #EmpoweringLearners.\n\n"
+            "Best regards,\n"
+            "Team Persevex\n"
+            "📧 support@persevex.com\n"
+            "🌐 www.persevex.com"
+        )
+
+        message.set_content(plain_text)
+        message.add_alternative(html_content, subtype="html")
+
+        message.add_attachment(
+            pdf_path.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=filename,
+        )
+    except Exception as exc:
+        print("CA EMAIL PREPARATION ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc), "email_status": "failed"}), 500
+
+    try:
+        print("========================================")
+        print("CONNECTING TO SMTP (CA LETTER)")
+        print("FROM:", SENDER_EMAIL)
+        print("TO:", recipient)
+        print("========================================")
+
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+            smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+            smtp.send_message(message)
+
+        print("SMTP CA EMAIL SENT SUCCESSFULLY")
+    except Exception as exc:
+        error_msg = str(exc)
+        print("SMTP CA EMAIL FAILED:", repr(exc))
+        try:
+            failed_record = build_ca_history_data(status="failed", error_message=error_msg)
+            repository.save_campus_ambassador_record(failed_record)
+        except Exception as save_err:
+            print("CA FAILED HISTORY SAVE ERROR:", repr(save_err))
+        return jsonify({"success": False, "error": error_msg, "email_status": "failed"}), 500
+
+    sent_time = datetime.now(timezone.utc).isoformat()
+
+    try:
+        with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+            imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+            imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+    except Exception as imap_err:
+        print("WARNING: Could not save CA email to IMAP Sent folder:", repr(imap_err))
+
+    try:
+        success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=1)
+        repository.save_campus_ambassador_record(success_record)
+    except Exception as save_err:
+        print("CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
+
+    return jsonify({"success": True, "message": "Campus Ambassador Offer Letter sent successfully!"})
+
+
+@app.post("/api/campus-ambassador/parse-upload")
+def campus_ambassador_parse_upload():
+    """Parse uploaded CSV or Excel file for Bulk Campus Ambassador offer letters."""
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded."}), 400
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "No file selected."}), 400
+
+    file_bytes = file.read()
+    result = parse_ca_file(file_bytes, file.filename)
+    if not result.get("success"):
+        return jsonify(result), 400
+    return jsonify(result)
+
+
+@app.post("/api/campus-ambassador/bulk-generate-item")
+def campus_ambassador_bulk_generate_item():
+    """Generate a single CA Offer Letter PDF without dispatching email."""
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = (data.get("student_name") or "").strip()
+        student_email = (data.get("student_email") or "").strip().lower()
+        raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+
+        if not student_name:
+            return jsonify({"success": False, "error": "Candidate Name is required."}), 400
+        if not student_email:
+            return jsonify({"success": False, "error": "Candidate Email is required."}), 400
+
+        date_formatted = format_ca_date(raw_date)
+        data_payload = {
+            "student_name": student_name,
+            "student_email": student_email,
+            "date": date_formatted,
+            "domain": "Campus Ambassador",
+            "offer_letter_type": "campus_ambassador",
+        }
+        filename = generate_ca_pdf(data_payload)
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "student_name": student_name,
+            "student_email": student_email,
+            "date": date_formatted
+        })
+    except Exception as exc:
+        print("BULK CA GENERATE ITEM ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/campus-ambassador/bulk-send-item")
+def campus_ambassador_bulk_send_item():
+    """Dispatch email for a generated CA Offer Letter PDF."""
+    student_name = ""
+    student_email = ""
+    try:
+        data = request.get_json(force=True) or {}
+        filename = (data.get("filename") or "").strip()
+        student_name = (data.get("student_name") or "").strip()
+        student_email = (data.get("student_email") or "").strip().lower()
+        raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+
+        if not filename:
+            # Fallback generate PDF if not provided
+            date_formatted = format_ca_date(raw_date)
+            data_payload = {
+                "student_name": student_name,
+                "student_email": student_email,
+                "date": date_formatted,
+                "domain": "Campus Ambassador",
+                "offer_letter_type": "campus_ambassador",
+            }
+            filename = generate_ca_pdf(data_payload)
+
+        safe_fn = Path(filename).name
+        pdf_path = GENERATED_DIR / safe_fn
+        if not pdf_path.exists():
+            return jsonify({
+                "success": False,
+                "error": "Generated PDF not found on server. Please regenerate.",
+                "student_name": student_name,
+                "student_email": student_email
+            }), 404
+
+        date_formatted = format_ca_date(raw_date)
+        doc_id = Path(safe_fn).stem
+
+        def build_ca_history_data(status, sent_at=None, send_count=1, error_message=None):
+            return {
+                "student_name": student_name,
+                "student_email": student_email,
+                "internship_domain": "Campus Ambassador",
+                "internship_duration": "Tenure",
+                "start_date": date_formatted,
+                "end_date": None,
+                "offer_letter_type": "campus_ambassador",
+                "email_status": status,
+                "sent_at": sent_at,
+                "offer_letter_id": doc_id,
+                "pdf_filename": safe_fn,
+                "send_count": send_count,
+                "error_message": error_message,
+            }
+
+        message = EmailMessage()
+        message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+        message["To"] = student_email
+
+        html_content = get_ca_email_html(student_name)
+        plain_text = (
+            f"Dear {student_name},\n\n"
+            "Greetings from Persevex!\n\n"
+            "We are excited to officially welcome you as a Campus Ambassador at Persevex. Please find attached your appointment letter, which outlines your key responsibilities, benefits, and the impact you can make as part of our team.\n\n"
+            "As a Campus Ambassador, you will play a vital role in building brand awareness, promoting our programs, and fostering student engagement at your institution. Your energy and initiative will be instrumental in expanding Persevex’s mission to empower learners across campuses.\n\n"
+            "If you have any questions or need further clarification, feel free to reach out to us at 📧 support@persevex.com.\n\n"
+            "We look forward to seeing your contributions and success in this role.\n\n"
+            "📣 Feel free to share this exciting opportunity on LinkedIn by posting about your new role, tagging @Persevex and using hashtags such as #Persevex #CampusAmbassador #Leadership #StudentOpportunity #EmpoweringLearners.\n\n"
+            "Best regards,\n"
+            "Team Persevex\n"
+            "📧 support@persevex.com\n"
+            "🌐 www.persevex.com"
+        )
+        message.set_content(plain_text)
+        message.add_alternative(html_content, subtype="html")
+        message.add_attachment(
+            pdf_path.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=safe_fn,
+        )
+
+        try:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+                smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+                smtp.send_message(message)
+        except Exception as smtp_exc:
+            error_msg = str(smtp_exc)
+            print("BULK CA SMTP EMAIL FAILED:", repr(smtp_exc))
+            try:
+                failed_record = build_ca_history_data(status="failed", error_message=error_msg)
+                repository.save_campus_ambassador_record(failed_record)
+            except Exception as save_err:
+                print("BULK CA FAILED HISTORY SAVE ERROR:", repr(save_err))
+            return jsonify({
+                "success": False,
+                "student_name": student_name,
+                "student_email": student_email,
+                "error": error_msg,
+                "email_status": "failed"
+            }), 500
+
+        sent_time = datetime.now(timezone.utc).isoformat()
+        try:
+            with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+                imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+                imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+        except Exception:
+            pass
+
+        try:
+            success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=1)
+            repository.save_campus_ambassador_record(success_record)
+        except Exception as save_err:
+            print("BULK CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
+
+        return jsonify({
+            "success": True,
+            "student_name": student_name,
+            "student_email": student_email,
+            "filename": safe_fn,
+            "message": "Campus Ambassador Offer Letter sent successfully!"
+        })
+
+    except Exception as exc:
+        print("BULK CA ITEM SEND ERROR:", repr(exc))
+        return jsonify({
+            "success": False,
+            "student_name": student_name,
+            "student_email": student_email,
+            "error": str(exc)
+        }), 500
+
+
+@app.post("/api/campus-ambassador/bulk-process-item")
+def campus_ambassador_bulk_process_item():
+    student_name = ""
+    student_email = ""
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = (data.get("student_name") or "").strip()
+        student_email = (data.get("student_email") or "").strip().lower()
+        raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+
+        if not student_name:
+            return jsonify({
+                "success": False,
+                "error": "Candidate Name is required.",
+                "student_name": student_name,
+                "student_email": student_email
+            }), 400
+
+        if not student_email:
+            return jsonify({
+                "success": False,
+                "error": "Candidate Email is required.",
+                "student_name": student_name,
+                "student_email": student_email
+            }), 400
+
+        date_formatted = format_ca_date(raw_date)
+
+        # 1. Generate PDF
+        data_payload = {
+            "student_name": student_name,
+            "student_email": student_email,
+            "date": date_formatted,
+            "domain": "Campus Ambassador",
+            "offer_letter_type": "campus_ambassador",
+        }
+        filename = generate_ca_pdf(data_payload)
+        safe_fn = Path(filename).name
+        doc_id = Path(safe_fn).stem
+        pdf_path = GENERATED_DIR / safe_fn
+
+        def build_ca_history_data(status, sent_at=None, send_count=1, error_message=None):
+            return {
+                "student_name": student_name,
+                "student_email": student_email,
+                "internship_domain": "Campus Ambassador",
+                "internship_duration": "Tenure",
+                "start_date": date_formatted,
+                "end_date": None,
+                "offer_letter_type": "campus_ambassador",
+                "email_status": status,
+                "sent_at": sent_at,
+                "offer_letter_id": doc_id,
+                "pdf_filename": safe_fn,
+                "send_count": send_count,
+                "error_message": error_message,
+            }
+
+        # 2. Prepare Email
+        message = EmailMessage()
+        message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+        message["To"] = student_email
+
+        html_content = get_ca_email_html(student_name)
+
+        plain_text = (
+            f"Dear {student_name},\n\n"
+            "Greetings from Persevex!\n\n"
+            "We are excited to officially welcome you as a Campus Ambassador at Persevex. Please find attached your appointment letter, which outlines your key responsibilities, benefits, and the impact you can make as part of our team.\n\n"
+            "As a Campus Ambassador, you will play a vital role in building brand awareness, promoting our programs, and fostering student engagement at your institution. Your energy and initiative will be instrumental in expanding Persevex’s mission to empower learners across campuses.\n\n"
+            "If you have any questions or need further clarification, feel free to reach out to us at 📧 support@persevex.com.\n\n"
+            "We look forward to seeing your contributions and success in this role.\n\n"
+            "📣 Feel free to share this exciting opportunity on LinkedIn by posting about your new role, tagging @Persevex and using hashtags such as #Persevex #CampusAmbassador #Leadership #StudentOpportunity #EmpoweringLearners.\n\n"
+            "Best regards,\n"
+            "Team Persevex\n"
+            "📧 support@persevex.com\n"
+            "🌐 www.persevex.com"
+        )
+
+        message.set_content(plain_text)
+        message.add_alternative(html_content, subtype="html")
+
+        message.add_attachment(
+            pdf_path.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=safe_fn,
+        )
+
+        # 3. Send Email via SMTP
+        try:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+                smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+                smtp.send_message(message)
+        except Exception as smtp_exc:
+            error_msg = str(smtp_exc)
+            print("BULK CA SMTP EMAIL FAILED:", repr(smtp_exc))
+            try:
+                failed_record = build_ca_history_data(status="failed", error_message=error_msg)
+                repository.save_campus_ambassador_record(failed_record)
+            except Exception as save_err:
+                print("BULK CA FAILED HISTORY SAVE ERROR:", repr(save_err))
+            return jsonify({
+                "success": False,
+                "student_name": student_name,
+                "student_email": student_email,
+                "error": error_msg,
+                "email_status": "failed"
+            }), 500
+
+        sent_time = datetime.now(timezone.utc).isoformat()
+
+        # 4. IMAP backup
+        try:
+            with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+                imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+                imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+        except Exception as imap_err:
+            print("WARNING: Could not save bulk CA email to IMAP Sent folder:", repr(imap_err))
+
+        # 5. Save success history
+        try:
+            success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=1)
+            repository.save_campus_ambassador_record(success_record)
+        except Exception as save_err:
+            print("BULK CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
+
+        return jsonify({
+            "success": True,
+            "student_name": student_name,
+            "student_email": student_email,
+            "filename": safe_fn,
+            "message": "Campus Ambassador Offer Letter generated and sent successfully!"
+        })
+
+    except Exception as exc:
+        print("BULK CA ITEM PROCESSING ERROR:", repr(exc))
+        return jsonify({
+            "success": False,
+            "student_name": student_name,
+            "student_email": student_email,
+            "error": str(exc)
+        }), 500
+
+
+
+# ============================================================
+# UNIFIED HISTORY ROUTES
 # ============================================================
 
 @app.get("/history")
 def history():
-
     try:
-
-        # ----------------------------------------------------
-        # GET FILTER VALUES
-        # ----------------------------------------------------
-
-        search = (
-            request.args.get("search", "") or ""
-        ).strip()
-
-        month_filter = (
-            request.args.get("month", "") or ""
-        ).strip()
-
-        date_from = (
-            request.args.get("date_from", "") or ""
-        ).strip()
-
-        date_to = (
-            request.args.get("date_to", "") or ""
-        ).strip()
-
-        date_filter = (
-            request.args.get("date", "") or ""
-        ).strip()
-
-        status_filter = (
-            request.args.get("status", "") or ""
-        ).strip().lower()
-
-        # ----------------------------------------------------
-        # PER PAGE
-        # ----------------------------------------------------
+        search = (request.args.get("search", "") or "").strip()
+        record_type = (request.args.get("record_type", "") or request.args.get("type", "") or "all").strip().lower()
+        status_filter = (request.args.get("status", "") or "").strip().lower()
+        month_filter = (request.args.get("month", "") or "").strip()
+        date_filter = (request.args.get("date_filter", "") or request.args.get("date", "") or "all").strip().lower()
+        date_from = (request.args.get("date_from", "") or "").strip()
+        date_to = (request.args.get("date_to", "") or "").strip()
 
         try:
-            per_page = int(
-                request.args.get("per_page", 25)
-            )
-            if per_page not in [10, 25, 50, 100]:
+            per_page = int(request.args.get("per_page", 25))
+            if per_page not in [10, 25, 50, 100, 200]:
                 per_page = 25
         except (TypeError, ValueError):
             per_page = 25
 
-        # ----------------------------------------------------
-        # PAGE
-        # ----------------------------------------------------
-
         try:
-            page = int(
-                request.args.get("page", 1)
-            )
+            page = int(request.args.get("page", 1))
         except (TypeError, ValueError):
             page = 1
-
         if page < 1:
             page = 1
 
-        # ----------------------------------------------------
-        # GET RECORDS FROM SUPABASE
-        # ----------------------------------------------------
-
-        response = (
-            supabase
-            .table("email_history")
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
+        history_data = repository.get_unified_history(
+            search=search,
+            record_type=record_type,
+            status_filter=status_filter,
+            month_filter=month_filter,
+            date_filter=date_filter,
+            date_from=date_from,
+            date_to=date_to,
+            page=page,
+            per_page=per_page,
         )
-
-        all_records = response.data or []
-
-        # ----------------------------------------------------
-        # COMPUTE AVAILABLE MONTHS DYNAMICALLY
-        # ----------------------------------------------------
-
-        month_set = set()
-        for rec in all_records:
-            ts = str(rec.get("sent_at") or rec.get("created_at") or "")
-            if len(ts) >= 7 and ts[:4].isdigit() and ts[5:7].isdigit():
-                month_set.add(ts[:7])
-
-        # Also ensure current month is present
-        now_month = datetime.now().strftime("%Y-%m")
-        month_set.add(now_month)
-
-        sorted_months = sorted(list(month_set), reverse=True)
-        available_months = []
-        for ym in sorted_months:
-            try:
-                dt_obj = datetime.strptime(ym, "%Y-%m")
-                label = dt_obj.strftime("%B %Y")
-            except Exception:
-                label = ym
-            available_months.append({
-                "value": ym,
-                "label": label
-            })
-
-        records = list(all_records)
-
-        # ----------------------------------------------------
-        # SEARCH BY STUDENT NAME OR EMAIL
-        # ----------------------------------------------------
-
-        if search:
-            search_lower = search.lower()
-            records = [
-                record
-                for record in records
-                if (
-                    search_lower in str(record.get("student_name") or "").lower()
-                    or search_lower in str(record.get("student_email") or "").lower()
-                )
-            ]
-
-        # ----------------------------------------------------
-        # FILTER BY MONTH (YYYY-MM)
-        # ----------------------------------------------------
-
-        if month_filter:
-            records = [
-                record
-                for record in records
-                if (
-                    str(record.get("created_at") or "").startswith(month_filter)
-                    or str(record.get("sent_at") or "").startswith(month_filter)
-                )
-            ]
-
-        # ----------------------------------------------------
-        # FILTER BY DATE RANGE (date_from, date_to)
-        # ----------------------------------------------------
-
-        if date_from or date_to:
-            filtered_by_range = []
-            for record in records:
-                rec_date = str(record.get("sent_at") or record.get("created_at") or "")[:10]
-                if date_from and rec_date and rec_date < date_from:
-                    continue
-                if date_to and rec_date and rec_date > date_to:
-                    continue
-                filtered_by_range.append(record)
-            records = filtered_by_range
-
-        # ----------------------------------------------------
-        # FILTER BY SINGLE DATE (legacy fallback)
-        # ----------------------------------------------------
-
-        if date_filter and not (date_from or date_to):
-            records = [
-                record
-                for record in records
-                if (
-                    str(record.get("created_at") or "").startswith(date_filter)
-                    or str(record.get("sent_at") or "").startswith(date_filter)
-                )
-            ]
-
-        # ----------------------------------------------------
-        # FILTER BY STATUS
-        # ----------------------------------------------------
-
-        if status_filter:
-            records = [
-                record
-                for record in records
-                if str(record.get("email_status") or "").strip().lower() == status_filter
-            ]
-
-        # ----------------------------------------------------
-        # GLOBAL FILTERED STATISTICS (BEFORE PAGINATION)
-        # ----------------------------------------------------
-
-        total_records = len(records)
-
-        total_sent = sum(
-            1
-            for record in records
-            if str(record.get("email_status") or "").strip().lower() == "sent"
-        )
-
-        total_failed = sum(
-            1
-            for record in records
-            if str(record.get("email_status") or "").strip().lower() == "failed"
-        )
-
-        # ----------------------------------------------------
-        # PAGINATION
-        # ----------------------------------------------------
-
-        total_pages = max(
-            1,
-            (total_records + per_page - 1) // per_page
-        )
-
-        if page > total_pages:
-            page = total_pages
-
-        start_index = (page - 1) * per_page
-        end_index = start_index + per_page
-
-        history_records = records[start_index:end_index]
-
-        # ----------------------------------------------------
-        # JSON RESPONSE (FOR LIVE SEARCH / AJAX)
-        # ----------------------------------------------------
 
         is_json = (
             request.args.get("format") == "json"
@@ -3455,196 +3976,243 @@ def history():
         if is_json:
             return jsonify({
                 "success": True,
-                "records": history_records,
-                "history_records": history_records,
-                "total_records": total_records,
-                "total_sent": total_sent,
-                "total_failed": total_failed,
-                "page": page,
-                "total_pages": total_pages,
-                "per_page": per_page,
-                "available_months": available_months
+                "records": history_data["records"],
+                "total_records": history_data["total_records"],
+                "total_offer_letters": history_data["total_offer_letters"],
+                "total_ca_letters": history_data.get("total_ca_letters", 0),
+                "total_certificates": history_data["total_certificates"],
+                "total_sent": history_data["total_sent"],
+                "total_failed": history_data["total_failed"],
+                "total_pending": history_data["total_pending"],
+                "page": history_data["page"],
+                "per_page": history_data["per_page"],
+                "total_pages": history_data["total_pages"],
+                "available_months": history_data["available_months"],
             })
-
-        # ----------------------------------------------------
-        # HTML TEMPLATE RENDER
-        # ----------------------------------------------------
 
         return render_template(
             "history.html",
-            history_records=history_records,
+            history_records=history_data["records"],
             search=search,
+            record_type=record_type,
+            status_filter=status_filter,
             month_filter=month_filter,
+            date_filter=date_filter,
             date_from=date_from,
             date_to=date_to,
-            date_filter=date_filter,
-            status_filter=status_filter,
-            page=page,
-            total_pages=total_pages,
-            total_records=total_records,
-            total_sent=total_sent,
-            total_failed=total_failed,
-            per_page=per_page,
-            available_months=available_months,
-            error=None
+            page=history_data["page"],
+            total_pages=history_data["total_pages"],
+            total_records=history_data["total_records"],
+            total_offer_letters=history_data["total_offer_letters"],
+            total_ca_letters=history_data.get("total_ca_letters", 0),
+            total_certificates=history_data["total_certificates"],
+            total_sent=history_data["total_sent"],
+            total_failed=history_data["total_failed"],
+            total_pending=history_data["total_pending"],
+            per_page=history_data["per_page"],
+            available_months=history_data["available_months"],
+            error=None,
         )
 
     except Exception as exc:
-
-        print("HISTORY ERROR:", repr(exc))
-
+        print("UNIFIED HISTORY ERROR:", repr(exc))
         is_json = (
             request.args.get("format") == "json"
             or request.headers.get("Accept") == "application/json"
             or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         )
-
         if is_json:
             return jsonify({
                 "success": False,
                 "error": str(exc),
                 "records": [],
                 "total_records": 0,
+                "total_offer_letters": 0,
+                "total_ca_letters": 0,
+                "total_certificates": 0,
                 "total_sent": 0,
                 "total_failed": 0,
                 "page": 1,
                 "total_pages": 1,
                 "per_page": 25,
-                "available_months": []
+                "available_months": [],
             }), 500
 
         return render_template(
             "history.html",
             history_records=[],
             search="",
+            record_type="all",
+            status_filter="",
             month_filter="",
+            date_filter="all",
             date_from="",
             date_to="",
-            date_filter="",
-            status_filter="",
             page=1,
             total_pages=1,
             total_records=0,
+            total_offer_letters=0,
+            total_ca_letters=0,
+            total_certificates=0,
             total_sent=0,
             total_failed=0,
+            total_pending=0,
             per_page=25,
             available_months=[],
-            error=str(exc)
+            error=str(exc),
         )
 
-
-# ============================================================
-# EXPORT EMAIL HISTORY (CSV)
-# ============================================================
 
 @app.get("/history/export")
 def export_history():
-
     try:
-
+        record_type = (request.args.get("record_type") or request.args.get("type") or "all").strip().lower()
         from_date = (request.args.get("date_from") or request.args.get("from_date") or "").strip()
         to_date = (request.args.get("date_to") or request.args.get("to_date") or "").strip()
-        status_filter = request.args.get("status", "").strip().lower()
+        status_filter = (request.args.get("status") or "").strip().lower()
+        export_format = (request.args.get("format") or "csv").strip().lower()
 
-        # Date range validation
         if from_date and to_date and from_date > to_date:
-            return jsonify({
-                "success": False,
-                "error": "From Date cannot be later than To Date."
-            }), 400
+            return jsonify({"success": False, "error": "From Date cannot be later than To Date."}), 400
 
-        # Fetch records
-        response = (
-            supabase
-            .table("email_history")
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
+        history_data = repository.get_unified_history(
+            search="",
+            record_type=record_type,
+            status_filter=status_filter,
+            date_from=from_date,
+            date_to=to_date,
+            page=1,
+            per_page=100000,
         )
 
-        records = response.data or []
+        records = history_data.get("all_filtered_records") or history_data.get("records") or []
 
-        # Filter by Date Range
-        if from_date or to_date:
-            filtered = []
-            for r in records:
-                rec_date = str(r.get("sent_at") or r.get("created_at") or "")[:10]
-                if from_date and rec_date and rec_date < from_date:
-                    continue
-                if to_date and rec_date and rec_date > to_date:
-                    continue
-                filtered.append(r)
-            records = filtered
+        filename_prefix = "Persevex_Unified_History"
+        if record_type in ("offer_letter", "offer", "offer_letters"):
+            filename_prefix = "Persevex_Offer_Letter_History"
+        elif record_type in ("ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+            filename_prefix = "Persevex_CA_Offer_Letter_History"
+        elif record_type in ("certificate", "cert", "certificates"):
+            filename_prefix = "Persevex_Certificate_History"
 
-        # Filter by Status
-        if status_filter:
-            records = [
-                r for r in records
-                if str(r.get("email_status") or "").strip().lower() == status_filter
-            ]
+        date_suffix = datetime.now().strftime("%Y-%m-%d")
+        if from_date and to_date:
+            date_suffix = f"{from_date}_to_{to_date}"
+        elif from_date:
+            date_suffix = f"from_{from_date}"
 
-        # Generate CSV in memory with UTF-8 BOM for Microsoft Excel compatibility
+        # 1. EXCEL (.xlsx) EXPORT
+        if export_format in ("excel", "xlsx"):
+            try:
+                import openpyxl
+                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "History Audit"
+
+                headers = [
+                    "Type", "Document ID", "Student Name", "Student Email",
+                    "Domain", "Duration / Track", "Start Date", "End Date",
+                    "Issued Date", "Email Status", "Sent Date & Time", "Send Count", "PDF Filename"
+                ]
+                ws.append(headers)
+
+                header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
+                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+                for col_idx in range(1, len(headers) + 1):
+                    cell = ws.cell(row=1, column=col_idx)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+                for r in records:
+                    raw_ts = str(r.get("sent_at") or r.get("created_at") or "")
+                    date_display = raw_ts[:19].replace("T", " ") if raw_ts else "-"
+
+                    status_val = str(r.get("email_status") or "").upper()
+                    if status_val == "SENT":
+                        status_display = "SENT"
+                    elif status_val == "FAILED":
+                        status_display = "FAILED"
+                    else:
+                        status_display = "PENDING"
+
+                    ws.append([
+                        r.get("type_label") or ("Offer Letter" if r.get("record_type") == "offer_letter" else "Certificate"),
+                        r.get("document_id") or "-",
+                        r.get("student_name") or "-",
+                        r.get("student_email") or "-",
+                        r.get("domain") or "-",
+                        r.get("duration") or r.get("letter_type") or "-",
+                        r.get("start_date") or "-",
+                        r.get("end_date") or "-",
+                        r.get("issued_date") or "-",
+                        status_display,
+                        date_display,
+                        r.get("send_count") or 0,
+                        r.get("pdf_filename") or "-",
+                    ])
+
+                # Adjust column widths
+                for col in ws.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                    ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+                excel_buffer = io.BytesIO()
+                wb.save(excel_buffer)
+                excel_bytes = excel_buffer.getvalue()
+                excel_buffer.close()
+
+                export_filename = f"{filename_prefix}_{date_suffix}.xlsx"
+                return Response(
+                    excel_bytes,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="{export_filename}"',
+                        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    }
+                )
+            except Exception as excel_err:
+                print("EXCEL EXPORT FALLBACK TO CSV:", repr(excel_err))
+                # Fall through to CSV
+
+        # 2. CSV EXPORT
         output = io.StringIO()
-        output.write("\ufeff")
+        output.write("\ufeff")  # UTF-8 BOM
         writer = csv.writer(output)
 
-        # Write header row
         writer.writerow([
-            "Student Name",
-            "Student Email",
-            "Internship Domain",
-            "Duration",
-            "Letter Type",
-            "Status",
-            "Sent Date",
-            "Sent Time",
-            "Send Count",
-            "Offer Letter ID"
+            "Type", "Document ID", "Student Name", "Student Email",
+            "Domain", "Duration / Track", "Start Date", "End Date",
+            "Issued Date", "Email Status", "Sent Date & Time", "Send Count", "PDF Filename"
         ])
 
         for r in records:
             raw_ts = str(r.get("sent_at") or r.get("created_at") or "")
-            date_str = ""
-            time_str = ""
-
-            if raw_ts:
-                try:
-                    dt = datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
-                    date_str = dt.strftime("%d-%b-%Y")
-                    time_str = dt.strftime("%I:%M:%S %p")
-                except Exception:
-                    date_str = raw_ts[:10]
-                    time_str = raw_ts[11:19]
-
-            status_display = (
-                "SENT"
-                if str(r.get("email_status") or "").strip().lower() == "sent"
-                else "FAILED"
-            )
+            date_display = raw_ts[:19].replace("T", " ") if raw_ts else "-"
+            status_val = str(r.get("email_status") or "").upper()
+            status_display = "SENT" if status_val == "SENT" else ("FAILED" if status_val == "FAILED" else "PENDING")
 
             writer.writerow([
+                r.get("type_label") or ("Offer Letter" if r.get("record_type") == "offer_letter" else "Certificate"),
+                r.get("document_id") or "-",
                 r.get("student_name") or "-",
                 r.get("student_email") or "-",
-                r.get("internship_domain") or "-",
-                r.get("internship_duration") or "-",
-                r.get("offer_letter_type") or "-",
+                r.get("domain") or "-",
+                r.get("duration") or r.get("letter_type") or "-",
+                r.get("start_date") or "-",
+                r.get("end_date") or "-",
+                r.get("issued_date") or "-",
                 status_display,
-                date_str or "-",
-                time_str or "-",
-                r.get("send_count") or 1,
-                r.get("offer_letter_id") or "-"
+                date_display,
+                r.get("send_count") or 0,
+                r.get("pdf_filename") or "-",
             ])
 
-        filename_parts = ["Persevex_Email_History"]
-        if from_date:
-            filename_parts.append(from_date)
-        if to_date:
-            filename_parts.append(f"to_{to_date}")
-        if not from_date and not to_date:
-            filename_parts.append(datetime.now().strftime("%Y-%m-%d"))
-
-        filename = "_".join(filename_parts) + ".csv"
-
+        export_filename = f"{filename_prefix}_{date_suffix}.csv"
         csv_content = output.getvalue()
         output.close()
 
@@ -3652,86 +4220,757 @@ def export_history():
             csv_content,
             mimetype="text/csv",
             headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
-                "Content-Type": "text/csv; charset=utf-8"
+                "Content-Disposition": f'attachment; filename="{export_filename}"',
+                "Content-Type": "text/csv; charset=utf-8",
             }
         )
 
     except Exception as exc:
+        print("EXPORT HISTORY ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
 
-        print("EXPORT ERROR:", repr(exc))
+
+@app.delete("/api/history/<string:record_type>/<path:record_id>")
+def delete_unified_history_record(record_type, record_id):
+    try:
+        rec_type = str(record_type or "").strip().lower()
+        if rec_type in ("offer_letter", "offer", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "email_history"):
+            repository.delete_offer_letter_record(record_id)
+        else:
+            repository.delete_certificate_record(record_id)
 
         return jsonify({
-            "success": False,
-            "error": str(exc)
-        }), 500
+            "success": True,
+            "message": "Audit record deleted successfully."
+        })
+    except Exception as exc:
+        print("DELETE UNIFIED RECORD ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
 
-
-# ============================================================
-# DELETE HISTORY RECORD
-# ============================================================
 
 @app.delete("/history/<int:record_id>")
-def delete_history_record(
-
-    record_id
-
-):
-
+def delete_history_record(record_id):
     try:
-
-
-        supabase.table(
-
-            "email_history"
-
-        ).delete().eq(
-
-            "id",
-
-            record_id
-
-        ).execute()
-
-
+        repository.delete_offer_letter_record(record_id)
         return jsonify({
-
-
-            "success":
-                True,
-
-
-            "message":
-
-                "History record deleted successfully."
-
+            "success": True,
+            "message": "Offer letter history record deleted successfully."
         })
-
-
     except Exception as exc:
+        print("DELETE HISTORY ERROR:", repr(exc))
+        return jsonify({"error": str(exc)}), 500
 
 
-        print(
+@app.post("/api/history/bulk-delete")
+def bulk_delete_history_records():
+    try:
+        data = request.get_json(force=True) or {}
+        items = data.get("items") or []
+        if not items:
+            return jsonify({"success": False, "error": "No records selected for deletion."}), 400
 
-            "DELETE HISTORY ERROR:",
+        result = repository.bulk_delete_records(items)
+        return jsonify({
+            "success": True,
+            "deleted_count": result.get("total_deleted", 0),
+            "offer_letters_deleted": result.get("offer_letters_deleted", 0),
+            "certificates_deleted": result.get("certificates_deleted", 0),
+            "message": f"{result.get('total_deleted', 0)} records deleted successfully."
+        })
+    except Exception as exc:
+        print("BULK DELETE API ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
 
-            repr(
-                exc
-            )
 
+@app.post("/api/history/delete-all")
+def delete_all_history_endpoint():
+    try:
+        data = request.get_json(force=True) or {}
+        confirm_phrase = str(data.get("confirm_phrase") or "").strip().upper()
+        record_type = str(data.get("record_type") or "all").strip().lower()
+
+        if confirm_phrase != "DELETE":
+            return jsonify({
+                "success": False,
+                "error": "Safety check failed. Please type DELETE to confirm."
+            }), 400
+
+        result = repository.delete_all_history_records(record_type)
+        return jsonify({
+            "success": True,
+            "deleted_count": result.get("total_deleted", 0),
+            "offer_letters_deleted": result.get("offer_letters_deleted", 0),
+            "certificates_deleted": result.get("certificates_deleted", 0),
+            "message": "All history records deleted successfully."
+        })
+    except Exception as exc:
+        print("DELETE ALL API ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+# ============================================================
+# CERTIFICATE GENERATOR & BULK ROUTES
+# ============================================================
+
+@app.get("/certificate")
+def certificate_page():
+    try:
+        history_data = repository.get_unified_history(record_type="certificate", page=1, per_page=1)
+        success_count = history_data.get("total_sent", 0)
+        failed_count = history_data.get("total_failed", 0)
+    except Exception as exc:
+        print("CERTIFICATE STATS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
+
+    return render_template(
+        "certificate.html",
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
+@app.get("/api/certificate/status-counts")
+def certificate_status_counts():
+    try:
+        history_data = repository.get_unified_history(record_type="certificate", page=1, per_page=1)
+        return jsonify({
+            "success": True,
+            "total_count": history_data.get("total_certificates", 0),
+            "success_count": history_data.get("total_sent", 0),
+            "failed_count": history_data.get("total_failed", 0),
+        })
+    except Exception as exc:
+        print("CERTIFICATE STATUS COUNTS ERROR:", repr(exc))
+        return jsonify({
+            "success": False,
+            "total_count": 0,
+            "success_count": 0,
+            "failed_count": 0,
+        }), 500
+
+
+@app.post("/api/certificate/generate")
+def certificate_generate():
+    try:
+        data = request.get_json(force=True) or {}
+        if not data:
+            return jsonify({"error": "No certificate data received."}), 400
+
+        student_name = str(data.get("student_name", "")).strip()
+        student_email = str(data.get("student_email", "")).strip().lower()
+        domain = str(data.get("domain") or data.get("internship_domain") or "").strip()
+        start_date = str(data.get("start_date", "")).strip()
+        end_date = str(data.get("end_date", "")).strip()
+        issued_date = str(data.get("issued_date", "")).strip()
+
+        if not student_name or not student_email or not domain or not start_date or not end_date or not issued_date:
+            return jsonify({
+                "error": "Please fill all required fields: Student Name, Email, Domain, Start Date, End Date, and Issued Date."
+            }), 400
+
+        try:
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d")
+            if "-" in issued_date and len(issued_date.split("-")[0]) == 4:
+                datetime.strptime(issued_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Expected YYYY-MM-DD."}), 400
+
+        if end_date_obj < start_date_obj:
+            return jsonify({"error": "End date cannot be before start date."}), 400
+
+        data["domain"] = domain
+        data["internship_domain"] = domain
+
+        cert_id = certificate_service.generate_certificate_id(supabase)
+        data["certificate_id"] = cert_id
+        base_url = certificate_service.get_public_base_url(request)
+
+        filename = certificate_service.generate_certificate_pdf(
+            data=data,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
         )
 
+        formatted_start = certificate_service.format_display_date(start_date)
+        formatted_end = certificate_service.format_display_date(end_date)
+        formatted_issued = certificate_service.format_display_date(issued_date)
+
+        cert_record = {
+            "certificate_id": cert_id,
+            "student_name": student_name,
+            "student_email": student_email,
+            "internship_domain": domain,
+            "start_date": formatted_start,
+            "end_date": formatted_end,
+            "issued_date": formatted_issued,
+            "email_status": "pending",
+            "pdf_filename": filename,
+            "send_count": 0,
+            "error_message": None,
+        }
+        repository.save_certificate_record(cert_record)
 
         return jsonify({
+            "success": True,
+            "filename": filename,
+            "url": f"/generated/{filename}",
+            "certificate_id": cert_id,
+            "data": {
+                "student_name": student_name,
+                "student_email": student_email,
+                "domain": domain,
+                "start_date": formatted_start,
+                "end_date": formatted_end,
+                "issued_date": formatted_issued,
+                "certificate_id": cert_id,
+            }
+        })
+
+    except Exception as exc:
+        print("CERTIFICATE GENERATE API ERROR:", repr(exc))
+        return jsonify({"error": str(exc)}), 500
 
 
-            "error":
+@app.post("/api/certificate/send-email")
+def certificate_send_email():
+    try:
+        data = request.get_json(force=True) or {}
+        filename = str(data.get("filename") or "").strip()
+        recipient = str(data.get("student_email") or "").strip().lower()
+        student_name = str(data.get("student_name") or "Student").strip()
+        domain = str(data.get("domain") or data.get("internship_domain") or "Internship").strip()
+        cert_id = str(data.get("certificate_id") or "").strip()
+        send_again = data.get("send_again") is True
 
-                str(
-                    exc
+        if not recipient:
+            return jsonify({"success": False, "error": "Student email address is required."}), 400
+
+        safe_file = Path(filename).name if filename else f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
+        pdf_path = GENERATED_DIR / safe_file if safe_file else None
+
+        existing_record = None
+        if cert_id:
+            existing_record = repository.get_certificate_by_id(cert_id)
+
+        if existing_record and str(existing_record.get("email_status") or "").lower() == "sent" and not send_again:
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "message": "A certificate has already been sent to this student email.",
+                "previous_record": existing_record,
+            }), 409
+
+        base_url = certificate_service.get_public_base_url(request)
+        cert_data = {
+            "student_name": student_name,
+            "student_email": recipient,
+            "domain": domain,
+            "start_date": existing_record.get("start_date") if existing_record else data.get("start_date", ""),
+            "end_date": existing_record.get("end_date") if existing_record else data.get("end_date", ""),
+            "issued_date": existing_record.get("issued_date") if existing_record else data.get("issued_date", ""),
+            "certificate_id": cert_id or (existing_record.get("certificate_id") if existing_record else certificate_service.generate_certificate_id(supabase)),
+            "template_version": existing_record.get("template_version") if existing_record else "v1",
+        }
+
+        sent_time = datetime.now(timezone.utc).isoformat()
+        try:
+            certificate_service.send_certificate_email(
+                data=cert_data,
+                pdf_path=pdf_path,
+                filename=safe_file,
+            )
+        except Exception as smtp_exc:
+            error_msg = str(smtp_exc)
+            print("CERTIFICATE SMTP SEND ERROR:", repr(smtp_exc))
+
+            previous_send_count = int(existing_record.get("send_count") or 0) if existing_record else 0
+            fail_record = {
+                "certificate_id": cert_data["certificate_id"],
+                "student_name": student_name,
+                "student_email": recipient,
+                "internship_domain": domain,
+                "start_date": cert_data["start_date"],
+                "end_date": cert_data["end_date"],
+                "issued_date": cert_data["issued_date"],
+                "email_status": "failed",
+                "sent_at": None,
+                "send_count": previous_send_count + 1,
+                "pdf_filename": safe_file,
+                "error_message": error_msg,
+                "template_version": cert_data.get("template_version", "v1"),
+            }
+            repository.save_certificate_record(fail_record)
+
+            return jsonify({
+                "success": False,
+                "error": f"Failed to send email: {error_msg}",
+                "email_status": "failed",
+            }), 500
+
+        previous_send_count = int(existing_record.get("send_count") or 0) if existing_record else 0
+        success_record = {
+            "certificate_id": cert_data["certificate_id"],
+            "student_name": student_name,
+            "student_email": recipient,
+            "internship_domain": domain,
+            "start_date": cert_data["start_date"],
+            "end_date": cert_data["end_date"],
+            "issued_date": cert_data["issued_date"],
+            "email_status": "sent",
+            "sent_at": sent_time,
+            "send_count": previous_send_count + 1,
+            "pdf_filename": safe_file,
+            "error_message": None,
+            "template_version": cert_data.get("template_version", "v1"),
+        }
+        repository.save_certificate_record(success_record)
+
+        return jsonify({
+            "success": True,
+            "message": "Certificate sent successfully.",
+            "email_status": "sent",
+        })
+
+    except Exception as exc:
+        print("CERTIFICATE SEND EMAIL ROUTE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+# ============================================================
+# BULK CERTIFICATE API ENDPOINTS
+# ============================================================
+
+@app.post("/api/certificate/bulk/validate")
+def bulk_certificate_validate():
+    try:
+        file = request.files.get("file")
+        if not file or not file.filename:
+            return jsonify({"success": False, "error": "No file uploaded."}), 400
+
+        filename = file.filename.lower()
+        file_bytes = file.read()
+
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            parsed_rows = bulk_certificate_service.parse_excel_content(file_bytes)
+        elif filename.endswith(".csv") or filename.endswith(".txt"):
+            parsed_rows = bulk_certificate_service.parse_csv_content(file_bytes)
+        else:
+            return jsonify({"success": False, "error": "Unsupported file type. Please upload CSV or Excel (.xlsx)."}), 400
+
+        if not parsed_rows:
+            return jsonify({"success": False, "error": "The uploaded spreadsheet is empty or has invalid headers."}), 400
+
+        validation_result = bulk_certificate_service.validate_bulk_records(parsed_rows)
+        return jsonify({
+            "success": True,
+            **validation_result
+        })
+
+    except Exception as exc:
+        print("BULK VALIDATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/certificate/preview-sample")
+def bulk_certificate_preview_sample():
+    """
+    Renders an in-memory preview of an individual candidate's certificate from uploaded spreadsheet data.
+    Does NOT write to database, does NOT send emails, does NOT create permanent files.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = str(data.get("student_name") or "").strip()
+        domain = str(data.get("domain") or data.get("internship_domain") or "").strip()
+        if not student_name:
+            return jsonify({"success": False, "error": "Student Name is required for preview."}), 400
+
+        base_url = certificate_service.get_public_base_url(request)
+        preview_data = {
+            "student_name": student_name,
+            "domain": domain or "Internship Domain",
+            "start_date": data.get("start_date") or "",
+            "end_date": data.get("end_date") or "",
+            "issued_date": data.get("issued_date") or "",
+            "certificate_id": "PXL-CERT-PREVIEW",
+        }
+        preview_img = certificate_service.render_certificate_preview_image(preview_data, base_url=base_url)
+        return jsonify({
+            "success": True,
+            "preview_image": preview_img,
+            "student_name": student_name,
+            "domain": domain
+        })
+    except Exception as exc:
+        print("BULK CERTIFICATE PREVIEW SAMPLE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+
+@app.post("/api/certificate/bulk/generate")
+def bulk_certificate_generate():
+    try:
+        data = request.get_json(force=True) or {}
+        rows = data.get("rows") or []
+        if not rows:
+            return jsonify({"success": False, "error": "No valid rows provided for certificate generation."}), 400
+
+        base_url = certificate_service.get_public_base_url(request)
+        result = bulk_certificate_service.generate_bulk_certificates(
+            valid_rows=rows,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
+            supabase_client=supabase
+        )
+
+        return jsonify({
+            "success": True,
+            **result
+        })
+
+    except Exception as exc:
+        print("BULK GENERATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/certificate/bulk/send-email")
+def bulk_certificate_send_email():
+    try:
+        data = request.get_json(force=True) or {}
+        items = data.get("items") or []
+        if not items:
+            return jsonify({"success": False, "error": "No certificates selected for email dispatch."}), 400
+
+        result = bulk_certificate_service.send_bulk_certificate_emails(
+            certificate_items=items,
+            output_dir=GENERATED_DIR,
+            batch_size=5,
+            delay_seconds=0.4
+        )
+
+        return jsonify({
+            "success": True,
+            **result
+        })
+
+    except Exception as exc:
+        print("BULK SEND EMAIL ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/api/certificate/bulk/sample-template")
+def bulk_certificate_sample_template():
+    try:
+        fmt = (request.args.get("format") or "csv").strip().lower()
+        if fmt in ("excel", "xlsx"):
+            excel_bytes = bulk_certificate_service.get_sample_excel_template()
+            if excel_bytes:
+                return Response(
+                    excel_bytes,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={
+                        "Content-Disposition": 'attachment; filename="Persevex_Certificate_Bulk_Sample.xlsx"',
+                        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    }
                 )
 
-        }), 500
+        csv_content = bulk_certificate_service.get_sample_csv_template()
+        return Response(
+            csv_content,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="Persevex_Certificate_Bulk_Sample.csv"',
+                "Content-Type": "text/csv; charset=utf-8",
+            }
+        )
+    except Exception as exc:
+        print("SAMPLE TEMPLATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/certificate-history")
+def certificate_history_legacy():
+    """Redirect legacy certificate-history route to Unified History."""
+    return redirect("/history?record_type=certificate", code=302)
+
+
+@app.get("/certificate-history/export")
+def certificate_history_export_legacy():
+    return redirect("/history/export?record_type=certificate", code=302)
+
+
+@app.delete("/api/certificate-history/<path:record_id>")
+def delete_certificate_record_legacy(record_id):
+    try:
+        repository.delete_certificate_record(record_id)
+        return jsonify({
+            "success": True,
+            "message": "Certificate record deleted successfully."
+        })
+    except Exception as exc:
+        print("DELETE CERTIFICATE RECORD ERROR:", repr(exc))
+        return jsonify({"error": str(exc)}), 500
+
+
+
+# ============================================================
+# PUBLIC CERTIFICATE VERIFICATION ROUTE (NO LOGIN REQUIRED)
+# ============================================================
+
+PERSISTENT_CERT_DIR = Path(tempfile.gettempdir()) / "persevex_certificates"
+try:
+    PERSISTENT_CERT_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
+
+
+@app.get("/verify/<certificate_id>")
+def verify_certificate(certificate_id):
+    """
+    Publicly accessible endpoint for validating authentic Persevex certificates.
+    Scanned via QR Code on mobile or opened in browser.
+    Differentiates 4 states:
+      1. Verified Active (200)
+      2. Revoked (200 / 410)
+      3. Service Unavailable (503)
+      4. Not Found (404)
+    """
+    cert_id = str(certificate_id).strip()
+    record, db_error = certificate_service.db_get_certificate_by_id(cert_id, supabase, return_error_detail=True)
+
+    base_url = certificate_service.get_public_base_url(request)
+    verification_url = certificate_service.get_verification_url(cert_id, request)
+
+    if record:
+        status = str(record.get("certificate_status") or "active").strip().lower()
+        if status == "revoked":
+            return render_template(
+                "verify.html",
+                valid=False,
+                status="revoked",
+                certificate=record,
+                certificate_id=cert_id,
+                base_url=base_url,
+                verification_url=verification_url,
+                revocation_reason=record.get("error_message") or "This certificate has been revoked by the issuing authority.",
+            ), 200
+
+        thumbnail_url = certificate_service.get_certificate_thumbnail_url(cert_id, request)
+        pdf_preview_url = certificate_service.get_certificate_preview_url(cert_id, request)
+        download_url = certificate_service.get_certificate_download_url(cert_id, request)
+
+        linkedin_text, linkedin_share_url = certificate_service.get_linkedin_share_data(record, request)
+        whatsapp_text, whatsapp_share_url = certificate_service.get_whatsapp_share_data(record, request)
+
+        return render_template(
+            "verify.html",
+            valid=True,
+            status="verified",
+            certificate=record,
+            certificate_id=cert_id,
+            base_url=base_url,
+            verification_url=verification_url,
+            thumbnail_url=thumbnail_url,
+            pdf_preview_url=pdf_preview_url,
+            download_url=download_url,
+            linkedin_text=linkedin_text,
+            whatsapp_text=whatsapp_text,
+            linkedin_share_url=linkedin_share_url,
+            whatsapp_share_url=whatsapp_share_url,
+        ), 200
+
+    # If Supabase experienced a connection error and SQLite didn't have it
+    if db_error and db_error != "empty_id":
+        return render_template(
+            "verify.html",
+            valid=False,
+            status="service_unavailable",
+            certificate_id=cert_id,
+            base_url=base_url,
+            verification_url=verification_url,
+        ), 503
+
+    return render_template(
+        "verify.html",
+        valid=False,
+        status="not_found",
+        certificate_id=cert_id,
+        base_url=base_url,
+        verification_url=verification_url,
+    ), 404
+
+
+@app.post("/api/certificate/revoke/<path:certificate_id>")
+def revoke_certificate_api(certificate_id):
+    """
+    Administrator endpoint to explicitly revoke a certificate.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        reason = data.get("reason") or "Revoked by administrator"
+        repository.revoke_certificate_record(certificate_id, reason=reason)
+        return jsonify({
+            "success": True,
+            "message": f"Certificate {certificate_id} has been revoked successfully."
+        })
+    except Exception as exc:
+        print("REVOKE CERTIFICATE API ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/verify/<certificate_id>/download")
+def verify_download_certificate(certificate_id):
+    """
+    Publicly accessible endpoint to download the authentic certificate PDF.
+    Generates and streams directly from memory on demand from Supabase certificate record.
+    NO PERMANENT LOCAL PDF STORAGE REQUIRED.
+    """
+    cert_id = str(certificate_id).strip()
+    record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
+
+    if not record:
+        return jsonify({"error": "Certificate record not found."}), 404
+
+    if str(record.get("certificate_status") or "").lower() == "revoked":
+        return jsonify({"error": "This certificate has been revoked and is unavailable for download."}), 410
+
+    try:
+        data = {
+            "student_name": record.get("student_name", ""),
+            "domain": record.get("internship_domain", ""),
+            "start_date": record.get("start_date", ""),
+            "end_date": record.get("end_date", ""),
+            "issued_date": record.get("issued_date", ""),
+            "certificate_id": cert_id,
+        }
+        base_url = certificate_service.get_public_base_url(request)
+        template_version = record.get("template_version") or "v1"
+
+        pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
+            data=data,
+            base_url=base_url,
+            template_version=template_version,
+        )
+
+        student_name_safe = certificate_service.safe_filename(record.get("student_name", "Student"))
+        download_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{download_name}"',
+                "Content-Type": "application/pdf",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+    except Exception as exc:
+        print("CERTIFICATE DOWNLOAD ERROR:", repr(exc))
+        return jsonify({"error": "Certificate document could not be generated at this time."}), 500
+
+
+@app.get("/verify/<certificate_id>/pdf")
+@app.get("/verify/<certificate_id>/preview")
+def verify_preview_certificate(certificate_id):
+    """
+    Publicly accessible endpoint to stream the certificate PDF for embedded preview.
+    Generates and streams directly from memory on demand from Supabase certificate record.
+    NO PERMANENT LOCAL PDF STORAGE REQUIRED.
+    """
+    cert_id = str(certificate_id).strip()
+    record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
+
+    if not record:
+        return jsonify({"error": "Certificate record not found."}), 404
+
+    if str(record.get("certificate_status") or "").lower() == "revoked":
+        return jsonify({"error": "This certificate has been revoked and is unavailable for preview."}), 410
+
+    try:
+        data = {
+            "student_name": record.get("student_name", ""),
+            "domain": record.get("internship_domain", ""),
+            "start_date": record.get("start_date", ""),
+            "end_date": record.get("end_date", ""),
+            "issued_date": record.get("issued_date", ""),
+            "certificate_id": cert_id,
+        }
+        base_url = certificate_service.get_public_base_url(request)
+        template_version = record.get("template_version") or "v1"
+
+        pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
+            data=data,
+            base_url=base_url,
+            template_version=template_version,
+        )
+
+        student_name_safe = certificate_service.safe_filename(record.get("student_name", "Student"))
+        preview_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
+
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{preview_name}"',
+                "Content-Type": "application/pdf",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+    except Exception as exc:
+        print("CERTIFICATE PREVIEW ERROR:", repr(exc))
+        return jsonify({"error": "Certificate document is unavailable for preview."}), 500
+
+
+@app.get("/verify/<certificate_id>/thumbnail")
+@app.get("/verify/<certificate_id>/image")
+def verify_image_certificate(certificate_id):
+    """
+    Publicly accessible endpoint to render and stream a crisp PNG image preview of the certificate.
+    Generates image directly in memory on demand from Supabase certificate record.
+    NO PERMANENT LOCAL PDF STORAGE REQUIRED.
+    """
+    cert_id = str(certificate_id).strip()
+    record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
+
+    if not record:
+        return jsonify({"error": "Certificate record not found."}), 404
+
+    if str(record.get("certificate_status") or "").lower() == "revoked":
+        return jsonify({"error": "This certificate has been revoked."}), 410
+
+    try:
+        data = {
+            "student_name": record.get("student_name", ""),
+            "domain": record.get("internship_domain", ""),
+            "start_date": record.get("start_date", ""),
+            "end_date": record.get("end_date", ""),
+            "issued_date": record.get("issued_date", ""),
+            "certificate_id": cert_id,
+        }
+        base_url = certificate_service.get_public_base_url(request)
+        template_version = record.get("template_version") or "v1"
+
+        img_bytes = certificate_service.generate_certificate_image_bytes(
+            data=data,
+            base_url=base_url,
+            dpi=180,
+            template_version=template_version,
+        )
+
+        return Response(
+            img_bytes,
+            mimetype="image/png",
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Content-Type": "image/png",
+            },
+        )
+    except Exception as exc:
+        print("CERTIFICATE IMAGE ERROR:", repr(exc))
+        return jsonify({"error": "Certificate image could not be rendered."}), 500
+
+
 # ============================================================
 # START SERVER
 # ============================================================
@@ -3763,7 +5002,7 @@ if __name__ == "__main__":
     )
 
     app.run(
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=5000,
         debug=True,
     )
