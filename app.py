@@ -4524,7 +4524,13 @@ def certificate_generate():
                 }
             })
 
-        cert_id = certificate_service.generate_certificate_id(supabase)
+        # 2. Check if student already has a previous sent certificate -> reuse that certificate_id
+        previous_sent_cert = repository.get_previous_sent_certificate_by_email(student_email)
+        if previous_sent_cert and str(previous_sent_cert.get("certificate_status") or "").lower() != "revoked":
+            cert_id = str(previous_sent_cert.get("certificate_id") or "").strip()
+        else:
+            cert_id = certificate_service.generate_certificate_id(supabase)
+
         data["certificate_id"] = cert_id
         base_url = certificate_service.get_public_base_url(request)
 
@@ -4534,23 +4540,8 @@ def certificate_generate():
             base_url=base_url,
         )
 
-        cert_record = {
-            "certificate_id": cert_id,
-            "student_name": student_name,
-            "student_email": student_email,
-            "internship_domain": domain,
-            "start_date": formatted_start,
-            "end_date": formatted_end,
-            "issued_date": formatted_issued,
-            "email_status": "pending",
-            "pdf_filename": filename,
-            "send_count": 0,
-            "error_message": None,
-        }
-        repository.save_certificate_record(cert_record)
-
-        preview_url = f"/verify/{cert_id}/preview"
-        download_url = f"/verify/{cert_id}/download"
+        preview_url = f"/generated/{filename}"
+        download_url = f"/generated/{filename}"
 
         return jsonify({
             "success": True,
@@ -4583,37 +4574,65 @@ def certificate_send_email():
         student_name = str(data.get("student_name") or "Student").strip()
         domain = str(data.get("domain") or data.get("internship_domain") or "Internship").strip()
         cert_id = str(data.get("certificate_id") or "").strip()
+        start_date = str(data.get("start_date") or "").strip()
+        end_date = str(data.get("end_date") or "").strip()
+        issued_date = str(data.get("issued_date") or "").strip()
         send_again = data.get("send_again") is True
 
         if not recipient:
             return jsonify({"success": False, "error": "Student email address is required."}), 400
 
-        safe_file = Path(filename).name if filename else f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
-        pdf_path = GENERATED_DIR / safe_file if safe_file else None
+        # Resend detection based on normalized recipient email ONLY
+        previous_sent_record = None
+        if not send_again:
+            previous_sent_record = repository.get_previous_sent_certificate_by_email(recipient)
+            if previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent":
+                return jsonify({
+                    "success": False,
+                    "duplicate": True,
+                    "message": "This email has already received a certificate. Do you want to send it again?",
+                    "previous_record": previous_sent_record,
+                }), 409
+        else:
+            previous_sent_record = repository.get_previous_sent_certificate_by_email(recipient)
 
-        existing_record = None
+        is_resend = bool(send_again and previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent")
+        target_record_id = (data.get("id") or data.get("existing_id") or (previous_sent_record.get("id") if previous_sent_record else None)) if is_resend else None
+
+        # Persistent Certificate ID: if resend, MUST preserve the existing certificate_id
+        if is_resend and previous_sent_record:
+            cert_id = str(previous_sent_record.get("certificate_id") or cert_id).strip()
+            prev_count = int(previous_sent_record.get("send_count") or 1)
+            current_send_count = prev_count + 1
+        else:
+            current_send_count = 1
+            if not cert_id:
+                cert_id = certificate_service.generate_certificate_id(supabase)
+
+        current_record = None
         if cert_id:
-            existing_record = repository.get_certificate_by_id(cert_id)
+            current_record = repository.get_certificate_by_id(cert_id)
 
-        if existing_record and str(existing_record.get("email_status") or "").lower() == "sent" and not send_again:
-            return jsonify({
-                "success": False,
-                "duplicate": True,
-                "message": "A certificate has already been sent to this student email.",
-                "previous_record": existing_record,
-            }), 409
-
-        base_url = certificate_service.get_public_base_url(request)
         cert_data = {
             "student_name": student_name,
             "student_email": recipient,
             "domain": domain,
-            "start_date": existing_record.get("start_date") if existing_record else data.get("start_date", ""),
-            "end_date": existing_record.get("end_date") if existing_record else data.get("end_date", ""),
-            "issued_date": existing_record.get("issued_date") if existing_record else data.get("issued_date", ""),
-            "certificate_id": cert_id or (existing_record.get("certificate_id") if existing_record else certificate_service.generate_certificate_id(supabase)),
-            "template_version": existing_record.get("template_version") if existing_record else "v1",
+            "start_date": start_date or (current_record.get("start_date") if current_record else (previous_sent_record.get("start_date") if previous_sent_record else "")),
+            "end_date": end_date or (current_record.get("end_date") if current_record else (previous_sent_record.get("end_date") if previous_sent_record else "")),
+            "issued_date": issued_date or (current_record.get("issued_date") if current_record else (previous_sent_record.get("issued_date") if previous_sent_record else "")),
+            "certificate_id": cert_id,
+            "template_version": data.get("template_version") or (current_record.get("template_version") if current_record else "v1"),
         }
+
+        # Regenerate/ensure PDF has the exact cert_id, QR code, and current details
+        base_url = certificate_service.get_public_base_url(request)
+        safe_file = certificate_service.generate_certificate_pdf(
+            data=cert_data,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
+            template_version=cert_data.get("template_version", "v1")
+        )
+        pdf_path = GENERATED_DIR / safe_file
 
         sent_time = datetime.now(timezone.utc).isoformat()
         try:
@@ -4626,7 +4645,6 @@ def certificate_send_email():
             error_msg = str(smtp_exc)
             print("CERTIFICATE SMTP SEND ERROR:", repr(smtp_exc))
 
-            previous_send_count = int(existing_record.get("send_count") or 0) if existing_record else 0
             fail_record = {
                 "certificate_id": cert_data["certificate_id"],
                 "student_name": student_name,
@@ -4637,12 +4655,15 @@ def certificate_send_email():
                 "issued_date": cert_data["issued_date"],
                 "email_status": "failed",
                 "sent_at": None,
-                "send_count": previous_send_count + 1,
+                "send_count": current_send_count,
                 "pdf_filename": safe_file,
                 "error_message": error_msg,
                 "template_version": cert_data.get("template_version", "v1"),
             }
-            repository.save_certificate_record(fail_record)
+            if is_resend and target_record_id:
+                fail_record["id"] = target_record_id
+                fail_record["send_again"] = True
+            repository.save_certificate_record(fail_record, existing_id=target_record_id if is_resend else None)
 
             return jsonify({
                 "success": False,
@@ -4650,7 +4671,7 @@ def certificate_send_email():
                 "email_status": "failed",
             }), 500
 
-        previous_send_count = int(existing_record.get("send_count") or 0) if existing_record else 0
+        # Success: update in-place if resend, or insert if first send
         success_record = {
             "certificate_id": cert_data["certificate_id"],
             "student_name": student_name,
@@ -4661,17 +4682,23 @@ def certificate_send_email():
             "issued_date": cert_data["issued_date"],
             "email_status": "sent",
             "sent_at": sent_time,
-            "send_count": previous_send_count + 1,
+            "send_count": current_send_count,
             "pdf_filename": safe_file,
             "error_message": None,
             "template_version": cert_data.get("template_version", "v1"),
         }
-        repository.save_certificate_record(success_record)
+        if is_resend and target_record_id:
+            success_record["id"] = target_record_id
+            success_record["send_again"] = True
+
+        repository.save_certificate_record(success_record, existing_id=target_record_id if is_resend else None)
 
         return jsonify({
             "success": True,
             "message": "Certificate sent successfully.",
             "email_status": "sent",
+            "send_count": current_send_count,
+            "certificate_id": cert_data["certificate_id"],
         })
 
     except Exception as exc:
@@ -4682,6 +4709,40 @@ def certificate_send_email():
 # ============================================================
 # BULK CERTIFICATE API ENDPOINTS
 # ============================================================
+
+@app.post("/api/certificate/bulk-check-duplicates")
+def certificate_bulk_check_duplicates():
+    """
+    Check uploaded certificate batch for historical sent recipients.
+    Considers ONLY records where email_status = 'sent'.
+    Normalizes candidate emails and database emails using email.strip().lower().
+    Authoritative source: Supabase (falls back to local SQLite on exception/unconfigured).
+    Returns list of duplicate email strings and mapping of details.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        records = data.get("records") or data.get("emails") or []
+        if not records:
+            return jsonify({
+                "success": True,
+                "duplicate_count": 0,
+                "duplicates": [],
+                "duplicate_map": {}
+            })
+
+        duplicate_map = repository.find_existing_certificate_emails_batch(records)
+        duplicate_emails = list(duplicate_map.keys())
+
+        return jsonify({
+            "success": True,
+            "duplicate_count": len(duplicate_emails),
+            "duplicates": duplicate_emails,
+            "duplicate_map": duplicate_map
+        })
+    except Exception as exc:
+        print("BULK CERTIFICATE CHECK DUPLICATES ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
 
 @app.post("/api/certificate/bulk/validate")
 def bulk_certificate_validate():
@@ -4748,7 +4809,6 @@ def bulk_certificate_preview_sample():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
-
 @app.post("/api/certificate/bulk/generate")
 def bulk_certificate_generate():
     try:
@@ -4780,6 +4840,9 @@ def bulk_certificate_send_email():
     try:
         data = request.get_json(force=True) or {}
         items = data.get("items") or []
+        skip_duplicate_emails = data.get("skip_duplicate_emails") or []
+        send_again_all = bool(data.get("send_again_all", False))
+
         if not items:
             return jsonify({"success": False, "error": "No certificates selected for email dispatch."}), 400
 
@@ -4787,7 +4850,9 @@ def bulk_certificate_send_email():
             certificate_items=items,
             output_dir=GENERATED_DIR,
             batch_size=5,
-            delay_seconds=0.4
+            delay_seconds=0.4,
+            skip_duplicate_emails=skip_duplicate_emails,
+            send_again_all=send_again_all
         )
 
         return jsonify({
@@ -4971,6 +5036,9 @@ def verify_download_certificate(certificate_id):
     record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
 
     if not record:
+        matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
+        if matched_files:
+            return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=True)
         return jsonify({"error": "Certificate record not found."}), 404
 
     if str(record.get("certificate_status") or "").lower() == "revoked":
@@ -5023,6 +5091,9 @@ def verify_preview_certificate(certificate_id):
     record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
 
     if not record:
+        matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
+        if matched_files:
+            return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=False)
         return jsonify({"error": "Certificate record not found."}), 404
 
     if str(record.get("certificate_status") or "").lower() == "revoked":

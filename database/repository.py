@@ -757,83 +757,159 @@ def delete_offer_letter_record(record_id, document_id=None):
 # ============================================================
 # CERTIFICATE STORAGE
 # ============================================================
-def save_certificate_record(record_data):
+def get_certificate_by_pk_id(record_id):
+    """
+    Retrieve a Certificate record by primary key ID (integer).
+    Authoritative source: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or query throws exception).
+    """
+    if record_id is None or not str(record_id).strip():
+        return None
+    try:
+        rec_id_int = int(record_id)
+    except (ValueError, TypeError):
+        return None
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("certificate_history").select("*").eq("id", rec_id_int).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                rec = dict(res.data[0])
+                if not rec.get("certificate_status"):
+                    rec["certificate_status"] = "active"
+                if not rec.get("template_version"):
+                    rec["template_version"] = "v1"
+                return rec
+            return None
+        except Exception as exc:
+            print("SUPABASE GET CERT BY PK ID ERROR (using fallback):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM certificate_history WHERE id = ? LIMIT 1", (rec_id_int,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            rec = dict(row)
+            if not rec.get("certificate_status"):
+                rec["certificate_status"] = "active"
+            if not rec.get("template_version"):
+                rec["template_version"] = "v1"
+            return rec
+    except Exception as exc:
+        print("LOCAL DB GET CERT BY PK ID ERROR:", repr(exc))
+
+    return None
+
+
+def save_certificate_record(record_data, existing_id=None):
     """
     Save or update Certificate record in Supabase and local SQLite.
-    CRITICAL: Performs field-preserving merge so updating email_status,
-    sent_at, send_count, or error_message NEVER wipes out start_date,
-    end_date, issued_date, student_name, or domain!
+    When send_again=True and existing_id/id is provided (resend), it UPDATES the existing record in-place:
+      - keeps the same primary key ID
+      - replaces old certificate details (certificate_id, domain, dates, name, pdf_filename) with CURRENT certificate details
+      - increments send_count
+      - updates sent_at
+      - sets email_status = 'sent'
+      - clears error_message
+      - preserves created_at from original record
+    When first-time send (send_again=False), it INSERTS a new record (or updates by certificate_id if already present).
     """
-    cert_id = record_data.get("certificate_id")
-    if not cert_id:
-        return False
-
-    cert_clean = str(cert_id).strip()
     now_iso = datetime.now(timezone.utc).isoformat()
+    send_again = bool(record_data.get("send_again"))
+    target_id_raw = existing_id if existing_id is not None else (record_data.get("id") or record_data.get("record_id") or record_data.get("existing_id"))
 
-    # 1. Look up existing record in local SQLite or Supabase to merge fields
+    target_id = None
+    if target_id_raw is not None and str(target_id_raw).strip():
+        try:
+            target_id = int(str(target_id_raw).strip())
+        except (ValueError, TypeError):
+            target_id = None
+
+    is_resend = bool(send_again and target_id is not None)
+
     existing = None
-    try:
-        existing = get_certificate_by_id(cert_clean)
-    except Exception:
-        existing = None
+    if is_resend:
+        try:
+            existing = get_certificate_by_pk_id(target_id)
+        except Exception:
+            existing = None
+    elif record_data.get("certificate_id"):
+        try:
+            existing = get_certificate_by_id(str(record_data.get("certificate_id")).strip())
+        except Exception:
+            existing = None
 
     existing = existing or {}
 
-    # 2. Merge non-empty fields with existing values
+    # Fields to persist (prioritize current record_data over existing)
+    cert_id = str(record_data.get("certificate_id") or existing.get("certificate_id") or "").strip()
+    if not cert_id and not target_id:
+        return False
+
     merged_student_name = str(record_data.get("student_name") or existing.get("student_name") or "").strip()
-    merged_student_email = str(record_data.get("student_email") or existing.get("student_email") or "").strip()
-    merged_domain = str(record_data.get("internship_domain") or existing.get("internship_domain") or record_data.get("domain") or "").strip()
+    merged_student_email = str(record_data.get("student_email") or existing.get("student_email") or "").strip().lower()
+    merged_domain = str(record_data.get("internship_domain") or record_data.get("domain") or existing.get("internship_domain") or "").strip()
     merged_start_date = str(record_data.get("start_date") or existing.get("start_date") or "").strip()
     merged_end_date = str(record_data.get("end_date") or existing.get("end_date") or "").strip()
     merged_issued_date = str(record_data.get("issued_date") or existing.get("issued_date") or "").strip()
     merged_generated_date = str(record_data.get("generated_date") or existing.get("generated_date") or now_iso).strip()
-    merged_created_at = str(record_data.get("created_at") or existing.get("created_at") or now_iso).strip()
+    merged_created_at = str(existing.get("created_at") or record_data.get("created_at") or now_iso).strip()
     merged_certificate_status = str(record_data.get("certificate_status") or existing.get("certificate_status") or "active").strip().lower()
-    merged_email_status = str(record_data.get("email_status") or existing.get("email_status") or "pending").strip().lower()
-    merged_sent_at = record_data.get("sent_at") or existing.get("sent_at")
+    merged_email_status = str(record_data.get("email_status") or ("sent" if is_resend else "pending")).strip().lower()
+    merged_sent_at = record_data.get("sent_at") or (now_iso if merged_email_status == "sent" else existing.get("sent_at"))
 
-    # send_count handling
-    if "send_count" in record_data and record_data.get("send_count") is not None:
-        merged_send_count = int(record_data.get("send_count"))
+    if is_resend:
+        if record_data.get("send_count") is not None:
+            merged_send_count = int(record_data["send_count"])
+        elif existing.get("send_count") is not None:
+            merged_send_count = int(existing["send_count"]) + 1
+        else:
+            merged_send_count = 2
+        merged_error_message = record_data.get("error_message") if merged_email_status == "failed" else None
     else:
-        merged_send_count = int(existing.get("send_count") or 0)
+        if record_data.get("send_count") is not None:
+            merged_send_count = int(record_data["send_count"])
+        else:
+            merged_send_count = 1 if merged_email_status == "sent" else 0
+        merged_error_message = record_data.get("error_message")
 
     merged_pdf_filename = str(record_data.get("pdf_filename") or existing.get("pdf_filename") or "").strip()
     merged_template_version = str(record_data.get("template_version") or existing.get("template_version") or "v1").strip()
 
-    if "error_message" in record_data:
-        merged_error_message = record_data.get("error_message")
-    else:
-        merged_error_message = existing.get("error_message")
+    payload_full = {
+        "certificate_id": cert_id,
+        "student_name": merged_student_name,
+        "student_email": merged_student_email,
+        "internship_domain": merged_domain,
+        "start_date": merged_start_date,
+        "end_date": merged_end_date,
+        "issued_date": merged_issued_date,
+        "generated_date": merged_generated_date,
+        "created_at": merged_created_at,
+        "certificate_status": merged_certificate_status,
+        "email_status": merged_email_status,
+        "sent_at": merged_sent_at,
+        "send_count": merged_send_count,
+        "pdf_filename": merged_pdf_filename,
+        "error_message": merged_error_message,
+        "template_version": merged_template_version,
+    }
 
-    # 3. Save to Supabase
+    # Supabase Mutate
     sb = get_supabase_client()
     if sb:
-        payload_full = {
-            "certificate_id": cert_clean,
-            "student_name": merged_student_name,
-            "student_email": merged_student_email,
-            "internship_domain": merged_domain,
-            "start_date": merged_start_date,
-            "end_date": merged_end_date,
-            "issued_date": merged_issued_date,
-            "generated_date": merged_generated_date,
-            "created_at": merged_created_at,
-            "certificate_status": merged_certificate_status,
-            "email_status": merged_email_status,
-            "sent_at": merged_sent_at,
-            "send_count": merged_send_count,
-            "pdf_filename": merged_pdf_filename,
-            "error_message": merged_error_message,
-            "template_version": merged_template_version,
-        }
-        def _safe_supabase_mutate(action, payload):
+        def _safe_supabase_mutate(action, payload, pk_id=None, c_id=None):
             current_payload = dict(payload)
             for _ in range(5):
                 try:
-                    if action == "update":
-                        return sb.table("certificate_history").update(current_payload).eq("certificate_id", cert_clean).execute()
+                    if action == "update_pk":
+                        return sb.table("certificate_history").update(current_payload).eq("id", pk_id).execute()
+                    elif action == "update_cert_id":
+                        return sb.table("certificate_history").update(current_payload).eq("certificate_id", c_id).execute()
                     else:
                         return sb.table("certificate_history").insert(current_payload).execute()
                 except Exception as mut_exc:
@@ -844,27 +920,29 @@ def save_certificate_record(record_data):
                         if col_to_drop in current_payload:
                             current_payload.pop(col_to_drop, None)
                             continue
-                    raise mut_exc
+                    print("SUPABASE MUTATE CERTIFICATE ERROR (using fallback):", repr(mut_exc))
+                    break
 
         try:
-            # Check if row exists in Supabase
-            existing_sb = sb.table("certificate_history").select("id").eq("certificate_id", cert_clean).limit(1).execute()
-            if existing_sb.data and len(existing_sb.data) > 0:
-                _safe_supabase_mutate("update", payload_full)
+            if is_resend and target_id is not None:
+                _safe_supabase_mutate("update_pk", payload_full, pk_id=target_id)
             else:
-                _safe_supabase_mutate("insert", payload_full)
+                existing_sb = sb.table("certificate_history").select("id").eq("certificate_id", cert_id).limit(1).execute()
+                if existing_sb.data and len(existing_sb.data) > 0:
+                    _safe_supabase_mutate("update_cert_id", payload_full, c_id=cert_id)
+                else:
+                    _safe_supabase_mutate("insert", payload_full)
         except Exception as exc:
             print("SUPABASE SAVE CERTIFICATE WARNING (will use local fallback):", repr(exc))
 
-    # 4. Save to local SQLite (always kept in sync)
+    # SQLite Mutate
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM certificate_history WHERE certificate_id = ? LIMIT 1", (cert_clean,))
-        row = cursor.fetchone()
-        if row:
+        if is_resend and target_id is not None:
             cursor.execute("""
                 UPDATE certificate_history SET
+                    certificate_id = ?,
                     student_name = ?,
                     student_email = ?,
                     internship_domain = ?,
@@ -880,8 +958,9 @@ def save_certificate_record(record_data):
                     pdf_filename = ?,
                     error_message = ?,
                     template_version = ?
-                WHERE certificate_id = ?
+                WHERE id = ?
             """, (
+                cert_id,
                 merged_student_name,
                 merged_student_email,
                 merged_domain,
@@ -897,34 +976,101 @@ def save_certificate_record(record_data):
                 merged_pdf_filename,
                 merged_error_message,
                 merged_template_version,
-                cert_clean
+                target_id
             ))
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO certificate_history (
+                        id, certificate_id, student_name, student_email, internship_domain,
+                        start_date, end_date, issued_date, generated_date, created_at,
+                        certificate_status, email_status, sent_at, send_count,
+                        pdf_filename, error_message, template_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    target_id,
+                    cert_id,
+                    merged_student_name,
+                    merged_student_email,
+                    merged_domain,
+                    merged_start_date,
+                    merged_end_date,
+                    merged_issued_date,
+                    merged_generated_date,
+                    merged_created_at,
+                    merged_certificate_status,
+                    merged_email_status,
+                    merged_sent_at,
+                    merged_send_count,
+                    merged_pdf_filename,
+                    merged_error_message,
+                    merged_template_version
+                ))
         else:
-            cursor.execute("""
-                INSERT INTO certificate_history (
-                    certificate_id, student_name, student_email, internship_domain,
-                    start_date, end_date, issued_date, generated_date, created_at,
-                    certificate_status, email_status, sent_at, send_count,
-                    pdf_filename, error_message, template_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                cert_clean,
-                merged_student_name,
-                merged_student_email,
-                merged_domain,
-                merged_start_date,
-                merged_end_date,
-                merged_issued_date,
-                merged_generated_date,
-                merged_created_at,
-                merged_certificate_status,
-                merged_email_status,
-                merged_sent_at,
-                merged_send_count,
-                merged_pdf_filename,
-                merged_error_message,
-                merged_template_version
-            ))
+            cursor.execute("SELECT id FROM certificate_history WHERE certificate_id = ? LIMIT 1", (cert_id,))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("""
+                    UPDATE certificate_history SET
+                        student_name = ?,
+                        student_email = ?,
+                        internship_domain = ?,
+                        start_date = ?,
+                        end_date = ?,
+                        issued_date = ?,
+                        generated_date = ?,
+                        created_at = ?,
+                        certificate_status = ?,
+                        email_status = ?,
+                        sent_at = ?,
+                        send_count = ?,
+                        pdf_filename = ?,
+                        error_message = ?,
+                        template_version = ?
+                    WHERE certificate_id = ?
+                """, (
+                    merged_student_name,
+                    merged_student_email,
+                    merged_domain,
+                    merged_start_date,
+                    merged_end_date,
+                    merged_issued_date,
+                    merged_generated_date,
+                    merged_created_at,
+                    merged_certificate_status,
+                    merged_email_status,
+                    merged_sent_at,
+                    merged_send_count,
+                    merged_pdf_filename,
+                    merged_error_message,
+                    merged_template_version,
+                    cert_id
+                ))
+            else:
+                cursor.execute("""
+                    INSERT INTO certificate_history (
+                        certificate_id, student_name, student_email, internship_domain,
+                        start_date, end_date, issued_date, generated_date, created_at,
+                        certificate_status, email_status, sent_at, send_count,
+                        pdf_filename, error_message, template_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    cert_id,
+                    merged_student_name,
+                    merged_student_email,
+                    merged_domain,
+                    merged_start_date,
+                    merged_end_date,
+                    merged_issued_date,
+                    merged_generated_date,
+                    merged_created_at,
+                    merged_certificate_status,
+                    merged_email_status,
+                    merged_sent_at,
+                    merged_send_count,
+                    merged_pdf_filename,
+                    merged_error_message,
+                    merged_template_version
+                ))
         conn.commit()
         conn.close()
     except Exception as exc:
@@ -1214,8 +1360,147 @@ def find_existing_certificates_batch(candidate_rows, supabase_client=None):
     return lookup
 
 
+def get_previous_sent_certificate_by_email(email):
+    """
+    Check if a successfully sent Certificate record already exists for this email.
+    Queries ONLY public.certificate_history.
+    Considers ONLY records where email_status = 'sent' (ignores 'pending', 'failed', etc.).
+    Trims whitespace and performs case-insensitive comparison.
+    Authoritative source: Supabase when configured and operational.
+    Local SQLite is used ONLY if Supabase is not configured or throws an actual connection/query exception.
+    """
+    if not email:
+        return None
+    email_clean = str(email).strip().lower()
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("certificate_history")
+                .select("*")
+                .ilike("student_email", email_clean)
+                .eq("email_status", "sent")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            # When Supabase query succeeds, its result is authoritative
+            if res.data and len(res.data) > 0:
+                for row in res.data:
+                    rec = dict(row)
+                    rec_email = str(rec.get("student_email") or "").strip().lower()
+                    if rec_email == email_clean:
+                        return rec
+                return None
+            return None
+        except Exception as exc:
+            print("SUPABASE GET PREVIOUS SENT CERT ERROR (using fallback):", repr(exc))
+
+    # Fallback to local SQLite ONLY if Supabase is unconfigured or threw an exception
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM certificate_history WHERE LOWER(TRIM(student_email)) = ? AND email_status = 'sent' ORDER BY id DESC LIMIT 1",
+            (email_clean,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as exc:
+        print("LOCAL DB GET PREVIOUS SENT CERT ERROR:", repr(exc))
+
+    return None
 
 
+def find_existing_certificate_emails_batch(candidate_rows_or_emails, supabase_client=None):
+    """
+    Efficient batch lookup to detect successfully sent Certificate records in public.certificate_history.
+    Considers ONLY records where email_status = 'sent' (ignores 'pending', 'failed', etc.).
+    Normalizes candidate emails and database emails using email.strip().lower().
+    Authoritative source of truth: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or throws an exception).
+    Returns: dict mapping lowercase trimmed email -> existing Certificate record dict
+    """
+    if not candidate_rows_or_emails:
+        return {}
+
+    # Extract clean unique candidate emails (normalized: trimmed & lowercase) + query variants
+    clean_emails_set = set()
+    query_variants_set = set()
+
+    for item in candidate_rows_or_emails:
+        if isinstance(item, dict):
+            em = item.get("student_email") or item.get("email") or ""
+        else:
+            em = str(item or "")
+        em_str = str(em).strip()
+        em_norm = em_str.lower()
+        if em_norm:
+            clean_emails_set.add(em_norm)
+            query_variants_set.add(em_norm)
+            if em_str:
+                query_variants_set.add(em_str)
+
+    if not clean_emails_set:
+        return {}
+
+    query_variants_list = list(query_variants_set)
+    clean_emails_list = list(clean_emails_set)
+    existing_records = []
+    supabase_success = False
+
+    # 1. Authoritative batch query to Supabase
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("certificate_history")
+                .select("*")
+                .in_("student_email", query_variants_list)
+                .eq("email_status", "sent")
+                .execute()
+            )
+            if res.data is not None:
+                supabase_success = True
+                for row in res.data:
+                    rec = dict(row)
+                    st = str(rec.get("email_status") or "").strip().lower()
+                    if st == "sent":
+                        existing_records.append(rec)
+        except Exception as exc:
+            print("SUPABASE FIND EXISTING CERT BATCH WARNING (falling back to local DB):", repr(exc))
+            supabase_success = False
+
+    # 2. Local SQLite fallback query — ONLY used if Supabase is unconfigured or query failed
+    if not supabase_success:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in clean_emails_list)
+            cursor.execute(
+                f"SELECT * FROM certificate_history WHERE LOWER(TRIM(student_email)) IN ({placeholders}) AND email_status = 'sent'",
+                clean_emails_list
+            )
+            for row in cursor.fetchall():
+                existing_records.append(dict(row))
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB FIND EXISTING CERT BATCH ERROR:", repr(exc))
+
+    # 3. Build lookup map with normalized email keys (trimmed & lowercased)
+    lookup = {}
+    for r in existing_records:
+        row_email = str(r.get("student_email") or "").strip().lower()
+        if row_email and row_email in clean_emails_set:
+            if row_email not in lookup or int(r.get("send_count") or 0) > int(lookup[row_email].get("send_count") or 0):
+                lookup[row_email] = r
+
+    return lookup
 def get_certificate_by_id(cert_id, return_error_detail=False):
     """
     Retrieve certificate record by ID.

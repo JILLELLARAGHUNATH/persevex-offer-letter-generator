@@ -309,9 +309,14 @@ def db_get_certificate_by_email(email, supabase_client=None):
     return None
 
 
-def db_save_certificate_record(record_data, supabase_client=None):
+def db_get_certificate_by_pk_id(record_id, supabase_client=None):
+    """Retrieve certificate record by primary key ID (integer)."""
+    return repository.get_certificate_by_pk_id(record_id)
+
+
+def db_save_certificate_record(record_data, supabase_client=None, existing_id=None):
     """Field-preserving merged save to Supabase and local SQLite."""
-    return repository.save_certificate_record(record_data)
+    return repository.save_certificate_record(record_data, existing_id=existing_id)
 
 
 def db_get_all_certificates(supabase_client=None):

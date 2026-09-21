@@ -10,6 +10,7 @@ from database.repository import (
     bulk_save_certificate_records,
     find_existing_certificates_batch,
     get_certificate_by_id,
+    get_previous_sent_certificate_by_email,
     save_bulk_job_record,
 )
 import certificate_service
@@ -464,77 +465,118 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
 
 
 
-def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, delay_seconds=0.4):
+def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, delay_seconds=0.4, skip_duplicate_emails=None, send_again_all=False):
     """
     Send emails in safe, controlled batches with live progress tracking and failure visibility.
+    Supports skipping historical duplicates and guarantees that the same email is never sent twice in one batch.
     """
     total = len(certificate_items)
     successful_count = 0
     failed_count = 0
+    skipped_count = 0
     failed_items = []
     results = []
 
+    skip_set = set()
+    if skip_duplicate_emails and not send_again_all:
+        for em in skip_duplicate_emails:
+            if em:
+                skip_set.add(str(em).strip().lower())
+
+    seen_batch_emails = set()
+
     for i, item in enumerate(certificate_items):
         cert_id = item.get("certificate_id")
-        student_email = item.get("student_email")
-        student_name = item.get("student_name")
-        domain = item.get("domain") or item.get("internship_domain")
+        student_email = str(item.get("student_email") or "").strip()
+        student_name = str(item.get("student_name") or "Student").strip()
+        domain = str(item.get("domain") or item.get("internship_domain") or "Internship").strip()
         filename = item.get("filename") or item.get("pdf_filename")
+        norm_email = student_email.lower()
 
-        pdf_path = Path(output_dir) / filename if filename else None
-        if not pdf_path or not pdf_path.exists():
-            from database.repository import PERSISTENT_CERT_DIR
-            persistent_path = PERSISTENT_CERT_DIR / filename if filename else None
-            if persistent_path and persistent_path.exists():
-                pdf_path = persistent_path
-
-        try:
-            if not pdf_path or not pdf_path.exists():
-                # Self-healing on demand
-                cert_rec = get_certificate_by_id(cert_id) or {}
-                if cert_rec:
-                    data = {
-                        "student_name": cert_rec.get("student_name", student_name),
-                        "domain": cert_rec.get("internship_domain", domain),
-                        "start_date": cert_rec.get("start_date", ""),
-                        "end_date": cert_rec.get("end_date", ""),
-                        "issued_date": cert_rec.get("issued_date", ""),
-                        "certificate_id": cert_id,
-                    }
-                    filename = certificate_service.generate_certificate_pdf(
-                        data=data,
-                        output_dir=Path(output_dir),
-                    )
-                    pdf_path = Path(output_dir) / filename
-                else:
-                    raise FileNotFoundError(f"Certificate PDF {filename} not found on server.")
-
-            email_data = {
+        # In-batch duplicate guard: Never send the same email twice in one bulk operation
+        if norm_email in seen_batch_emails:
+            skipped_count += 1
+            results.append({
+                "certificate_id": cert_id,
                 "student_email": student_email,
                 "student_name": student_name,
                 "domain": domain,
+                "filename": filename,
+                "status": "skipped_batch_duplicate",
+                "error": None
+            })
+            continue
+
+        # Historical duplicate skip guard (when "Send Only to New" is chosen)
+        if norm_email in skip_set:
+            skipped_count += 1
+            results.append({
                 "certificate_id": cert_id,
-            }
+                "student_email": student_email,
+                "student_name": student_name,
+                "domain": domain,
+                "filename": filename,
+                "status": "skipped_historical_duplicate",
+                "error": None
+            })
+            continue
+
+        seen_batch_emails.add(norm_email)
+
+        prev_rec = get_previous_sent_certificate_by_email(student_email)
+        is_resend = bool(prev_rec and str(prev_rec.get("email_status") or "").strip().lower() == "sent")
+        target_id = prev_rec.get("id") if is_resend else None
+        if is_resend and prev_rec:
+            cert_id = str(prev_rec.get("certificate_id") or cert_id).strip()
+            send_count = (int(prev_rec.get("send_count") or 1) + 1)
+        else:
+            send_count = 1
+
+        email_data = {
+            "student_email": student_email,
+            "student_name": student_name,
+            "domain": domain,
+            "start_date": item.get("start_date") or (prev_rec.get("start_date") if prev_rec else ""),
+            "end_date": item.get("end_date") or (prev_rec.get("end_date") if prev_rec else ""),
+            "issued_date": item.get("issued_date") or (prev_rec.get("issued_date") if prev_rec else ""),
+            "certificate_id": cert_id,
+            "template_version": item.get("template_version") or "v1",
+        }
+
+        try:
+            filename = certificate_service.generate_certificate_pdf(
+                data=email_data,
+                output_dir=Path(output_dir),
+                template_version=email_data.get("template_version", "v1")
+            )
+            pdf_path = Path(output_dir) / filename
 
             certificate_service.send_certificate_email(email_data, pdf_path, filename)
 
             successful_count += 1
             now_iso = datetime.now().isoformat()
 
-            # Update DB record: increment send_count and mark sent
-            cert_rec = get_certificate_by_id(cert_id) or {}
-            send_count = (cert_rec.get("send_count") or 0) + 1
-            save_certificate_record({
+            # Update DB record: in-place resend update if previous sent record exists, else insert
+            save_payload = {
                 "certificate_id": cert_id,
                 "student_name": student_name,
                 "student_email": student_email,
                 "internship_domain": domain,
+                "start_date": email_data["start_date"],
+                "end_date": email_data["end_date"],
+                "issued_date": email_data["issued_date"],
                 "email_status": "sent",
                 "sent_at": now_iso,
                 "send_count": send_count,
                 "pdf_filename": filename,
-                "error_message": None
-            })
+                "error_message": None,
+                "template_version": email_data.get("template_version", "v1"),
+            }
+            if is_resend and target_id:
+                save_payload["id"] = target_id
+                save_payload["send_again"] = True
+
+            save_certificate_record(save_payload, existing_id=target_id if is_resend else None)
 
             results.append({
                 "certificate_id": cert_id,
@@ -550,17 +592,31 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             now_iso = datetime.now().isoformat()
             err_msg = str(exc)
 
-            # Mark email_status as failed in DB, but PRESERVE existing send_count and do NOT mark certificate as revoked or invalid
-            save_certificate_record({
+            prev_rec = get_previous_sent_certificate_by_email(student_email)
+            is_resend = bool(prev_rec and str(prev_rec.get("email_status") or "").strip().lower() == "sent")
+            target_id = prev_rec.get("id") if is_resend else None
+            prev_count = int(prev_rec.get("send_count") or 0) if prev_rec else 0
+
+            fail_payload = {
                 "certificate_id": cert_id,
                 "student_name": student_name,
                 "student_email": student_email,
                 "internship_domain": domain,
+                "start_date": item.get("start_date") or (prev_rec.get("start_date") if prev_rec else ""),
+                "end_date": item.get("end_date") or (prev_rec.get("end_date") if prev_rec else ""),
+                "issued_date": item.get("issued_date") or (prev_rec.get("issued_date") if prev_rec else ""),
                 "email_status": "failed",
                 "sent_at": now_iso,
+                "send_count": prev_count + 1,
                 "pdf_filename": filename,
-                "error_message": err_msg
-            })
+                "error_message": err_msg,
+                "template_version": item.get("template_version") or "v1",
+            }
+            if is_resend and target_id:
+                fail_payload["id"] = target_id
+                fail_payload["send_again"] = True
+
+            save_certificate_record(fail_payload, existing_id=target_id if is_resend else None)
 
             failed_items.append({
                 "certificate_id": cert_id,
@@ -600,6 +656,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         "total": total,
         "successful_count": successful_count,
         "failed_count": failed_count,
+        "skipped_count": skipped_count,
         "results": results,
         "failed_items": failed_items,
     }

@@ -278,10 +278,42 @@
                     <p class="placeholder-desc">Fill out the student details and click <strong>Generate Certificate</strong> to create the verified PDF with QR code.</p>
                 </div>
 
-                <div id="generatingState" class="generating-state" style="display: none;">
-                    <div class="loading-spinner"></div>
-                    <p class="generating-title">Generating Certificate...</p>
-                    <p class="generating-subtitle">Applying template styling & creating unique verification QR code</p>
+                <div id="generatingState" class="cert-gen-card" style="display: none;">
+                    <div class="cert-icon-pulse-wrapper">
+                        <svg class="cert-animated-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="7"></circle>
+                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                        </svg>
+                    </div>
+                    <h3 class="cert-gen-title">Generating Certificate...</h3>
+                    <p class="cert-gen-subtitle">Creating high-resolution certificate with cryptographic verification QR</p>
+                    <div class="cert-steps-checklist" id="certStepsChecklist">
+                        <div class="cert-step-item" id="certStep1"><span class="step-icon"><span class="step-bullet">●</span></span> <span class="step-text">Validating candidate details</span></div>
+                        <div class="cert-step-item" id="certStep2"><span class="step-icon"><span class="step-bullet">●</span></span> <span class="step-text">Preparing certificate canvas</span></div>
+                        <div class="cert-step-item" id="certStep3"><span class="step-icon"><span class="step-bullet">●</span></span> <span class="step-text">Generating secure certificate ID</span></div>
+                        <div class="cert-step-item" id="certStep4"><span class="step-icon"><span class="step-bullet">●</span></span> <span class="step-text">Preparing verification QR</span></div>
+                        <div class="cert-step-item" id="certStep5"><span class="step-icon"><span class="step-bullet">●</span></span> <span class="step-text">Finalizing PDF & preview</span></div>
+                    </div>
+                </div>
+
+                <div id="previewErrorState" class="preview-error-state" style="display: none;">
+                    <div class="error-icon-ring">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                    </div>
+                    <p class="error-title">Preview Load Failed</p>
+                    <p class="error-desc" id="previewErrorMsg">The certificate was generated, but the preview could not be rendered in the browser.</p>
+                    <button type="button" class="action-btn download-btn" id="retryPreviewBtn" onclick="retryCertificatePreview()" style="font-size: 13px; padding: 8px 16px;">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        <span>Retry Preview</span>
+                    </button>
                 </div>
 
                 <iframe
@@ -529,7 +561,7 @@
                             <span id="bulkGenerateBtnText">Generate All Valid Certificates</span>
                         </button>
 
-                        <button type="button" id="bulkSendEmailsBtn" class="action-btn send-btn" style="display: none;" onclick="executeBulkEmailDispatch()">
+                        <button type="button" id="bulkSendEmailsBtn" class="action-btn send-btn" style="display: none;" onclick="initiateBulkEmailDispatch()">
                             <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="22" y1="2" x2="11" y2="13"></line>
                                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -571,6 +603,143 @@
     </div>
 </div>
 
+<!-- =========================================================
+     CERTIFICATE RESEND CONFIRMATION MODAL (SINGLE)
+     ========================================================= -->
+<div
+    id="certResendModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleCertResendBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="certResendModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCertResendModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="certResendModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px;">
+            Certificate Already Sent
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 0 0 12px;">
+            This email has already received a verified certificate.
+        </p>
+
+        <div
+            id="certDuplicateEmail"
+            class="modal-target-highlight duplicate-email"
+        ></div>
+
+        <p style="color: var(--text-body); font-size: 14px; font-weight: 500; line-height: 1.5; margin: 0 0 20px;">
+            Do you want to send the certificate email again?
+        </p>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 12px;">
+            <button
+                type="button"
+                id="cancelCertResendBtn"
+                class="modal-cancel-btn"
+                onclick="closeCertResendModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="confirmCertResendBtn"
+                class="modal-confirm-btn"
+                onclick="handleCertResendConfirm()"
+            >
+                <span>Send Again</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     BULK CERTIFICATE DUPLICATE CONFIRMATION MODAL
+     ========================================================= -->
+<div
+    id="certBulkDuplicateModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleCertBulkDuplicateBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        style="max-width: 520px;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="certBulkDuplicateModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCertBulkDuplicateModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="certBulkDuplicateModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px;">
+            Some certificates have already been sent
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 12px;">
+            <strong id="certBulkDuplicateCountText" style="color: #d97706;">0</strong> recipients in this batch have previously received a certificate.
+        </p>
+
+        <div id="certBulkDuplicateList" style="max-height: 120px; overflow-y: auto; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; margin: 0 auto 16px; font-size: 12.5px; text-align: left; color: var(--text-body);">
+        </div>
+
+        <p style="color: var(--text-body); font-size: 13.5px; font-weight: 500; line-height: 1.5; margin: 0 0 20px;">
+            Choose how you would like to proceed with email dispatch:
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+            <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <button
+                    type="button"
+                    class="modal-cancel-btn"
+                    onclick="closeCertBulkDuplicateModal()"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="button"
+                    class="modal-confirm-btn"
+                    style="background: #059669; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);"
+                    onclick="handleCertBulkSendOnlyNew()"
+                >
+                    <span>Send Only to New (<span id="certBulkNewCount">0</span>)</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="modal-confirm-btn"
+                    style="background: var(--brand-primary);"
+                    onclick="handleCertBulkSendAgainAll()"
+                >
+                    <span>Send Again to All (<span id="certBulkTotalCount">0</span>)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- =====================================================
      CLIENT JAVASCRIPT
      ===================================================== -->
@@ -580,6 +749,8 @@ let currentBulkRows = [];
 let currentGeneratedBulkItems = [];
 let currentFailedGenerationItems = [];
 let currentFailedEmailItems = [];
+let pendingBulkDuplicates = [];
+let pendingBulkAllItems = [];
 
 // Mode Switcher Handler
 function switchCertificateMode(mode) {
@@ -590,7 +761,39 @@ function switchCertificateMode(mode) {
     document.getElementById('tabBulkCert').classList.toggle('active', isBulk);
 }
 
-// Single Certificate Generation
+// Stepped Checklist Animation Helpers
+function setStepState(stepNum, state) {
+    const el = document.getElementById(`certStep${stepNum}`);
+    if (!el) return;
+    el.classList.remove('step-active', 'step-completed');
+    const icon = el.querySelector('.step-icon');
+    if (state === 'active') {
+        el.classList.add('step-active');
+        if (icon) icon.innerHTML = '<span class="step-bullet">●</span>';
+    } else if (state === 'completed') {
+        el.classList.add('step-completed');
+        if (icon) icon.innerHTML = '✔';
+    } else {
+        if (icon) icon.innerHTML = '<span class="step-bullet" style="opacity:0.3">●</span>';
+    }
+}
+
+function resetGenerationSteps() {
+    for (let i = 1; i <= 5; i++) {
+        setStepState(i, 'pending');
+    }
+}
+
+function animateStepProgression() {
+    resetGenerationSteps();
+    setStepState(1, 'active');
+    setTimeout(() => { setStepState(1, 'completed'); setStepState(2, 'active'); }, 350);
+    setTimeout(() => { setStepState(2, 'completed'); setStepState(3, 'active'); }, 800);
+    setTimeout(() => { setStepState(3, 'completed'); setStepState(4, 'active'); }, 1350);
+    setTimeout(() => { setStepState(4, 'completed'); setStepState(5, 'active'); }, 1900);
+}
+
+// Single Certificate Generation & Email Dispatch
 document.addEventListener('DOMContentLoaded', () => {
     const domainSelect = document.getElementById('domain_select');
     const customInput = document.getElementById('custom_domain_input');
@@ -621,6 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const genText = document.getElementById('generateBtnText');
             const placeholder = document.getElementById('previewPlaceholder');
             const generatingState = document.getElementById('generatingState');
+            const errorState = document.getElementById('previewErrorState');
             const iframe = document.getElementById('pdfPreviewFrame');
             const previewActions = document.getElementById('previewActions');
             const badge = document.getElementById('previewStatusBadge');
@@ -642,12 +846,15 @@ document.addEventListener('DOMContentLoaded', () => {
             isGeneratingCertificate = true;
             genBtn.disabled = true;
             genText.textContent = 'Generating Certificate...';
-            placeholder.style.display = 'none';
-            generatingState.style.display = 'flex';
-            iframe.style.display = 'none';
-            previewActions.style.display = 'none';
+            if (placeholder) placeholder.style.display = 'none';
+            if (errorState) errorState.style.display = 'none';
+            if (generatingState) generatingState.style.display = 'flex';
+            if (iframe) iframe.style.display = 'none';
+            if (previewActions) previewActions.style.display = 'none';
             badge.textContent = 'Generating...';
             badge.className = 'section-tag';
+
+            animateStepProgression();
 
             try {
                 const response = await fetch('/api/certificate/generate', {
@@ -669,29 +876,64 @@ document.addEventListener('DOMContentLoaded', () => {
                         download_url: downloadUrl
                     };
 
+                    for (let i = 1; i <= 5; i++) {
+                        setStepState(i, 'completed');
+                    }
+
+                    // Gate iframe display until loaded to eliminate black flash
+                    let previewLoaded = false;
+                    const safetyTimeout = setTimeout(() => {
+                        if (!previewLoaded) {
+                            previewLoaded = true;
+                            if (generatingState) generatingState.style.display = 'none';
+                            if (iframe) iframe.style.display = 'block';
+                        }
+                    }, 7000);
+
+                    iframe.onload = () => {
+                        if (!previewLoaded) {
+                            previewLoaded = true;
+                            clearTimeout(safetyTimeout);
+                            if (generatingState) generatingState.style.display = 'none';
+                            if (iframe) iframe.style.display = 'block';
+                        }
+                    };
+
+                    iframe.onerror = () => {
+                        clearTimeout(safetyTimeout);
+                        if (generatingState) generatingState.style.display = 'none';
+                        if (iframe) iframe.style.display = 'none';
+                        if (errorState) errorState.style.display = 'flex';
+                    };
+
                     iframe.src = previewUrl;
-                    iframe.style.display = 'block';
-                    generatingState.style.display = 'none';
-                    previewActions.style.display = 'flex';
+
+                    if (previewActions) previewActions.style.display = 'flex';
                     badge.textContent = 'Ready';
                     badge.className = 'section-tag status-ready';
 
                     const downloadBtn = document.getElementById('downloadBtn');
-                    downloadBtn.href = downloadUrl;
-                    downloadBtn.setAttribute('download', result.filename || 'Certificate.pdf');
+                    if (downloadBtn) {
+                        downloadBtn.href = downloadUrl;
+                        downloadBtn.setAttribute('download', result.filename || 'Certificate.pdf');
+                    }
                     showToast('Certificate generated successfully.', 'success');
                     localStorage.setItem('persevex_stats_updated', Date.now().toString());
                     refreshStats();
                 } else {
                     showToast(result.error || 'Failed to generate certificate', 'error');
-                    placeholder.style.display = 'flex';
-                    generatingState.style.display = 'none';
+                    if (placeholder) placeholder.style.display = 'flex';
+                    if (generatingState) generatingState.style.display = 'none';
+                    badge.textContent = 'Awaiting Generation';
+                    badge.className = 'section-tag';
                 }
             } catch (err) {
                 console.error(err);
                 showToast('An error occurred during certificate generation.', 'error');
-                placeholder.style.display = 'flex';
-                generatingState.style.display = 'none';
+                if (placeholder) placeholder.style.display = 'flex';
+                if (generatingState) generatingState.style.display = 'none';
+                badge.textContent = 'Awaiting Generation';
+                badge.className = 'section-tag';
             } finally {
                 isGeneratingCertificate = false;
                 genBtn.disabled = false;
@@ -701,50 +943,177 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (sendBtn) {
-        sendBtn.addEventListener('click', async () => {
-            if (!currentGeneratedCertificate) return;
-
-            const sendText = document.getElementById('sendEmailBtnText');
-            sendBtn.disabled = true;
-            sendBtn.classList.remove('is-sent', 'is-failed');
-            sendText.textContent = '⏳ Sending Certificate...';
-
-            try {
-                const response = await fetch('/api/certificate/send-email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(currentGeneratedCertificate)
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    sendBtn.classList.add('is-sent');
-                    sendText.textContent = '✓ Certificate Sent';
-                    showToast('Certificate email sent to student successfully.', 'success');
-                    localStorage.setItem('persevex_stats_updated', Date.now().toString());
-                    refreshStats();
-                } else {
-                    sendBtn.classList.add('is-failed');
-                    sendText.textContent = '❌ Delivery Failed';
-                    showToast(result.error || 'Failed to send certificate email', 'error');
-                    localStorage.setItem('persevex_stats_updated', Date.now().toString());
-                    refreshStats();
-                }
-            } catch (err) {
-                console.error(err);
-                sendBtn.classList.add('is-failed');
-                sendText.textContent = '❌ Delivery Error';
-                showToast('Network error during certificate email dispatch.', 'error');
-            } finally {
-                setTimeout(() => {
-                    sendBtn.disabled = false;
-                    sendBtn.classList.remove('is-sent', 'is-failed');
-                    sendText.textContent = 'Send Certificate Email';
-                }, 3500);
-            }
+        sendBtn.addEventListener('click', () => {
+            sendSingleCertificateEmail(false);
         });
     }
 });
+
+function retryCertificatePreview() {
+    if (!currentGeneratedCertificate || !currentGeneratedCertificate.url) return;
+    const errorState = document.getElementById('previewErrorState');
+    const generatingState = document.getElementById('generatingState');
+    const iframe = document.getElementById('pdfPreviewFrame');
+    if (errorState) errorState.style.display = 'none';
+    if (generatingState) generatingState.style.display = 'flex';
+    if (iframe) iframe.style.display = 'none';
+    resetGenerationSteps();
+    for (let i = 1; i <= 5; i++) setStepState(i, 'completed');
+
+    let previewLoaded = false;
+    const safetyTimeout = setTimeout(() => {
+        if (!previewLoaded) {
+            previewLoaded = true;
+            if (generatingState) generatingState.style.display = 'none';
+            if (iframe) iframe.style.display = 'block';
+        }
+    }, 7000);
+
+    iframe.onload = () => {
+        if (!previewLoaded) {
+            previewLoaded = true;
+            clearTimeout(safetyTimeout);
+            if (generatingState) generatingState.style.display = 'none';
+            if (iframe) iframe.style.display = 'block';
+        }
+    };
+    iframe.onerror = () => {
+        clearTimeout(safetyTimeout);
+        if (generatingState) generatingState.style.display = 'none';
+        if (iframe) iframe.style.display = 'none';
+        if (errorState) errorState.style.display = 'flex';
+    };
+    const cacheBust = (currentGeneratedCertificate.url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    iframe.src = currentGeneratedCertificate.url + cacheBust;
+}
+
+async function sendSingleCertificateEmail(sendAgain = false) {
+    if (!currentGeneratedCertificate) return;
+
+    const sendBtn = document.getElementById('sendEmailBtn');
+    const sendText = document.getElementById('sendEmailBtnText');
+    const confirmResendBtn = document.getElementById('confirmCertResendBtn');
+    const cancelCertResendBtn = document.getElementById('cancelCertResendBtn');
+
+    sendBtn.disabled = true;
+    sendBtn.classList.remove('is-sent', 'is-failed');
+    sendText.textContent = sendAgain ? '⏳ Resending Certificate...' : '⏳ Sending Certificate...';
+
+    if (confirmResendBtn) confirmResendBtn.disabled = true;
+    if (cancelCertResendBtn) cancelCertResendBtn.disabled = true;
+
+    try {
+        const payload = {
+            ...currentGeneratedCertificate,
+            send_again: sendAgain
+        };
+
+        const response = await fetch('/api/certificate/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+
+        // DUPLICATE DETECTED (HTTP 409)
+        if (response.status === 409 && result.duplicate) {
+            sendBtn.disabled = false;
+            sendText.textContent = 'Send Certificate Email';
+            if (confirmResendBtn) confirmResendBtn.disabled = false;
+            if (cancelCertResendBtn) cancelCertResendBtn.disabled = false;
+            openCertResendModal(result.email || currentGeneratedCertificate.student_email);
+            return;
+        }
+
+        closeCertResendModal();
+
+        if (response.ok && result.success) {
+            sendBtn.classList.add('is-sent');
+            sendText.textContent = sendAgain ? '✓ Certificate Resent' : '✓ Certificate Sent';
+            showToast(sendAgain ? 'Certificate email resent successfully.' : 'Certificate email sent to student successfully.', 'success');
+            localStorage.setItem('persevex_stats_updated', Date.now().toString());
+            localStorage.setItem('persevex_history_updated', Date.now().toString());
+            refreshStats();
+        } else {
+            sendBtn.classList.add('is-failed');
+            sendText.textContent = '❌ Delivery Failed';
+            showToast(result.error || result.message || 'Failed to send certificate email', 'error');
+            localStorage.setItem('persevex_stats_updated', Date.now().toString());
+            localStorage.setItem('persevex_history_updated', Date.now().toString());
+            refreshStats();
+        }
+    } catch (err) {
+        console.error(err);
+        sendBtn.classList.add('is-failed');
+        sendText.textContent = '❌ Delivery Error';
+        showToast('Network error during certificate email dispatch.', 'error');
+    } finally {
+        if (confirmResendBtn) confirmResendBtn.disabled = false;
+        if (cancelCertResendBtn) cancelCertResendBtn.disabled = false;
+        setTimeout(() => {
+            sendBtn.disabled = false;
+            sendBtn.classList.remove('is-sent', 'is-failed');
+            sendText.textContent = 'Send Certificate Email';
+        }, 3500);
+    }
+}
+
+// Single Certificate Resend Modal Handlers
+function openCertResendModal(email) {
+    const modal = document.getElementById('certResendModal');
+    const target = document.getElementById('certDuplicateEmail');
+    if (target) target.textContent = email || '';
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCertResendModal() {
+    const modal = document.getElementById('certResendModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function handleCertResendBackdropClick(event) {
+    if (event.target.id === 'certResendModal') {
+        closeCertResendModal();
+    }
+}
+
+function handleCertResendConfirm() {
+    closeCertResendModal();
+    sendSingleCertificateEmail(true);
+}
+
+// Bulk Certificate Resend Modal Handlers
+function openCertBulkDuplicateModal() {
+    const modal = document.getElementById('certBulkDuplicateModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeCertBulkDuplicateModal() {
+    const modal = document.getElementById('certBulkDuplicateModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function handleCertBulkDuplicateBackdropClick(event) {
+    if (event.target.id === 'certBulkDuplicateModal') {
+        closeCertBulkDuplicateModal();
+    }
+}
+
+function handleCertBulkSendOnlyNew() {
+    closeCertBulkDuplicateModal();
+    const dupSet = new Set(pendingBulkDuplicates.map(e => String(e).trim().toLowerCase()));
+    const newItems = pendingBulkAllItems.filter(item => !dupSet.has(String(item.student_email).trim().toLowerCase()));
+    if (newItems.length === 0) {
+        showToast('No new certificate recipients in this batch.', 'info');
+        return;
+    }
+    executeBulkEmailDispatch(newItems, { skip_duplicate_emails: true });
+}
+
+function handleCertBulkSendAgainAll() {
+    closeCertBulkDuplicateModal();
+    executeBulkEmailDispatch(pendingBulkAllItems, { send_again_all: true });
+}
 
 /* ==========================================================
    TOAST NOTIFICATION ENGINE
@@ -837,11 +1206,11 @@ async function handleBulkFileSelect(event) {
             renderBulkPreviewTable(data.rows);
             document.getElementById('bulkValidationSection').style.display = 'block';
         } else {
-            alert('File validation error: ' + (data.error || 'Unknown error'));
+            showToast('File validation error: ' + (data.error || 'Unknown error'), 'error');
         }
     } catch (err) {
         console.error(err);
-        alert('Failed to parse uploaded file.');
+        showToast('Failed to parse uploaded file.', 'error');
     } finally {
         dropzone.style.opacity = '1';
     }
@@ -913,6 +1282,8 @@ function resetBulkWorkspace() {
     currentGeneratedBulkItems = [];
     currentFailedGenerationItems = [];
     currentFailedEmailItems = [];
+    pendingBulkDuplicates = [];
+    pendingBulkAllItems = [];
 }
 
 /* ==========================================================
@@ -1074,6 +1445,8 @@ function handleModalBackdropClick(event) {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeBulkPreviewModal();
+        closeCertResendModal();
+        closeCertBulkDuplicateModal();
     }
 });
 
@@ -1097,7 +1470,7 @@ async function executeBulkGeneration(targetRows = null) {
     }
 
     if (rowsToGenerate.length === 0) {
-        alert('Please select at least one valid record to generate.');
+        showToast('Please select at least one valid record to generate.', 'error');
         return;
     }
 
@@ -1264,7 +1637,7 @@ async function executeBulkGeneration(targetRows = null) {
 
 function retryFailedGenerations() {
     if (!currentFailedGenerationItems || currentFailedGenerationItems.length === 0) {
-        alert('No failed certificate generations to retry.');
+        showToast('No failed certificate generations to retry.', 'info');
         return;
     }
     const retryList = [...currentFailedGenerationItems];
@@ -1272,9 +1645,63 @@ function retryFailedGenerations() {
 }
 
 /* ==========================================================
-   RESUME-SAFE CHUNKED BULK EMAIL ENGINE
+   RESUME-SAFE CHUNKED BULK EMAIL ENGINE WITH DUPLICATE HANDLING
    ========================================================== */
-async function executeBulkEmailDispatch(targetItems = null) {
+async function initiateBulkEmailDispatch() {
+    if (!currentGeneratedBulkItems || currentGeneratedBulkItems.length === 0) return;
+
+    const checkEmails = currentGeneratedBulkItems.map(item => item.student_email).filter(Boolean);
+
+    const sendBtn = document.getElementById('bulkSendEmailsBtn');
+    if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.6';
+    }
+
+    try {
+        const checkRes = await fetch('/api/certificate/bulk-check-duplicates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails: checkEmails })
+        });
+        const checkData = await checkRes.json();
+
+        if (checkData.success && Array.isArray(checkData.duplicate_emails) && checkData.duplicate_emails.length > 0) {
+            pendingBulkDuplicates = checkData.duplicate_emails;
+            pendingBulkAllItems = currentGeneratedBulkItems;
+
+            const dupSet = new Set(pendingBulkDuplicates.map(e => String(e).trim().toLowerCase()));
+            const newCount = currentGeneratedBulkItems.filter(item => !dupSet.has(String(item.student_email).trim().toLowerCase())).length;
+
+            const countEl = document.getElementById('certBulkDuplicateCountText');
+            if (countEl) countEl.textContent = pendingBulkDuplicates.length;
+            const newCountEl = document.getElementById('certBulkNewCount');
+            if (newCountEl) newCountEl.textContent = newCount;
+            const totalCountEl = document.getElementById('certBulkTotalCount');
+            if (totalCountEl) totalCountEl.textContent = currentGeneratedBulkItems.length;
+
+            const listEl = document.getElementById('certBulkDuplicateList');
+            if (listEl) {
+                listEl.innerHTML = pendingBulkDuplicates.map(e => `<div>• <strong>${escapeHtml(e)}</strong></div>`).join('');
+            }
+
+            openCertBulkDuplicateModal();
+            return;
+        }
+    } catch (err) {
+        console.warn('Duplicate check error, proceeding with normal dispatch:', err);
+    } finally {
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.style.opacity = '1';
+        }
+    }
+
+    // No duplicates found -> send directly
+    executeBulkEmailDispatch();
+}
+
+async function executeBulkEmailDispatch(targetItems = null, options = {}) {
     let itemsToSend = [];
     const isRetry = Array.isArray(targetItems);
 
@@ -1344,7 +1771,11 @@ async function executeBulkEmailDispatch(targetItems = null) {
             const response = await fetch('/api/certificate/bulk/send-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: chunk })
+                body: JSON.stringify({
+                    items: chunk,
+                    skip_duplicate_emails: !!(options && options.skip_duplicate_emails),
+                    send_again_all: !!(options && options.send_again_all)
+                })
             });
             const result = await response.json();
 
@@ -1352,6 +1783,8 @@ async function executeBulkEmailDispatch(targetItems = null) {
                 for (const item of result.results) {
                     if (item.status === 'sent') {
                         sentCount++;
+                    } else if (item.status === 'skipped_duplicate') {
+                        // Skipped duplicate is not considered a failure
                     } else {
                         failedCount++;
                     }
@@ -1417,7 +1850,7 @@ async function executeBulkEmailDispatch(targetItems = null) {
 
 function retryFailedEmails() {
     if (!currentFailedEmailItems || currentFailedEmailItems.length === 0) {
-        alert('No failed emails to retry.');
+        showToast('No failed emails to retry.', 'info');
         return;
     }
     const retryList = [...currentFailedEmailItems];

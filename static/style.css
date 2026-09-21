@@ -2140,7 +2140,7 @@ button:disabled,
     text-transform: uppercase;
     letter-spacing: 0.5px;
     text-align: left;
-    padding: 12px 14px;
+    padding: 9px 12px;
     border-bottom: 1.5px solid var(--border-color);
     white-space: nowrap;
     position: sticky;
@@ -2149,10 +2149,11 @@ button:disabled,
 }
 
 .history-table td {
-    padding: 12px 14px;
+    padding: 9px 12px;
     border-bottom: 1px solid var(--border-color);
     color: var(--text-body);
     vertical-align: middle;
+    line-height: 1.35;
 }
 
 .history-table tbody tr {
@@ -2209,12 +2210,24 @@ button:disabled,
     }
 }
 
-/* Cell Column Specifics */
+/* Cell Column Specifics & Balanced Widths */
+.history-table .th-select, .history-table .cell-select { width: 38px; text-align: center; }
+.history-table .th-type, .history-table .cell-type { width: 105px; white-space: nowrap; }
+.history-table .th-id, .history-table .cell-id { width: 130px; white-space: nowrap; }
+.history-table .th-name, .history-table .cell-name { width: 150px; white-space: nowrap; }
+.history-table .th-email, .history-table .cell-email { width: 180px; white-space: nowrap; }
+.history-table .th-domain, .history-table .cell-domain { max-width: 230px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-table .th-date, .history-table .cell-date { white-space: nowrap; font-size: 12px; }
+.history-table .th-sent-at, .history-table .cell-sent-at { white-space: nowrap; font-size: 12.5px; }
+.history-table .th-status, .history-table .cell-status { width: 55px; text-align: center; }
+.history-table .th-count, .history-table .cell-count { width: 65px; text-align: center; }
+.history-table .th-action, .history-table .cell-action { width: 80px; text-align: center; }
+
 .cell-name-text {
     font-weight: 700;
     color: var(--brand-dark);
     display: inline-block;
-    max-width: 220px;
+    max-width: 150px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2223,7 +2236,7 @@ button:disabled,
 
 .cell-truncate-email {
     display: inline-block;
-    max-width: 260px;
+    max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2234,7 +2247,7 @@ button:disabled,
 
 .domain-tag {
     display: inline-block;
-    max-width: 200px;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2246,13 +2259,15 @@ button:disabled,
 
 .duration-badge {
     display: inline-block;
-    padding: 2px 7px;
+    padding: 1.5px 6px;
     border-radius: var(--radius-full);
     background: #f1f5f9;
     color: var(--text-muted);
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
+    vertical-align: middle;
+    margin-left: 4px;
 }
 
 .type-pill {
@@ -7154,4 +7169,205 @@ button:active:not(:disabled) {
 .modal-info-note svg {
     color: var(--brand-primary, #2563eb);
     flex-shrink: 0;
+}
+
+/* ==========================================================
+   CERTIFICATE GENERATOR LOADING PANEL & PREVIEW
+   ========================================================== */
+
+.cert-preview-container {
+    position: relative;
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.cert-preview-container .pdf-preview-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: #ffffff;
+}
+
+.generating-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    width: 100%;
+    text-align: center;
+}
+
+.cert-gen-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg, 12px);
+    padding: 28px 32px;
+    max-width: 380px;
+    width: 100%;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: certCardFadeIn 0.3s ease-out;
+}
+
+@keyframes certCardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.cert-icon-pulse-wrapper {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #eff6ff;
+    border: 1.5px solid #bfdbfe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--brand-primary);
+    margin-bottom: 16px;
+    animation: certIconPulse 2s infinite ease-in-out;
+}
+
+@keyframes certIconPulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.2);
+    }
+    50% {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+    }
+}
+
+.cert-animated-icon {
+    color: var(--brand-primary);
+}
+
+.cert-gen-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--brand-dark);
+    margin: 0 0 4px;
+}
+
+.cert-gen-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 20px;
+}
+
+.cert-steps-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+}
+
+.cert-step-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    opacity: 0.45;
+    transition: all 0.3s ease;
+}
+
+.cert-step-item.step-active {
+    opacity: 1;
+    color: var(--brand-primary);
+    font-weight: 600;
+}
+
+.cert-step-item.step-completed {
+    opacity: 1;
+    color: #059669;
+    font-weight: 600;
+}
+
+.cert-step-item .step-icon {
+    font-size: 12px;
+    font-weight: 700;
+    width: 16px;
+    text-align: center;
+}
+
+.cert-step-item .step-bullet {
+    font-size: 9px;
+    animation: bulletPulse 1s infinite alternate;
+}
+
+@keyframes bulletPulse {
+    from { opacity: 0.4; }
+    to { opacity: 1; }
+}
+
+/* Error State */
+.preview-error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    text-align: center;
+}
+
+.preview-error-state .error-icon-ring {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #fef2f2;
+    border: 1.5px solid #fecaca;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.preview-error-state .error-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #b91c1c;
+    margin: 0 0 6px;
+}
+
+.preview-error-state .error-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+    max-width: 320px;
+}
+
+/* prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+    .cert-gen-card,
+    .cert-icon-pulse-wrapper,
+    .cert-step-item,
+    .cert-step-item .step-bullet {
+        animation: none !important;
+        transition: none !important;
+    }
 }
