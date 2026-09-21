@@ -187,9 +187,10 @@ def parse_ca_file(file_bytes, filename):
         }
 
     # 3. Extract Rows (Ignore all other columns!)
-    valid_candidates = []
+    unique_candidates = []
+    all_valid_candidates = []
     invalid_rows = []
-    seen_pairs = set()
+    seen_emails = set()
     duplicate_count = 0
 
     data_rows = raw_rows[1:]
@@ -213,18 +214,23 @@ def parse_ca_file(file_bytes, filename):
         is_email_ok = is_valid_email(raw_email)
 
         if is_name_ok and is_email_ok:
-            pair = (raw_name.lower(), raw_email.lower())
-            if pair in seen_pairs:
-                duplicate_count += 1
-            else:
-                seen_pairs.add(pair)
-
-            valid_candidates.append({
+            norm_email = raw_email.strip().lower()
+            all_valid_candidates.append({
                 "row_num": idx,
                 "name": raw_name,
-                "email": raw_email.lower(),
+                "email": norm_email,
                 "valid": True
             })
+            if norm_email in seen_emails:
+                duplicate_count += 1
+            else:
+                seen_emails.add(norm_email)
+                unique_candidates.append({
+                    "row_num": idx,
+                    "name": raw_name,
+                    "email": norm_email,
+                    "valid": True
+                })
         else:
             reason_parts = []
             if not is_name_ok:
@@ -247,17 +253,19 @@ def parse_ca_file(file_bytes, filename):
             "error": "The uploaded file has headers but contains no data rows."
         }
 
-    names_text = "\n".join(c["name"] for c in valid_candidates)
-    emails_text = "\n".join(c["email"] for c in valid_candidates)
+    names_text = "\n".join(c["name"] for c in all_valid_candidates)
+    emails_text = "\n".join(c["email"] for c in all_valid_candidates)
 
     return {
         "success": True,
         "filename": filename,
         "total_rows": total_data_rows,
-        "valid_count": len(valid_candidates),
+        "valid_count": len(unique_candidates),
+        "total_valid_rows": len(all_valid_candidates),
+        "unique_count": len(unique_candidates),
         "invalid_count": len(invalid_rows),
         "duplicate_count": duplicate_count,
-        "candidates": valid_candidates,
+        "candidates": unique_candidates,
         "invalid_rows": invalid_rows,
         "names_text": names_text,
         "emails_text": emails_text,

@@ -152,55 +152,271 @@ init_database_tables()
 # ============================================================
 # CAMPUS AMBASSADOR STORAGE
 # ============================================================
-def save_campus_ambassador_record(record_data):
+def get_campus_ambassador_by_id(record_id):
     """
-    Save Campus Ambassador record to dedicated campus_ambassador_history table in Supabase & local SQLite.
+    Retrieve a Campus Ambassador record by primary key ID.
+    Authoritative source: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or query throws exception).
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
-    if not record_data.get("created_at"):
-        record_data["created_at"] = now_iso
-    if not record_data.get("internship_domain"):
-        record_data["internship_domain"] = "Campus Ambassador"
-    if not record_data.get("internship_duration"):
-        record_data["internship_duration"] = "Tenure"
-    if not record_data.get("offer_letter_type"):
-        record_data["offer_letter_type"] = "campus_ambassador"
+    if record_id is None or not str(record_id).strip():
+        return None
+    try:
+        rec_id_int = int(record_id)
+    except (ValueError, TypeError):
+        return None
 
     sb = get_supabase_client()
     if sb:
         try:
-            sb.table("campus_ambassador_history").insert(record_data).execute()
+            res = sb.table("campus_ambassador_history").select("*").eq("id", rec_id_int).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                return dict(res.data[0])
+            return None
         except Exception as exc:
-            print("SUPABASE SAVE CA RECORD ERROR (using local DB):", repr(exc))
+            print("SUPABASE GET CA BY ID ERROR (using fallback):", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM campus_ambassador_history WHERE id = ? LIMIT 1", (rec_id_int,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as exc:
+        print("LOCAL DB GET CA BY ID ERROR:", repr(exc))
+
+    return None
+
+
+def save_campus_ambassador_record(record_data, existing_id=None):
+    """
+    Save or update Campus Ambassador record in Supabase & local SQLite.
+    When send_again=True and existing_id/id is provided (resend), it UPDATES the existing record:
+      - keeps the same primary key ID
+      - increments send_count
+      - updates sent_at
+      - sets email_status = 'sent'
+      - clears error_message
+      - preserves existing metadata unless explicitly overridden.
+    When first-time send (send_again=False), it INSERTS a new record with send_count=1 (or specified count).
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    send_again = bool(record_data.get("send_again"))
+    target_id_raw = existing_id if existing_id is not None else (record_data.get("id") or record_data.get("record_id") or record_data.get("existing_id"))
+
+    target_id = None
+    if target_id_raw is not None and str(target_id_raw).strip():
+        try:
+            target_id = int(str(target_id_raw).strip())
+        except (ValueError, TypeError):
+            target_id = None
+
+    is_resend = bool(send_again and target_id is not None)
+
+    existing = None
+    if is_resend:
+        try:
+            existing = get_campus_ambassador_by_id(target_id)
+        except Exception:
+            existing = None
+    existing = existing or {}
+
+    # Merge fields
+    merged_student_name = str(record_data.get("student_name") or existing.get("student_name") or "").strip()
+    merged_student_email = str(record_data.get("student_email") or existing.get("student_email") or "").strip().lower()
+    merged_phone_number = record_data.get("phone_number") if record_data.get("phone_number") is not None else existing.get("phone_number")
+    merged_college_name = record_data.get("college_name") if record_data.get("college_name") is not None else existing.get("college_name")
+    merged_internship_domain = str(record_data.get("internship_domain") or existing.get("internship_domain") or "Campus Ambassador").strip()
+    merged_internship_duration = str(record_data.get("internship_duration") or existing.get("internship_duration") or "Tenure").strip()
+    merged_start_date = record_data.get("start_date") if record_data.get("start_date") is not None else existing.get("start_date")
+    merged_end_date = record_data.get("end_date") if record_data.get("end_date") is not None else existing.get("end_date")
+    merged_offer_letter_type = str(record_data.get("offer_letter_type") or existing.get("offer_letter_type") or "campus_ambassador").strip()
+    merged_email_status = str(record_data.get("email_status") or ("sent" if is_resend else "pending")).strip().lower()
+    merged_sent_at = record_data.get("sent_at") or (now_iso if merged_email_status == "sent" else existing.get("sent_at"))
+    merged_created_at = existing.get("created_at") or record_data.get("created_at") or now_iso
+    merged_offer_letter_id = record_data.get("offer_letter_id") or existing.get("offer_letter_id")
+    merged_pdf_filename = record_data.get("pdf_filename") or existing.get("pdf_filename")
+
+    if is_resend:
+        if record_data.get("send_count") is not None:
+            merged_send_count = int(record_data["send_count"])
+        elif existing.get("send_count") is not None:
+            merged_send_count = int(existing["send_count"]) + 1
+        else:
+            merged_send_count = 2
+        merged_error_message = record_data.get("error_message") if merged_email_status == "failed" else None
+    else:
+        if record_data.get("send_count") is not None:
+            merged_send_count = int(record_data["send_count"])
+        else:
+            merged_send_count = 1 if merged_email_status == "sent" else 0
+        merged_error_message = record_data.get("error_message")
+
+    sb = get_supabase_client()
+    if sb:
+        if is_resend and target_id is not None:
+            update_payload = {
+                "student_name": merged_student_name,
+                "student_email": merged_student_email,
+                "phone_number": merged_phone_number,
+                "college_name": merged_college_name,
+                "internship_domain": merged_internship_domain,
+                "internship_duration": merged_internship_duration,
+                "start_date": merged_start_date,
+                "end_date": merged_end_date,
+                "offer_letter_type": merged_offer_letter_type,
+                "email_status": merged_email_status,
+                "sent_at": merged_sent_at,
+                "offer_letter_id": merged_offer_letter_id,
+                "pdf_filename": merged_pdf_filename,
+                "send_count": merged_send_count,
+                "error_message": merged_error_message,
+            }
+            current_payload = dict(update_payload)
+            for _ in range(5):
+                try:
+                    sb.table("campus_ambassador_history").update(current_payload).eq("id", target_id).execute()
+                    break
+                except Exception as mut_exc:
+                    err_str = str(mut_exc)
+                    match = re.search(r"Could not find the '([^']+)' column", err_str)
+                    if match:
+                        col_to_drop = match.group(1)
+                        if col_to_drop in current_payload:
+                            current_payload.pop(col_to_drop, None)
+                            continue
+                    print("SUPABASE UPDATE CA RECORD ERROR (using local DB):", repr(mut_exc))
+                    break
+        else:
+            insert_payload = {
+                "student_name": merged_student_name,
+                "student_email": merged_student_email,
+                "phone_number": merged_phone_number,
+                "college_name": merged_college_name,
+                "internship_domain": merged_internship_domain,
+                "internship_duration": merged_internship_duration,
+                "start_date": merged_start_date,
+                "end_date": merged_end_date,
+                "offer_letter_type": merged_offer_letter_type,
+                "email_status": merged_email_status,
+                "sent_at": merged_sent_at,
+                "created_at": merged_created_at,
+                "offer_letter_id": merged_offer_letter_id,
+                "pdf_filename": merged_pdf_filename,
+                "send_count": merged_send_count,
+                "error_message": merged_error_message,
+            }
+            current_payload = dict(insert_payload)
+            for _ in range(5):
+                try:
+                    sb.table("campus_ambassador_history").insert(current_payload).execute()
+                    break
+                except Exception as mut_exc:
+                    err_str = str(mut_exc)
+                    match = re.search(r"Could not find the '([^']+)' column", err_str)
+                    if match:
+                        col_to_drop = match.group(1)
+                        if col_to_drop in current_payload:
+                            current_payload.pop(col_to_drop, None)
+                            continue
+                    print("SUPABASE SAVE CA RECORD ERROR (using local DB):", repr(mut_exc))
+                    break
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO campus_ambassador_history (
-                student_name, student_email, phone_number, college_name,
-                internship_domain, internship_duration, start_date, end_date,
-                offer_letter_type, email_status, sent_at, created_at,
-                offer_letter_id, pdf_filename, send_count, error_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            record_data.get("student_name"),
-            record_data.get("student_email"),
-            record_data.get("phone_number"),
-            record_data.get("college_name"),
-            record_data.get("internship_domain", "Campus Ambassador"),
-            record_data.get("internship_duration", "Tenure"),
-            record_data.get("start_date"),
-            record_data.get("end_date"),
-            record_data.get("offer_letter_type", "campus_ambassador"),
-            record_data.get("email_status", "pending"),
-            record_data.get("sent_at"),
-            record_data.get("created_at"),
-            record_data.get("offer_letter_id"),
-            record_data.get("pdf_filename"),
-            record_data.get("send_count", 0),
-            record_data.get("error_message")
-        ))
+        if is_resend and target_id is not None:
+            cursor.execute("""
+                UPDATE campus_ambassador_history SET
+                    student_name = ?,
+                    student_email = ?,
+                    phone_number = ?,
+                    college_name = ?,
+                    internship_domain = ?,
+                    internship_duration = ?,
+                    start_date = ?,
+                    end_date = ?,
+                    offer_letter_type = ?,
+                    email_status = ?,
+                    sent_at = ?,
+                    offer_letter_id = ?,
+                    pdf_filename = ?,
+                    send_count = ?,
+                    error_message = ?
+                WHERE id = ?
+            """, (
+                merged_student_name,
+                merged_student_email,
+                merged_phone_number,
+                merged_college_name,
+                merged_internship_domain,
+                merged_internship_duration,
+                merged_start_date,
+                merged_end_date,
+                merged_offer_letter_type,
+                merged_email_status,
+                merged_sent_at,
+                merged_offer_letter_id,
+                merged_pdf_filename,
+                merged_send_count,
+                merged_error_message,
+                target_id
+            ))
+            if cursor.rowcount == 0:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO campus_ambassador_history (
+                        id, student_name, student_email, phone_number, college_name,
+                        internship_domain, internship_duration, start_date, end_date,
+                        offer_letter_type, email_status, sent_at, created_at,
+                        offer_letter_id, pdf_filename, send_count, error_message
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    target_id,
+                    merged_student_name,
+                    merged_student_email,
+                    merged_phone_number,
+                    merged_college_name,
+                    merged_internship_domain,
+                    merged_internship_duration,
+                    merged_start_date,
+                    merged_end_date,
+                    merged_offer_letter_type,
+                    merged_email_status,
+                    merged_sent_at,
+                    merged_created_at,
+                    merged_offer_letter_id,
+                    merged_pdf_filename,
+                    merged_send_count,
+                    merged_error_message
+                ))
+        else:
+            cursor.execute("""
+                INSERT INTO campus_ambassador_history (
+                    student_name, student_email, phone_number, college_name,
+                    internship_domain, internship_duration, start_date, end_date,
+                    offer_letter_type, email_status, sent_at, created_at,
+                    offer_letter_id, pdf_filename, send_count, error_message
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                merged_student_name,
+                merged_student_email,
+                merged_phone_number,
+                merged_college_name,
+                merged_internship_domain,
+                merged_internship_duration,
+                merged_start_date,
+                merged_end_date,
+                merged_offer_letter_type,
+                merged_email_status,
+                merged_sent_at,
+                merged_created_at,
+                merged_offer_letter_id,
+                merged_pdf_filename,
+                merged_send_count,
+                merged_error_message
+            ))
         conn.commit()
         conn.close()
     except Exception as exc:
@@ -253,6 +469,144 @@ def delete_campus_ambassador_record(record_id, document_id=None):
         print("LOCAL DB DELETE CA ERROR:", repr(exc))
 
     return deleted
+
+
+def get_previous_sent_campus_ambassador_by_email(email):
+    """
+    Check if a successfully sent Campus Ambassador record already exists for this email.
+    Queries ONLY public.campus_ambassador_history.
+    Considers ONLY records where email_status = 'sent' (ignores 'pending', 'failed', etc.).
+    Trims whitespace and performs case-insensitive comparison.
+    Authoritative source: Supabase when configured and operational.
+    Local SQLite is used ONLY if Supabase is not configured or throws an actual connection/query exception.
+    """
+    if not email:
+        return None
+    email_clean = str(email).strip().lower()
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("campus_ambassador_history")
+                .select("*")
+                .ilike("student_email", email_clean)
+                .eq("email_status", "sent")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            # When Supabase query succeeds, its result is authoritative
+            if res.data and len(res.data) > 0:
+                return res.data[0]
+            return None
+        except Exception as exc:
+            print("SUPABASE GET PREVIOUS SENT CA ERROR (using fallback):", repr(exc))
+
+    # Fallback to local SQLite ONLY if Supabase is unconfigured or threw an exception
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM campus_ambassador_history WHERE LOWER(TRIM(student_email)) = ? AND email_status = 'sent' ORDER BY id DESC LIMIT 1",
+            (email_clean,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as exc:
+        print("LOCAL DB GET PREVIOUS SENT CA ERROR:", repr(exc))
+
+    return None
+
+
+def find_existing_campus_ambassador_batch(candidate_rows_or_emails, supabase_client=None):
+    """
+    Efficient batch lookup to detect successfully sent Campus Ambassador records in public.campus_ambassador_history.
+    Considers ONLY records where email_status = 'sent' (ignores 'pending', 'failed', etc.).
+    Normalizes candidate emails and database emails using email.strip().lower().
+    Authoritative source of truth: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or throws an exception).
+    Returns: dict mapping lowercase trimmed email -> existing CA record dict
+    """
+    if not candidate_rows_or_emails:
+        return {}
+
+    # Extract clean unique candidate emails (normalized: trimmed & lowercase) + query variants
+    clean_emails_set = set()
+    query_variants_set = set()
+
+    for item in candidate_rows_or_emails:
+        if isinstance(item, dict):
+            em = item.get("student_email") or item.get("email") or ""
+        else:
+            em = str(item or "")
+        em_str = str(em).strip()
+        em_norm = em_str.lower()
+        if em_norm:
+            clean_emails_set.add(em_norm)
+            query_variants_set.add(em_norm)
+            if em_str:
+                query_variants_set.add(em_str)
+
+    if not clean_emails_set:
+        return {}
+
+    query_variants_list = list(query_variants_set)
+    clean_emails_list = list(clean_emails_set)
+    existing_records = []
+    supabase_success = False
+
+    # 1. Authoritative batch query to Supabase
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("campus_ambassador_history")
+                .select("*")
+                .in_("student_email", query_variants_list)
+                .eq("email_status", "sent")
+                .execute()
+            )
+            if res.data is not None:
+                supabase_success = True
+                for row in res.data:
+                    rec = dict(row)
+                    st = str(rec.get("email_status") or "").strip().lower()
+                    if st == "sent":
+                        existing_records.append(rec)
+        except Exception as exc:
+            print("SUPABASE FIND EXISTING CA BATCH WARNING (falling back to local DB):", repr(exc))
+            supabase_success = False
+
+    # 2. Local SQLite fallback query — ONLY used if Supabase is unconfigured or query failed
+    if not supabase_success:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in clean_emails_list)
+            cursor.execute(
+                f"SELECT * FROM campus_ambassador_history WHERE LOWER(TRIM(student_email)) IN ({placeholders}) AND email_status = 'sent'",
+                clean_emails_list
+            )
+            for row in cursor.fetchall():
+                existing_records.append(dict(row))
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB FIND EXISTING CA BATCH ERROR:", repr(exc))
+
+    # 3. Build lookup map with normalized email keys (trimmed & lowercased)
+    lookup = {}
+    for r in existing_records:
+        row_email = str(r.get("student_email") or "").strip().lower()
+        if row_email and row_email in clean_emails_set:
+            if row_email not in lookup or int(r.get("send_count") or 0) > int(lookup[row_email].get("send_count") or 0):
+                lookup[row_email] = r
+
+    return lookup
 
 
 # ============================================================
@@ -310,7 +664,10 @@ def save_offer_letter_record(record_data):
 
 
 def get_previous_offer_letter_by_email(email):
-    """Check if an offer letter already exists for this email."""
+    """
+    Check if an offer letter already exists for this email.
+    Authoritative source: Supabase when configured and operational.
+    """
     if not email:
         return None
     email_clean = email.strip().lower()
@@ -328,9 +685,11 @@ def get_previous_offer_letter_by_email(email):
             )
             if res.data and len(res.data) > 0:
                 return res.data[0]
-        except Exception:
-            pass
+            return None
+        except Exception as exc:
+            print("SUPABASE GET OFFER LETTER BY EMAIL ERROR (using fallback):", repr(exc))
 
+    # Fallback to local SQLite ONLY if Supabase is unconfigured or threw an exception
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row

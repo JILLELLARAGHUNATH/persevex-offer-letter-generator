@@ -3483,6 +3483,7 @@ def campus_ambassador_send_email():
     student_name = (data.get("student_name") or "Candidate").strip()
     raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
     date_formatted = format_ca_date(raw_date)
+    send_again = data.get("send_again") is True or data.get("force_resend") is True
 
     if not filename:
         return jsonify({"success": False, "error": "Generated PDF filename is required."}), 400
@@ -3499,11 +3500,29 @@ def campus_ambassador_send_email():
             "error": "Generated PDF not found on server. Please generate the letter again."
         }), 404
 
+    # --------------------------------------------------------
+    # DUPLICATE / PREVIOUSLY SENT CHECK (public.campus_ambassador_history ONLY)
+    # --------------------------------------------------------
+    previous_sent_record = repository.get_previous_sent_campus_ambassador_by_email(recipient)
+
+    if previous_sent_record and not send_again:
+        return jsonify({
+            "success": False,
+            "duplicate": True,
+            "previously_sent": True,
+            "message": "This email has already received a Campus Ambassador Offer Letter. Do you want to send it again?",
+            "previous_record": previous_sent_record
+        }), 409
+
+    is_resend = bool(previous_sent_record and send_again)
+    target_record_id = previous_sent_record.get("id") if is_resend else None
+    current_send_count = ((previous_sent_record.get("send_count") or 1) + 1) if is_resend else 1
+
     safe_fn = Path(filename).name
     doc_id = Path(safe_fn).stem
 
-    def build_ca_history_data(status, sent_at=None, send_count=1, error_message=None):
-        return {
+    def build_ca_history_data(status, sent_at=None, send_count=current_send_count, error_message=None):
+        payload = {
             "student_name": student_name,
             "student_email": recipient,
             "internship_domain": "Campus Ambassador",
@@ -3518,6 +3537,10 @@ def campus_ambassador_send_email():
             "send_count": send_count,
             "error_message": error_message,
         }
+        if is_resend and target_record_id:
+            payload["id"] = target_record_id
+            payload["send_again"] = True
+        return payload
 
     try:
         message = EmailMessage()
@@ -3586,12 +3609,17 @@ def campus_ambassador_send_email():
         print("WARNING: Could not save CA email to IMAP Sent folder:", repr(imap_err))
 
     try:
-        success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=1)
-        repository.save_campus_ambassador_record(success_record)
+        success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=current_send_count)
+        repository.save_campus_ambassador_record(success_record, existing_id=target_record_id if is_resend else None)
     except Exception as save_err:
         print("CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
 
-    return jsonify({"success": True, "message": "Campus Ambassador Offer Letter sent successfully!"})
+    return jsonify({
+        "success": True,
+        "message": "Campus Ambassador Offer Letter sent successfully!",
+        "send_count": current_send_count,
+        "resent": is_resend
+    })
 
 
 @app.post("/api/campus-ambassador/parse-upload")
@@ -3645,6 +3673,40 @@ def campus_ambassador_bulk_generate_item():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+@app.post("/api/campus-ambassador/bulk-check-duplicates")
+def campus_ambassador_bulk_check_duplicates():
+    """
+    Batch duplicate check against public.campus_ambassador_history.
+    Considers ONLY records where email_status = 'sent'.
+    Normalizes candidate emails and database emails using email.strip().lower().
+    Authoritative source: Supabase (falls back to local SQLite on exception/unconfigured).
+    Returns list of duplicate email strings and mapping of details.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        records = data.get("records") or data.get("emails") or []
+        if not records:
+            return jsonify({
+                "success": True,
+                "duplicate_count": 0,
+                "duplicates": [],
+                "duplicate_map": {}
+            })
+
+        duplicate_map = repository.find_existing_campus_ambassador_batch(records)
+        duplicate_emails = list(duplicate_map.keys())
+
+        return jsonify({
+            "success": True,
+            "duplicate_count": len(duplicate_emails),
+            "duplicates": duplicate_emails,
+            "duplicate_map": duplicate_map
+        })
+    except Exception as exc:
+        print("BULK CA CHECK DUPLICATES ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @app.post("/api/campus-ambassador/bulk-send-item")
 def campus_ambassador_bulk_send_item():
     """Dispatch email for a generated CA Offer Letter PDF."""
@@ -3656,6 +3718,8 @@ def campus_ambassador_bulk_send_item():
         student_name = (data.get("student_name") or "").strip()
         student_email = (data.get("student_email") or "").strip().lower()
         raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+        send_again = bool(data.get("send_again", False))
+        prev_count_param = data.get("previous_send_count")
 
         if not filename:
             # Fallback generate PDF if not provided
@@ -3682,8 +3746,39 @@ def campus_ambassador_bulk_send_item():
         date_formatted = format_ca_date(raw_date)
         doc_id = Path(safe_fn).stem
 
-        def build_ca_history_data(status, sent_at=None, send_count=1, error_message=None):
-            return {
+        # --------------------------------------------------------
+        # BACKEND DUPLICATE GUARD (public.campus_ambassador_history)
+        # --------------------------------------------------------
+        previous_sent_record = None
+        if not send_again:
+            previous_sent_record = repository.get_previous_sent_campus_ambassador_by_email(student_email)
+            if previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent":
+                return jsonify({
+                    "success": False,
+                    "duplicate": True,
+                    "skipped": True,
+                    "error": f"Email '{student_email}' has already received a Campus Ambassador Offer Letter.",
+                    "student_name": student_name,
+                    "student_email": student_email
+                }), 409
+        else:
+            previous_sent_record = repository.get_previous_sent_campus_ambassador_by_email(student_email)
+
+        is_resend = bool(send_again and previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent")
+        target_record_id = (data.get("id") or data.get("existing_id") or (previous_sent_record.get("id") if previous_sent_record else None)) if is_resend else None
+
+        if is_resend:
+            if prev_count_param is not None and int(prev_count_param) >= 1:
+                current_send_count = int(prev_count_param) + 1
+            elif previous_sent_record:
+                current_send_count = (int(previous_sent_record.get("send_count") or 1)) + 1
+            else:
+                current_send_count = 2
+        else:
+            current_send_count = 1
+
+        def build_ca_history_data(status, sent_at=None, send_count=current_send_count, error_message=None):
+            payload = {
                 "student_name": student_name,
                 "student_email": student_email,
                 "internship_domain": "Campus Ambassador",
@@ -3698,6 +3793,10 @@ def campus_ambassador_bulk_send_item():
                 "send_count": send_count,
                 "error_message": error_message,
             }
+            if is_resend and target_record_id:
+                payload["id"] = target_record_id
+                payload["send_again"] = True
+            return payload
 
         message = EmailMessage()
         message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
@@ -3756,8 +3855,8 @@ def campus_ambassador_bulk_send_item():
             pass
 
         try:
-            success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=1)
-            repository.save_campus_ambassador_record(success_record)
+            success_record = build_ca_history_data(status="sent", sent_at=sent_time, send_count=current_send_count)
+            repository.save_campus_ambassador_record(success_record, existing_id=target_record_id if is_resend else None)
         except Exception as save_err:
             print("BULK CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
 
@@ -3766,6 +3865,8 @@ def campus_ambassador_bulk_send_item():
             "student_name": student_name,
             "student_email": student_email,
             "filename": safe_fn,
+            "send_count": current_send_count,
+            "resent": is_resend,
             "message": "Campus Ambassador Offer Letter sent successfully!"
         })
 
@@ -4234,7 +4335,9 @@ def export_history():
 def delete_unified_history_record(record_type, record_id):
     try:
         rec_type = str(record_type or "").strip().lower()
-        if rec_type in ("offer_letter", "offer", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "email_history"):
+        if rec_type in ("ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+            repository.delete_campus_ambassador_record(record_id)
+        elif rec_type in ("offer_letter", "offer", "offer_letters", "email_history"):
             repository.delete_offer_letter_record(record_id)
         else:
             repository.delete_certificate_record(record_id)
@@ -4274,6 +4377,7 @@ def bulk_delete_history_records():
             "success": True,
             "deleted_count": result.get("total_deleted", 0),
             "offer_letters_deleted": result.get("offer_letters_deleted", 0),
+            "ca_letters_deleted": result.get("ca_letters_deleted", 0),
             "certificates_deleted": result.get("certificates_deleted", 0),
             "message": f"{result.get('total_deleted', 0)} records deleted successfully."
         })
@@ -4300,6 +4404,7 @@ def delete_all_history_endpoint():
             "success": True,
             "deleted_count": result.get("total_deleted", 0),
             "offer_letters_deleted": result.get("offer_letters_deleted", 0),
+            "ca_letters_deleted": result.get("ca_letters_deleted", 0),
             "certificates_deleted": result.get("certificates_deleted", 0),
             "message": "All history records deleted successfully."
         })

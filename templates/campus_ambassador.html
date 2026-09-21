@@ -337,6 +337,72 @@
 
 </div>
 
+<!-- =========================================================
+     CAMPUS AMBASSADOR RESEND CONFIRMATION MODAL
+     ========================================================= -->
+<div
+    id="caResendModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleCAResendBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caResendModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCAResendModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="caResendModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px;">
+            Send Campus Ambassador Offer Letter Again?
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 0 0 12px;">
+            This email has already received a Campus Ambassador Offer Letter.
+        </p>
+
+        <div
+            id="caDuplicateEmail"
+            class="modal-target-highlight duplicate-email"
+            style="background: #f8fafc; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px; font-size: 14px; font-weight: 700; color: var(--brand-primary); word-break: break-all; margin: 0 auto 14px; max-width: 90%;"
+        ></div>
+
+        <p style="color: var(--text-body); font-size: 14px; font-weight: 500; line-height: 1.5; margin: 0 0 20px;">
+            Do you want to send the offer letter again?
+        </p>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 12px;">
+            <button
+                type="button"
+                id="cancelCAResendBtn"
+                class="modal-cancel-btn"
+                onclick="closeCAResendModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="confirmCAResendBtn"
+                class="modal-confirm-btn"
+                style="background: var(--brand-primary); color: #ffffff; border: none; padding: 10px 22px; border-radius: var(--radius-md); font-family: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: var(--shadow-btn-primary); transition: all var(--transition-fast); display: inline-flex; align-items: center; justify-content: center; gap: 6px;"
+                onclick="handleCAResendConfirm()"
+            >
+                <span>Send Again</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
@@ -356,6 +422,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const generatingPreview = document.getElementById("generatingPreview");
     const messageBox = document.getElementById("message");
     const toastContainer = document.getElementById("toastContainer");
+
+    const caResendModal = document.getElementById("caResendModal");
+    const caDuplicateEmail = document.getElementById("caDuplicateEmail");
+    const confirmCAResendBtn = document.getElementById("confirmCAResendBtn");
+    const cancelCAResendBtn = document.getElementById("cancelCAResendBtn");
 
     let currentFilename = "";
     let currentPayload = null;
@@ -388,6 +459,75 @@ document.addEventListener("DOMContentLoaded", () => {
         messageBox.className = `message-box ${type}`;
         messageBox.textContent = text;
     }
+
+    // MODAL CONTROLS
+    window.openCAResendModal = function(email) {
+        if (caDuplicateEmail) caDuplicateEmail.textContent = email;
+        if (caResendModal) {
+            caResendModal.classList.remove("modal-closing");
+            caResendModal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+            if (confirmCAResendBtn) {
+                confirmCAResendBtn.disabled = false;
+                confirmCAResendBtn.innerHTML = "<span>Send Again</span>";
+                confirmCAResendBtn.focus();
+            }
+            if (cancelCAResendBtn) {
+                cancelCAResendBtn.disabled = false;
+            }
+        }
+    };
+
+    window.closeCAResendModal = function() {
+        if (caResendModal) {
+            caResendModal.classList.add("modal-closing");
+            setTimeout(function () {
+                caResendModal.style.display = "none";
+                caResendModal.classList.remove("modal-closing");
+                document.body.style.overflow = "";
+            }, 200);
+        }
+    };
+
+    window.handleCAResendBackdropClick = function(event) {
+        if (event.target === caResendModal) {
+            window.closeCAResendModal();
+        }
+    };
+
+    window.handleCAResendConfirm = async function() {
+        if (confirmCAResendBtn) {
+            confirmCAResendBtn.disabled = true;
+            confirmCAResendBtn.innerHTML = `
+                <span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span>
+                <span>Sending...</span>
+            `;
+        }
+        if (cancelCAResendBtn) {
+            cancelCAResendBtn.disabled = true;
+        }
+
+        try {
+            await sendCAEmail(true);
+            window.closeCAResendModal();
+        } catch (err) {
+            console.error("Resend confirmation error:", err);
+            if (confirmCAResendBtn) {
+                confirmCAResendBtn.disabled = false;
+                confirmCAResendBtn.innerHTML = "<span>Send Again</span>";
+            }
+            if (cancelCAResendBtn) {
+                cancelCAResendBtn.disabled = false;
+            }
+        }
+    };
+
+    // ESC Key listener
+    document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape" && caResendModal && caResendModal.style.display !== "none") {
+            window.closeCAResendModal();
+        }
+    });
 
     // GENERATE FORM SUBMIT
     form.addEventListener("submit", async (e) => {
@@ -473,14 +613,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // SEND EMAIL ACTION
-    sendBtn.addEventListener("click", async () => {
+    async function sendCAEmail(sendAgain = false) {
         if (!currentFilename || !currentPayload) {
             setMessage("Please generate the letter first.", "error");
             return;
         }
-
-        const confirmSend = confirm(`Send Campus Ambassador Offer Letter to ${currentPayload.student_email}?`);
-        if (!confirmSend) return;
 
         sendBtn.disabled = true;
         sendBtn.innerHTML = `
@@ -496,11 +633,27 @@ document.addEventListener("DOMContentLoaded", () => {
                     filename: currentFilename,
                     student_name: currentPayload.student_name,
                     student_email: currentPayload.student_email,
-                    date: currentPayload.date
+                    date: currentPayload.date,
+                    send_again: sendAgain
                 })
             });
 
             const data = await res.json();
+
+            // PREVIOUSLY SENT (RESEND) CONFIRMATION CHECK
+            if (res.status === 409 && (data.duplicate || data.previously_sent)) {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = `
+                    <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                    <span>Send to Candidate</span>
+                `;
+
+                window.openCAResendModal(currentPayload.student_email);
+                return;
+            }
 
             if (!res.ok || !data.success) {
                 throw new Error(data.error || "Failed to send CA Offer Letter email.");
@@ -526,6 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 void failedCountEl.offsetWidth;
                 failedCountEl.classList.add("count-pulse");
             }
+            throw err;
         } finally {
             sendBtn.disabled = false;
             sendBtn.innerHTML = `
@@ -536,6 +690,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 <span>Send to Candidate</span>
             `;
         }
+    }
+
+    sendBtn.addEventListener("click", () => {
+        sendCAEmail(false);
     });
 
     // EDIT BUTTON

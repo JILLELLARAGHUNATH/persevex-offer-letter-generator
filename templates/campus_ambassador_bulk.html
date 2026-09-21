@@ -278,19 +278,19 @@
                                 <strong class="eval-metric-val" id="evalTotalRows">0</strong>
                             </div>
                             <div class="eval-metric-box eval-box-valid">
-                                <span class="eval-metric-label">Valid Candidates</span>
+                                <span class="eval-metric-label">Unique Recipients</span>
                                 <strong class="eval-metric-val" id="evalValidCandidates">0</strong>
+                            </div>
+                            <div class="eval-metric-box eval-box-duplicate" id="evalDuplicateBox">
+                                <span class="eval-metric-label">Duplicate Rows</span>
+                                <strong class="eval-metric-val" id="evalDuplicateRows">0</strong>
                             </div>
                             <div class="eval-metric-box eval-box-invalid">
                                 <span class="eval-metric-label">Invalid Rows</span>
                                 <strong class="eval-metric-val" id="evalInvalidRows">0</strong>
                             </div>
-                            <div class="eval-metric-box">
-                                <span class="eval-metric-label">Emails Found</span>
-                                <strong class="eval-metric-val" id="evalEmailsFound">0</strong>
-                            </div>
                             <div class="eval-metric-box eval-box-matched">
-                                <span class="eval-metric-label">Matched</span>
+                                <span class="eval-metric-label">Ready to Process</span>
                                 <strong class="eval-metric-val" id="evalMatched">0</strong>
                             </div>
                         </div>
@@ -423,6 +423,10 @@
                         <div class="stat-box-title" id="statSuccessLabel">Success</div>
                         <div class="stat-box-num" id="statSent">0</div>
                     </div>
+                    <div class="bulk-stat-box stat-skipped" id="statSkippedBox" style="display: none;">
+                        <div class="stat-box-title">Skipped</div>
+                        <div class="stat-box-num" id="statSkipped">0</div>
+                    </div>
                     <div class="bulk-stat-box stat-failed">
                         <div class="stat-box-title">Failed</div>
                         <div class="stat-box-num" id="statFailed">0</div>
@@ -516,6 +520,217 @@
 
 </div>
 
+<!-- =====================================================
+     1. BULK CA SEND CONFIRMATION MODAL (NO HISTORICAL DUPLICATES)
+     ===================================================== -->
+<div
+    id="caBulkSendModal"
+    class="modal-backdrop"
+    style="display: none;"
+    onclick="handleCABulkSendBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        style="max-width: 490px; width: 92%;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caBulkSendModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCABulkSendModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header success-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+        </div>
+
+        <h3 id="caBulkSendModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px; text-align: center;">
+            Send Campus Ambassador Offer Letters?
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 0 0 12px; text-align: center;">
+            You are about to send Campus Ambassador Offer Letters to <strong id="sendModalCountText" style="color: var(--brand-dark);">0</strong> recipients.
+        </p>
+
+        <!-- Compact Metrics Section -->
+        <div class="modal-metrics-summary-grid">
+            <div class="modal-metric-mini-box highlight-primary">
+                <span class="modal-metric-mini-label">READY TO SEND</span>
+                <strong class="modal-metric-mini-val" id="sendModalReady">0</strong>
+            </div>
+            <div class="modal-metric-mini-box">
+                <span class="modal-metric-mini-label">ALREADY SENT</span>
+                <strong class="modal-metric-mini-val" id="sendModalAlreadySent">0</strong>
+            </div>
+            <div class="modal-metric-mini-box highlight-warning">
+                <span class="modal-metric-mini-label">SKIPPED DUPLICATE ROWS</span>
+                <strong class="modal-metric-mini-val" id="sendModalDuplicates">0</strong>
+            </div>
+        </div>
+
+        <!-- Informational Note -->
+        <div class="modal-info-note">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <span>Each recipient will receive one email.</span>
+        </div>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px;">
+            <button
+                type="button"
+                id="caBulkSendCancelBtn"
+                class="modal-cancel-btn"
+                onclick="closeCABulkSendModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="caBulkSendConfirmBtn"
+                class="modal-confirm-btn"
+                onclick="handleCABulkSendConfirm()"
+            >
+                <span id="sendBtnText">Send Letters</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     3. CONSOLIDATED BULK CA DUPLICATE CONFIRMATION MODAL (HISTORICAL DUPLICATES)
+     ===================================================== -->
+<div
+    id="caBulkResendModal"
+    class="modal-backdrop"
+    style="display: none;"
+    onclick="handleCABulkResendBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        style="max-width: 490px; width: 92%;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caBulkResendModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCABulkResendModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="caBulkResendModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px; text-align: center;">
+            Some Campus Ambassador Offer Letters Were Already Sent
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 0 0 8px; text-align: center;">
+            The following recipients have already received an offer letter:
+        </p>
+
+        <div class="bulk-duplicate-list-container">
+            <ul id="caBulkDuplicateList" class="bulk-duplicate-email-list">
+                <!-- Populated dynamically -->
+            </ul>
+        </div>
+
+        <div id="caBulkDuplicateSummary" class="bulk-duplicate-summary-text">
+            0 recipients have already received an offer letter.
+        </div>
+
+        <div class="resend-modal-actions" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; margin-top: 14px;">
+            <button
+                type="button"
+                id="caBulkCancelBtn"
+                class="modal-cancel-btn"
+                onclick="closeCABulkResendModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="caBulkSendNewBtn"
+                class="modal-secondary-action-btn"
+                onclick="handleCABulkSendOnlyNew()"
+            >
+                Send Only to New
+            </button>
+
+            <button
+                type="button"
+                id="caBulkSendAllBtn"
+                class="modal-confirm-btn"
+                onclick="handleCABulkSendAgainAll()"
+            >
+                <span>Send Again to All</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =====================================================
+     4. BULK CA RETRY CONFIRMATION MODAL
+     ===================================================== -->
+<div
+    id="caBulkRetryModal"
+    class="modal-backdrop"
+    style="display: none;"
+    onclick="handleCABulkRetryBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        style="max-width: 460px; width: 92%;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caBulkRetryModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCABulkRetryModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+        </div>
+
+        <h3 id="caBulkRetryModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 10px; text-align: center;">
+            Retry Failed Records?
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 14px; line-height: 1.5; margin: 0 0 14px; text-align: center;">
+            You are about to retry processing <strong id="retryModalCountText" style="color: #dc2626;">0</strong> failed record(s).
+        </p>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 14px;">
+            <button
+                type="button"
+                id="caBulkRetryCancelBtn"
+                class="modal-cancel-btn"
+                onclick="closeCABulkRetryModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="caBulkRetryConfirmBtn"
+                class="modal-confirm-btn"
+                onclick="handleCABulkRetryConfirm()"
+            >
+                <span id="retryBtnText">Retry Records</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
@@ -551,8 +766,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const evalStatusBadge = document.getElementById("evalStatusBadge");
     const evalTotalRows = document.getElementById("evalTotalRows");
     const evalValidCandidates = document.getElementById("evalValidCandidates");
+    const evalDuplicateRows = document.getElementById("evalDuplicateRows");
     const evalInvalidRows = document.getElementById("evalInvalidRows");
-    const evalEmailsFound = document.getElementById("evalEmailsFound");
     const evalMatched = document.getElementById("evalMatched");
     const evalDuplicateBanner = document.getElementById("evalDuplicateBanner");
     const evalDuplicateText = document.getElementById("evalDuplicateText");
@@ -567,6 +782,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const statCompletedEl = document.getElementById("statCompleted");
     const statSuccessLabel = document.getElementById("statSuccessLabel");
     const statSentEl = document.getElementById("statSent");
+    const statSkippedBox = document.getElementById("statSkippedBox");
+    const statSkippedEl = document.getElementById("statSkipped");
     const statFailedEl = document.getElementById("statFailed");
     const statRemainingEl = document.getElementById("statRemaining");
     const progressBarFill = document.getElementById("progressBarFill");
@@ -587,6 +804,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const retryBtnCount = document.getElementById("retryBtnCount");
     const retryFailedBtn = document.getElementById("retryFailedBtn");
 
+    // Modal elements - Send
+    const caBulkSendModal = document.getElementById("caBulkSendModal");
+    const sendModalCountText = document.getElementById("sendModalCountText");
+    const sendModalReady = document.getElementById("sendModalReady");
+    const sendModalAlreadySent = document.getElementById("sendModalAlreadySent");
+    const sendModalDuplicates = document.getElementById("sendModalDuplicates");
+    const caBulkSendCancelBtn = document.getElementById("caBulkSendCancelBtn");
+    const caBulkSendConfirmBtn = document.getElementById("caBulkSendConfirmBtn");
+    const sendBtnText = document.getElementById("sendBtnText");
+
+    // Modal elements - Historical Duplicate (Already Sent)
+    const caBulkResendModal = document.getElementById("caBulkResendModal");
+    const caBulkDuplicateList = document.getElementById("caBulkDuplicateList");
+    const caBulkDuplicateSummary = document.getElementById("caBulkDuplicateSummary");
+    const caBulkCancelBtn = document.getElementById("caBulkCancelBtn");
+    const caBulkSendNewBtn = document.getElementById("caBulkSendNewBtn");
+    const caBulkSendAllBtn = document.getElementById("caBulkSendAllBtn");
+
+    // Modal elements - Retry
+    const caBulkRetryModal = document.getElementById("caBulkRetryModal");
+    const retryModalCountText = document.getElementById("retryModalCountText");
+    const caBulkRetryCancelBtn = document.getElementById("caBulkRetryCancelBtn");
+    const caBulkRetryConfirmBtn = document.getElementById("caBulkRetryConfirmBtn");
+    const retryBtnText = document.getElementById("retryBtnText");
+
     // State Variables
     let isProcessing = false;
     let isEvaluated = false;
@@ -594,6 +836,15 @@ document.addEventListener("DOMContentLoaded", () => {
     let generatedRecordsList = [];
     let failedRecordsList = [];
     let failedPhase = "generation"; // "generation" or "send"
+    let currentBatchMetrics = {
+        totalRows: 0,
+        duplicateRows: 0,
+        uniqueRecipients: 0
+    };
+    let currentBulkDuplicateData = {
+        emails: [],
+        map: {}
+    };
 
     function showToast(text, type = "success") {
         const toast = document.createElement("div");
@@ -719,7 +970,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
-                <span><strong>${escapeHtml(data.filename)}</strong> • ${data.total_rows} rows detected • ${data.valid_count} names • ${data.valid_count} emails • ${data.valid_count} matched</span>
+                <span><strong>${escapeHtml(data.filename)}</strong> • ${data.total_rows} total rows • ${data.valid_count} unique recipients${data.duplicate_count > 0 ? ` (${data.duplicate_count} duplicate rows)` : ""}${data.invalid_count > 0 ? ` • ${data.invalid_count} invalid` : ""}</span>
             `;
             bulkUploadInfo.style.display = "inline-flex";
             bulkErrorBanner.style.display = "none";
@@ -736,7 +987,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 invalid_rows: data.invalid_rows || []
             });
 
-            showToast(`Loaded ${data.valid_count} candidate records from ${file.name}!`, "success");
+            showToast(`Loaded ${data.valid_count} unique candidate records from ${file.name}!`, "success");
 
         } catch (err) {
             showToast("Network error uploading file: " + err.message, "error");
@@ -784,7 +1035,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const validCandidates = [];
         const invalidRows = [];
-        const seenPairs = new Set();
+        const seenEmails = new Set();
         let duplicateCount = 0;
 
         for (let i = 0; i < names.length; i++) {
@@ -796,18 +1047,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const isEmailOk = isValidEmail(rawEmail);
 
             if (isNameOk && isEmailOk) {
-                const pair = `${rawName.toLowerCase()}|${rawEmail.toLowerCase()}`;
-                if (seenPairs.has(pair)) {
+                const normEmail = rawEmail.trim().toLowerCase();
+                if (seenEmails.has(normEmail)) {
                     duplicateCount++;
                 } else {
-                    seenPairs.add(pair);
+                    seenEmails.add(normEmail);
+                    validCandidates.push({
+                        row_num: rowNum,
+                        name: rawName,
+                        email: normEmail
+                    });
                 }
-
-                validCandidates.push({
-                    row_num: rowNum,
-                    name: rawName,
-                    email: rawEmail.toLowerCase()
-                });
             } else {
                 const reasons = [];
                 if (!isNameOk) reasons.push("Candidate Name is missing");
@@ -837,15 +1087,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const isPassed = !results.forceFail && results.invalid_count === 0 && results.valid_count > 0;
         isEvaluated = isPassed;
 
+        currentBatchMetrics = {
+            totalRows: results.total_rows || 0,
+            duplicateRows: results.duplicate_count || 0,
+            uniqueRecipients: results.valid_count || 0
+        };
+
         evalTotalRows.textContent = results.total_rows;
         evalValidCandidates.textContent = results.valid_count;
+        if (evalDuplicateRows) evalDuplicateRows.textContent = results.duplicate_count || 0;
         evalInvalidRows.textContent = results.invalid_count;
-        evalEmailsFound.textContent = results.valid_count;
         evalMatched.textContent = results.valid_count;
 
         if (isPassed) {
             evalStatusBadge.className = "eval-status-badge";
-            evalStatusBadge.textContent = `✓ Evaluation Passed (${results.valid_count} Valid)`;
+            evalStatusBadge.textContent = `✓ Evaluation Passed (${results.valid_count} Unique ${results.valid_count === 1 ? 'Recipient' : 'Recipients'})`;
             evalInvalidSection.style.display = "none";
             generateBtn.disabled = false;
             sendBtn.disabled = true;
@@ -874,7 +1130,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Duplicate Banner
         if (results.duplicate_count > 0) {
-            evalDuplicateText.textContent = `Notice: ${results.duplicate_count} duplicate candidate record(s) detected. Uploaded row order is preserved.`;
+            evalDuplicateText.textContent = `Notice: ${results.duplicate_count} duplicate email row(s) detected in current input. Only the first occurrence of each unique email will be processed.`;
             evalDuplicateBanner.style.display = "flex";
         } else {
             evalDuplicateBanner.style.display = "none";
@@ -890,7 +1146,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // =====================================================
-    // 3. GENERATION HANDLER (PDF ONLY, NO EMAILS SENT)
+    // 3. GENERATION HANDLER (PDF ONLY, DIRECT START)
     // =====================================================
     generateBtn.addEventListener("click", async () => {
         if (isProcessing || !isEvaluated || validCandidatesList.length === 0) return;
@@ -900,9 +1156,6 @@ document.addEventListener("DOMContentLoaded", () => {
             showToast("Please select an Offer Letter Date.", "error");
             return;
         }
-
-        const confirmGen = confirm(`Generate ${validCandidatesList.length} Campus Ambassador Offer Letter PDFs?\n\nNote: No emails will be sent during this step.`);
-        if (!confirmGen) return;
 
         await runGenerationProcessing(validCandidatesList, letterDate);
     });
@@ -925,6 +1178,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         statCompletedLabel.textContent = "Generated";
         statSuccessLabel.textContent = "PDFs Ready";
+        if (statSkippedBox) statSkippedBox.style.display = "none";
 
         const total = candidates.length;
         let completed = 0;
@@ -1046,16 +1300,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Render Completion Banner & Enable Send Button
         bulkCompletionCard.style.display = "flex";
+        const totalInputRows = currentBatchMetrics.totalRows || total;
+        const duplicateInputRows = currentBatchMetrics.duplicateRows || 0;
+
         if (failed === 0) {
             bulkCompletionCard.className = "bulk-completion-card success-completion";
             completionTitle.textContent = "Generation Complete";
-            completionMessage.textContent = `Total: ${total} • Generated: ${generated} • Failed: 0. Ready to send emails.`;
-            showToast(`All ${total} CA Offer Letters generated! Click 'Send CA Letters' to dispatch.`, "success");
+            completionMessage.textContent = duplicateInputRows > 0
+                ? `Total Rows: ${totalInputRows} • Unique Recipients: ${generated} • Duplicate Rows Skipped: ${duplicateInputRows} • Failed: 0. Ready to send emails.`
+                : `Total: ${total} • Generated: ${generated} • Failed: 0. Ready to send emails.`;
+            showToast(`All ${generated} CA Offer Letters generated! Click 'Send CA Letters' to dispatch.`, "success");
             sendBtn.disabled = false;
         } else {
             bulkCompletionCard.className = "bulk-completion-card warning-completion";
             completionTitle.textContent = "Generation Complete with Failures";
-            completionMessage.textContent = `Total: ${total} • Generated: ${generated} • Failed: ${failed}. You can retry failed records or send the generated letters.`;
+            completionMessage.textContent = `Total Rows: ${totalInputRows} • Generated: ${generated} • Failed: ${failed}. You can retry failed records or send the generated letters.`;
             showToast(`${generated} generated, ${failed} failed.`, "error");
             if (generated > 0) {
                 sendBtn.disabled = false;
@@ -1064,18 +1323,327 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =====================================================
-    // 4. EMAIL SENDING HANDLER (EXPLICIT USER CLICK)
+    // 4. MODAL CONTROLS & EMAIL SENDING HANDLERS
     // =====================================================
+    window.openCABulkResendModal = function(duplicateEmails, duplicateMap) {
+        currentBulkDuplicateData = {
+            emails: duplicateEmails || [],
+            map: duplicateMap || {}
+        };
+
+        if (caBulkDuplicateList) {
+            caBulkDuplicateList.innerHTML = "";
+            currentBulkDuplicateData.emails.forEach(em => {
+                const li = document.createElement("li");
+                li.textContent = em;
+                caBulkDuplicateList.appendChild(li);
+            });
+        }
+
+        const count = currentBulkDuplicateData.emails.length;
+        if (caBulkDuplicateSummary) {
+            caBulkDuplicateSummary.textContent = `${count} recipient${count === 1 ? "" : "s"} ${count === 1 ? "has" : "have"} already received an offer letter.`;
+        }
+
+        if (caBulkSendNewBtn) caBulkSendNewBtn.disabled = false;
+        if (caBulkSendAllBtn) caBulkSendAllBtn.disabled = false;
+        if (caBulkCancelBtn) caBulkCancelBtn.disabled = false;
+
+        if (caBulkResendModal) {
+            caBulkResendModal.classList.remove("modal-closing");
+            caBulkResendModal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+            if (caBulkSendNewBtn) caBulkSendNewBtn.focus();
+        }
+    };
+
+    window.closeCABulkResendModal = function() {
+        if (caBulkResendModal) {
+            caBulkResendModal.classList.add("modal-closing");
+            setTimeout(function () {
+                caBulkResendModal.style.display = "none";
+                caBulkResendModal.classList.remove("modal-closing");
+                document.body.style.overflow = "";
+            }, 200);
+        }
+    };
+
+    window.handleCABulkResendBackdropClick = function(event) {
+        if (event.target === caBulkResendModal) {
+            window.closeCABulkResendModal();
+        }
+    };
+
+    // ACTION: Send Only to New
+    window.handleCABulkSendOnlyNew = async function() {
+        if (caBulkSendNewBtn) caBulkSendNewBtn.disabled = true;
+        if (caBulkSendAllBtn) caBulkSendAllBtn.disabled = true;
+        if (caBulkCancelBtn) caBulkCancelBtn.disabled = true;
+
+        window.closeCABulkResendModal();
+        const duplicateSet = new Set(currentBulkDuplicateData.emails.map(e => String(e).trim().toLowerCase()));
+
+        const recordsToSend = [];
+        let skippedCount = 0;
+
+        generatedRecordsList.forEach(r => {
+            const normEmail = String(r.email || "").trim().toLowerCase();
+            if (duplicateSet.has(normEmail)) {
+                skippedCount++;
+            } else {
+                recordsToSend.push({
+                    ...r,
+                    send_again: false,
+                    previous_send_count: 0
+                });
+            }
+        });
+
+        if (recordsToSend.length === 0) {
+            showToast("All candidates in this batch have already received an offer letter. 0 new emails to send.", "info");
+            return;
+        }
+
+        await runEmailSending(recordsToSend, {
+            mode: "only_new",
+            totalBatchCount: generatedRecordsList.length,
+            skippedCount: skippedCount,
+            duplicateMap: currentBulkDuplicateData.map
+        });
+    };
+
+    // ACTION: Send Again to All
+    window.handleCABulkSendAgainAll = async function() {
+        if (caBulkSendNewBtn) caBulkSendNewBtn.disabled = true;
+        if (caBulkSendAllBtn) caBulkSendAllBtn.disabled = true;
+        if (caBulkCancelBtn) caBulkCancelBtn.disabled = true;
+
+        window.closeCABulkResendModal();
+        const duplicateSet = new Set(currentBulkDuplicateData.emails.map(e => String(e).trim().toLowerCase()));
+
+        const recordsToSend = generatedRecordsList.map(r => {
+            const normEmail = String(r.email || "").trim().toLowerCase();
+            const isDuplicate = duplicateSet.has(normEmail);
+            const prevRec = isDuplicate ? currentBulkDuplicateData.map[normEmail] : null;
+            return {
+                ...r,
+                send_again: isDuplicate,
+                previous_send_count: prevRec ? (prevRec.send_count || 1) : 0,
+                id: prevRec ? prevRec.id : null,
+                existing_id: prevRec ? prevRec.id : null
+            };
+        });
+
+        await runEmailSending(recordsToSend, {
+            mode: "send_all",
+            totalBatchCount: generatedRecordsList.length,
+            skippedCount: 0,
+            duplicateMap: currentBulkDuplicateData.map
+        });
+    };
+
+    // CUSTOM SEND MODAL (Zero historical duplicates)
+    window.openCABulkSendModal = function() {
+        if (isProcessing || generatedRecordsList.length === 0) return;
+
+        const count = generatedRecordsList.length;
+        const duplicateRows = currentBatchMetrics.duplicateRows || 0;
+
+        if (sendModalCountText) sendModalCountText.textContent = count;
+        if (sendModalReady) sendModalReady.textContent = count;
+        if (sendModalAlreadySent) sendModalAlreadySent.textContent = "0";
+        if (sendModalDuplicates) sendModalDuplicates.textContent = duplicateRows;
+
+        if (caBulkSendConfirmBtn) {
+            caBulkSendConfirmBtn.disabled = false;
+            if (sendBtnText) sendBtnText.textContent = `Send ${count} ${count === 1 ? 'Letter' : 'Letters'}`;
+        }
+        if (caBulkSendCancelBtn) caBulkSendCancelBtn.disabled = false;
+
+        if (caBulkSendModal) {
+            caBulkSendModal.classList.remove("modal-closing");
+            caBulkSendModal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+            if (caBulkSendConfirmBtn) caBulkSendConfirmBtn.focus();
+        }
+    };
+
+    window.closeCABulkSendModal = function() {
+        if (caBulkSendModal) {
+            caBulkSendModal.classList.add("modal-closing");
+            setTimeout(function () {
+                caBulkSendModal.style.display = "none";
+                caBulkSendModal.classList.remove("modal-closing");
+                document.body.style.overflow = "";
+            }, 200);
+        }
+    };
+
+    window.handleCABulkSendBackdropClick = function(event) {
+        if (event.target === caBulkSendModal) {
+            window.closeCABulkSendModal();
+        }
+    };
+
+    window.handleCABulkSendConfirm = async function() {
+        if (isProcessing || generatedRecordsList.length === 0) return;
+
+        if (caBulkSendConfirmBtn) caBulkSendConfirmBtn.disabled = true;
+        if (caBulkSendCancelBtn) caBulkSendCancelBtn.disabled = true;
+        if (sendBtnText) {
+            sendBtnText.innerHTML = `
+                <span class="spinner" style="display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span>
+                <span>Sending...</span>
+            `;
+        }
+
+        window.closeCABulkSendModal();
+
+        const recordsToSend = generatedRecordsList.map(r => ({
+            ...r,
+            send_again: false,
+            previous_send_count: 0
+        }));
+
+        await runEmailSending(recordsToSend, {
+            mode: "all",
+            totalBatchCount: generatedRecordsList.length,
+            skippedCount: 0,
+            duplicateMap: {}
+        });
+    };
+
+    // SEND BUTTON (Batch duplicate check)
     sendBtn.addEventListener("click", async () => {
         if (isProcessing || generatedRecordsList.length === 0) return;
 
-        const confirmSend = confirm(`Are you sure you want to send CA Offer Letter emails to ${generatedRecordsList.length} candidate(s)?`);
-        if (!confirmSend) return;
+        sendBtn.disabled = true;
+        const origSendBtnHTML = sendBtn.innerHTML;
+        sendBtn.innerHTML = `
+            <span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span>
+            <span>Checking duplicates...</span>
+        `;
 
-        await runEmailSending(generatedRecordsList);
+        try {
+            const response = await fetch("/api/campus-ambassador/bulk-check-duplicates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    records: generatedRecordsList.map(r => ({
+                        student_email: r.email,
+                        student_name: r.name
+                    }))
+                })
+            });
+
+            const result = await response.json();
+            sendBtn.innerHTML = origSendBtnHTML;
+            sendBtn.disabled = false;
+
+            if (!response.ok || !result.success) {
+                showToast("Failed to verify duplicate status: " + (result.error || "Unknown server error"), "error");
+                return;
+            }
+
+            const duplicateCount = result.duplicate_count || 0;
+            const duplicateEmails = result.duplicates || [];
+            const duplicateMap = result.duplicate_map || {};
+
+            if (duplicateCount > 0) {
+                openCABulkResendModal(duplicateEmails, duplicateMap);
+            } else {
+                openCABulkSendModal();
+            }
+        } catch (err) {
+            sendBtn.innerHTML = origSendBtnHTML;
+            sendBtn.disabled = false;
+            showToast("Error checking duplicate records: " + err.message, "error");
+        }
     });
 
-    async function runEmailSending(recordsToSend, isRetry = false) {
+    // =====================================================
+    // 5. RETRY FAILED HANDLER & CUSTOM RETRY MODAL
+    // =====================================================
+    window.openCABulkRetryModal = function() {
+        if (isProcessing || failedRecordsList.length === 0) return;
+
+        const count = failedRecordsList.length;
+        if (retryModalCountText) retryModalCountText.textContent = count;
+        if (caBulkRetryConfirmBtn) {
+            caBulkRetryConfirmBtn.disabled = false;
+            if (retryBtnText) retryBtnText.textContent = `Retry ${count} ${count === 1 ? 'Record' : 'Records'}`;
+        }
+        if (caBulkRetryCancelBtn) caBulkRetryCancelBtn.disabled = false;
+
+        if (caBulkRetryModal) {
+            caBulkRetryModal.classList.remove("modal-closing");
+            caBulkRetryModal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+            if (caBulkRetryConfirmBtn) caBulkRetryConfirmBtn.focus();
+        }
+    };
+
+    window.closeCABulkRetryModal = function() {
+        if (caBulkRetryModal) {
+            caBulkRetryModal.classList.add("modal-closing");
+            setTimeout(function () {
+                caBulkRetryModal.style.display = "none";
+                caBulkRetryModal.classList.remove("modal-closing");
+                document.body.style.overflow = "";
+            }, 200);
+        }
+    };
+
+    window.handleCABulkRetryBackdropClick = function(event) {
+        if (event.target === caBulkRetryModal) {
+            window.closeCABulkRetryModal();
+        }
+    };
+
+    window.handleCABulkRetryConfirm = async function() {
+        if (isProcessing || failedRecordsList.length === 0) return;
+
+        if (caBulkRetryConfirmBtn) caBulkRetryConfirmBtn.disabled = true;
+        if (caBulkRetryCancelBtn) caBulkRetryCancelBtn.disabled = true;
+        if (retryBtnText) {
+            retryBtnText.innerHTML = `
+                <span class="spinner" style="display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span>
+                <span>Retrying...</span>
+            `;
+        }
+
+        window.closeCABulkRetryModal();
+
+        const recordsToRetry = [...failedRecordsList];
+        if (failedPhase === "generation") {
+            const letterDate = dateInput.value.trim();
+            await runGenerationProcessing(recordsToRetry, letterDate);
+        } else {
+            await runEmailSending(recordsToRetry, { isRetry: true });
+        }
+    };
+
+    window.retryFailedRecords = function() {
+        if (isProcessing || failedRecordsList.length === 0) return;
+        window.openCABulkRetryModal();
+    };
+
+    // Unified ESC Key listener for all bulk modals
+    document.addEventListener("keydown", function(event) {
+        if (event.key === "Escape") {
+            if (caBulkSendModal && caBulkSendModal.style.display !== "none") {
+                window.closeCABulkSendModal();
+            }
+            if (caBulkResendModal && caBulkResendModal.style.display !== "none") {
+                window.closeCABulkResendModal();
+            }
+            if (caBulkRetryModal && caBulkRetryModal.style.display !== "none") {
+                window.closeCABulkRetryModal();
+            }
+        }
+    });
+
+    async function runEmailSending(recordsToSend, options = {}) {
         isProcessing = true;
         failedPhase = "send";
         evaluateBtn.disabled = true;
@@ -1094,7 +1662,11 @@ document.addEventListener("DOMContentLoaded", () => {
         statCompletedLabel.textContent = "Processed";
         statSuccessLabel.textContent = "Sent";
 
+        const isRetry = Boolean(options.isRetry);
         const total = recordsToSend.length;
+        const totalBatchCount = options.totalBatchCount || total;
+        const skippedCount = options.skippedCount || 0;
+
         let completed = 0;
         let sent = 0;
         let failed = 0;
@@ -1106,14 +1678,23 @@ document.addEventListener("DOMContentLoaded", () => {
             bulkFailedSection.style.display = "none";
         }
 
-        statTotalEl.textContent = total;
+        if (statSkippedBox && statSkippedEl) {
+            if (skippedCount > 0) {
+                statSkippedEl.textContent = skippedCount;
+                statSkippedBox.style.display = "block";
+            } else {
+                statSkippedBox.style.display = "none";
+            }
+        }
+
+        statTotalEl.textContent = totalBatchCount;
         statCompletedEl.textContent = "0";
         statSentEl.textContent = "0";
         statFailedEl.textContent = "0";
         statRemainingEl.textContent = total;
         progressBarFill.style.width = "0%";
         progressPercentageLabel.textContent = "0%";
-        progressCountLabel.textContent = `0 / ${total} sent`;
+        progressCountLabel.textContent = `0 / ${total} sent${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`;
         progressStatusTag.textContent = isRetry ? "Retrying Emails..." : "Sending Emails...";
         currentCandidateBox.style.display = "flex";
 
@@ -1138,7 +1719,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         filename: item.filename,
                         student_name: item.name,
                         student_email: item.email,
-                        date: item.date
+                        date: item.date,
+                        send_again: Boolean(item.send_again),
+                        previous_send_count: item.previous_send_count || 0,
+                        id: item.id || item.existing_id || null,
+                        existing_id: item.existing_id || item.id || null
                     })
                 });
 
@@ -1160,6 +1745,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         email: item.email,
                         date: item.date,
                         filename: item.filename,
+                        send_again: Boolean(item.send_again),
+                        previous_send_count: item.previous_send_count || 0,
                         error: result.error || `HTTP ${response.status} Error`
                     });
                     if (failedCountEl) {
@@ -1177,6 +1764,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     email: item.email,
                     date: item.date,
                     filename: item.filename,
+                    send_again: Boolean(item.send_again),
+                    previous_send_count: item.previous_send_count || 0,
                     error: err.message || "Network/Server Connection Error"
                 });
                 if (failedCountEl) {
@@ -1197,7 +1786,7 @@ document.addEventListener("DOMContentLoaded", () => {
             statRemainingEl.textContent = remaining;
             progressBarFill.style.width = `${pct}%`;
             progressPercentageLabel.textContent = `${pct}%`;
-            progressCountLabel.textContent = `${completed} / ${total} sent`;
+            progressCountLabel.textContent = `${completed} / ${total} sent${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`;
         }
 
         isProcessing = false;
@@ -1235,36 +1824,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Render Completion Card
         bulkCompletionCard.style.display = "flex";
+        const totalInputRows = currentBatchMetrics.totalRows || totalBatchCount;
+        const duplicateInputRows = currentBatchMetrics.duplicateRows || 0;
+
         if (failed === 0) {
             bulkCompletionCard.className = "bulk-completion-card success-completion";
             completionTitle.textContent = "Bulk CA Offer Letters Delivered Successfully!";
-            completionMessage.textContent = `All ${total} Campus Ambassador offer letters were successfully delivered.`;
-            showToast(`All ${total} CA offer letters sent successfully!`, "success");
+
+            const parts = [];
+            parts.push(`Total Rows: ${totalInputRows}`);
+            parts.push(`Unique Recipients: ${totalBatchCount}`);
+            parts.push(`Sent: ${sent}`);
+            if (skippedCount > 0) {
+                parts.push(`Skipped (Already Sent): ${skippedCount}`);
+            }
+            if (duplicateInputRows > 0) {
+                parts.push(`Duplicate Rows Skipped: ${duplicateInputRows}`);
+            }
+            parts.push(`Failed: 0`);
+
+            completionMessage.textContent = parts.join(" • ");
+            showToast(`Bulk CA letters sent successfully!${skippedCount > 0 ? ` (${skippedCount} already sent and skipped)` : ""}`, "success");
         } else {
             bulkCompletionCard.className = "bulk-completion-card warning-completion";
             completionTitle.textContent = "Bulk CA Delivery Completed with Failures";
-            completionMessage.textContent = `${sent} sent successfully, ${failed} failed out of ${total} total. You can retry the failed records below.`;
+
+            const parts = [];
+            parts.push(`Total Rows: ${totalInputRows}`);
+            parts.push(`Unique Recipients: ${totalBatchCount}`);
+            parts.push(`Sent: ${sent}`);
+            if (skippedCount > 0) {
+                parts.push(`Skipped (Already Sent): ${skippedCount}`);
+            }
+            if (duplicateInputRows > 0) {
+                parts.push(`Duplicate Rows Skipped: ${duplicateInputRows}`);
+            }
+            parts.push(`Failed: ${failed}`);
+
+            completionMessage.textContent = `${parts.join(" • ")}. You can retry failed records below.`;
             showToast(`${sent} sent, ${failed} failed. Check the failed list below.`, "error");
         }
     }
-
-    // =====================================================
-    // 5. RETRY FAILED HANDLER
-    // =====================================================
-    window.retryFailedRecords = async function() {
-        if (isProcessing || failedRecordsList.length === 0) return;
-
-        const confirmRetry = confirm(`Retry ${failedRecordsList.length} failed record(s)?`);
-        if (!confirmRetry) return;
-
-        const recordsToRetry = [...failedRecordsList];
-        if (failedPhase === "generation") {
-            const letterDate = dateInput.value.trim();
-            await runGenerationProcessing(recordsToRetry, letterDate);
-        } else {
-            await runEmailSending(recordsToRetry, true);
-        }
-    };
 
     // =====================================================
     // 6. CLEAR INPUTS
@@ -1277,10 +1877,14 @@ document.addEventListener("DOMContentLoaded", () => {
         bulkUploadInfo.style.display = "none";
         evaluationSection.style.display = "none";
         progressSection.style.display = "none";
+        if (statSkippedBox) statSkippedBox.style.display = "none";
+        if (statSkippedEl) statSkippedEl.textContent = "0";
         isEvaluated = false;
         validCandidatesList = [];
         generatedRecordsList = [];
         failedRecordsList = [];
+        currentBatchMetrics = { totalRows: 0, duplicateRows: 0, uniqueRecipients: 0 };
+        currentBulkDuplicateData = { emails: [], map: {} };
         generateBtn.disabled = true;
         sendBtn.disabled = true;
         updateLiveSummary();

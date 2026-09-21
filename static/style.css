@@ -1598,6 +1598,55 @@ button:disabled,
     opacity: 0.6;
 }
 
+.modal-confirm-btn {
+    border: none;
+    padding: 10px 22px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: var(--brand-primary, #2563eb);
+    color: #ffffff;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 13.5px;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.modal-confirm-btn:hover:not(:disabled) {
+    background: var(--brand-primary-hover, #1d4ed8);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+    transform: translateY(-2px);
+}
+
+.modal-confirm-btn:active:not(:disabled) {
+    transform: scale(0.97) translateY(0);
+}
+
+.modal-confirm-btn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+}
+
+.duplicate-email {
+    background: #f8fafc;
+    border: 1.5px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--brand-primary, #2563eb);
+    word-break: break-all;
+    margin: 12px auto;
+    max-width: 90%;
+    text-align: center;
+}
+
 /* ==========================================================
    BULK ACTIONS FLOATING/INLINE TOOLBAR
    ========================================================== */
@@ -6528,6 +6577,7 @@ button:active:not(:disabled) {
 }
 
 .eval-box-valid .eval-metric-val { color: #059669; }
+.eval-box-duplicate .eval-metric-val { color: #d97706; }
 .eval-box-invalid .eval-metric-val { color: #dc2626; }
 .eval-box-matched .eval-metric-val { color: #2563eb; }
 
@@ -6927,4 +6977,181 @@ button:active:not(:disabled) {
 
 .failed-records-table tr:hover td {
     background: #fff1f2;
+}
+
+.stat-skipped .stat-box-num {
+    color: #8b5cf6;
+}
+
+/* ==========================================================
+   CONSOLIDATED BULK CA DUPLICATE DIALOG
+   ========================================================== */
+.bulk-duplicate-list-container {
+    max-height: 180px;
+    overflow-y: auto;
+    background: #f8fafc;
+    border: 1.5px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-md, 8px);
+    padding: 10px 14px;
+    margin: 12px 0 14px;
+    text-align: left;
+}
+
+.bulk-duplicate-email-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bulk-duplicate-email-list li {
+    font-family: var(--font-mono, monospace);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand-dark, #0f172a);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    word-break: break-all;
+}
+
+.bulk-duplicate-email-list li::before {
+    content: "•";
+    color: var(--brand-primary, #2563eb);
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.bulk-duplicate-summary-text {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-body, #334155);
+    margin: 0 0 18px;
+    text-align: center;
+}
+
+.modal-secondary-action-btn {
+    border: 1.5px solid var(--brand-primary, #2563eb);
+    padding: 10px 20px;
+    border-radius: var(--radius-md, 8px);
+    cursor: pointer;
+    background: #ffffff;
+    color: var(--brand-primary, #2563eb);
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 13.5px;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+    transition: all var(--transition-fast, 0.2s ease);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.modal-secondary-action-btn:hover:not(:disabled) {
+    background: #eff6ff;
+    color: var(--brand-primary-hover, #1d4ed8);
+    border-color: var(--brand-primary-hover, #1d4ed8);
+    transform: translateY(-1px);
+}
+
+.modal-secondary-action-btn:active:not(:disabled) {
+    transform: scale(0.97) translateY(0);
+}
+
+.modal-secondary-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ==========================================================
+   PERSEVEX UNIFIED MODAL METRICS & ICON HEADERS
+   ========================================================== */
+.primary-icon-bg {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1.5px solid #bfdbfe;
+}
+
+.purple-icon-bg {
+    background: #f5f3ff;
+    color: #7c3aed;
+    border: 1.5px solid #ddd6fe;
+}
+
+.success-icon-bg {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1.5px solid #a7f3d0;
+}
+
+.modal-metrics-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    background: #f8fafc;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: var(--radius-md, 8px);
+    padding: 12px 8px;
+    margin: 14px 0;
+}
+
+@media (max-width: 480px) {
+    .modal-metrics-summary-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}
+
+.modal-metric-mini-box {
+    text-align: center;
+    padding: 2px 4px;
+}
+
+.modal-metric-mini-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted, #64748b);
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.modal-metric-mini-val {
+    font-size: 19px;
+    font-weight: 800;
+    color: var(--brand-dark, #0f172a);
+}
+
+.modal-metric-mini-box.highlight-primary .modal-metric-mini-val {
+    color: var(--brand-primary, #2563eb);
+}
+
+.modal-metric-mini-box.highlight-warning .modal-metric-mini-val {
+    color: #d97706;
+}
+
+.modal-info-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: #f1f5f9;
+    color: var(--text-body, #334155);
+    border: 1px solid #e2e8f0;
+    border-radius: var(--radius-sm, 6px);
+    padding: 8px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    margin: 12px 0 16px;
+    text-align: center;
+}
+
+.modal-info-note svg {
+    color: var(--brand-primary, #2563eb);
+    flex-shrink: 0;
 }
