@@ -4488,6 +4488,42 @@ def certificate_generate():
         data["domain"] = domain
         data["internship_domain"] = domain
 
+        formatted_start = certificate_service.format_display_date(start_date)
+        formatted_end = certificate_service.format_display_date(end_date)
+        formatted_issued = certificate_service.format_display_date(issued_date)
+
+        # Idempotent lookup: Check for existing active certificate with exact candidate identity
+        existing_cert = repository.find_active_certificate(
+            email=student_email,
+            domain=domain,
+            start_date=formatted_start,
+            end_date=formatted_end,
+        )
+
+        if existing_cert and str(existing_cert.get("certificate_status") or "").lower() != "revoked":
+            cert_id = str(existing_cert.get("certificate_id") or "").strip()
+            student_name_safe = certificate_service.safe_filename(existing_cert.get("student_name") or student_name)
+            filename = str(existing_cert.get("pdf_filename") or f"{student_name_safe}_Certificate.pdf").strip()
+            preview_url = f"/verify/{cert_id}/preview"
+            download_url = f"/verify/{cert_id}/download"
+
+            return jsonify({
+                "success": True,
+                "filename": filename,
+                "url": preview_url,
+                "download_url": download_url,
+                "certificate_id": cert_id,
+                "data": {
+                    "student_name": existing_cert.get("student_name") or student_name,
+                    "student_email": student_email,
+                    "domain": existing_cert.get("internship_domain") or domain,
+                    "start_date": existing_cert.get("start_date") or formatted_start,
+                    "end_date": existing_cert.get("end_date") or formatted_end,
+                    "issued_date": existing_cert.get("issued_date") or formatted_issued,
+                    "certificate_id": cert_id,
+                }
+            })
+
         cert_id = certificate_service.generate_certificate_id(supabase)
         data["certificate_id"] = cert_id
         base_url = certificate_service.get_public_base_url(request)
@@ -4497,10 +4533,6 @@ def certificate_generate():
             output_dir=GENERATED_DIR,
             base_url=base_url,
         )
-
-        formatted_start = certificate_service.format_display_date(start_date)
-        formatted_end = certificate_service.format_display_date(end_date)
-        formatted_issued = certificate_service.format_display_date(issued_date)
 
         cert_record = {
             "certificate_id": cert_id,
@@ -4517,10 +4549,14 @@ def certificate_generate():
         }
         repository.save_certificate_record(cert_record)
 
+        preview_url = f"/verify/{cert_id}/preview"
+        download_url = f"/verify/{cert_id}/download"
+
         return jsonify({
             "success": True,
             "filename": filename,
-            "url": f"/generated/{filename}",
+            "url": preview_url,
+            "download_url": download_url,
             "certificate_id": cert_id,
             "data": {
                 "student_name": student_name,

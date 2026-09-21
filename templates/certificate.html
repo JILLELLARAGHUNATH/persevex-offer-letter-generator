@@ -610,9 +610,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    let isGeneratingCertificate = false;
+
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (isGeneratingCertificate) return;
+
             const genBtn = document.getElementById('generateBtn');
             const genText = document.getElementById('generateBtnText');
             const placeholder = document.getElementById('previewPlaceholder');
@@ -635,8 +639,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 issued_date: document.getElementById('issued_date').value,
             };
 
+            isGeneratingCertificate = true;
             genBtn.disabled = true;
-            genText.textContent = 'Generating...';
+            genText.textContent = 'Generating Certificate...';
             placeholder.style.display = 'none';
             generatingState.style.display = 'flex';
             iframe.style.display = 'none';
@@ -653,22 +658,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const result = await response.json();
 
                 if (result.success) {
+                    const previewUrl = result.url;
+                    const downloadUrl = result.download_url || result.url;
+
                     currentGeneratedCertificate = {
                         ...payload,
                         filename: result.filename,
                         certificate_id: result.certificate_id,
-                        url: result.url
+                        url: previewUrl,
+                        download_url: downloadUrl
                     };
 
-                    iframe.src = result.url;
+                    iframe.src = previewUrl;
                     iframe.style.display = 'block';
                     generatingState.style.display = 'none';
                     previewActions.style.display = 'flex';
                     badge.textContent = 'Ready';
                     badge.className = 'section-tag status-ready';
 
-                    document.getElementById('downloadBtn').href = result.url;
-                    document.getElementById('downloadBtn').setAttribute('download', result.filename);
+                    const downloadBtn = document.getElementById('downloadBtn');
+                    downloadBtn.href = downloadUrl;
+                    downloadBtn.setAttribute('download', result.filename || 'Certificate.pdf');
                     showToast('Certificate generated successfully.', 'success');
                     localStorage.setItem('persevex_stats_updated', Date.now().toString());
                     refreshStats();
@@ -683,6 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 placeholder.style.display = 'flex';
                 generatingState.style.display = 'none';
             } finally {
+                isGeneratingCertificate = false;
                 genBtn.disabled = false;
                 genText.textContent = 'Generate Certificate';
             }

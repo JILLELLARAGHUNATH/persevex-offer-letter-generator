@@ -1036,6 +1036,109 @@ def bulk_save_certificate_records(records_list):
     return True
 
 
+def _normalize_cert_date(date_str):
+    """Normalize date strings to DD-MM-YYYY format for strict identity matching."""
+    if not date_str:
+        return ""
+    date_str = str(date_str).strip()
+    if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", date_str):
+        try:
+            return datetime.strptime(date_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+        except Exception:
+            pass
+    if re.fullmatch(r"\d{1,2}-\d{1,2}-\d{4}", date_str):
+        try:
+            return datetime.strptime(date_str, "%d-%m-%Y").strftime("%d-%m-%Y")
+        except Exception:
+            pass
+    if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", date_str):
+        try:
+            return datetime.strptime(date_str, "%d/%m/%Y").strftime("%d-%m-%Y")
+        except Exception:
+            pass
+    return date_str
+
+
+def find_active_certificate(email, domain, start_date, end_date, supabase_client=None):
+    """
+    Lookup an existing active certificate matching the exact candidate identity:
+    - normalized email (case-insensitive, trimmed)
+    - normalized domain (case-insensitive, trimmed)
+    - exact start_date (matching normalized date)
+    - exact end_date (matching normalized date)
+    - certificate_status != 'revoked'
+    Candidate name is NOT part of the identity.
+    Returns the most recent matching certificate record dict, or None.
+    """
+    if not email or not domain:
+        return None
+
+    email_clean = str(email).strip().lower()
+    domain_clean = str(domain).strip().lower()
+    start_norm = _normalize_cert_date(start_date)
+    end_norm = _normalize_cert_date(end_date)
+
+    if not email_clean or not domain_clean or not start_norm or not end_norm:
+        return None
+
+    sb = supabase_client or get_supabase_client()
+    supabase_success = False
+    candidates = []
+
+    if sb:
+        try:
+            res = (
+                sb.table("certificate_history")
+                .select("*")
+                .ilike("student_email", email_clean)
+                .order("id", desc=True)
+                .execute()
+            )
+            if res.data is not None:
+                supabase_success = True
+                for row in res.data:
+                    candidates.append(dict(row))
+        except Exception as exc:
+            print("SUPABASE FIND ACTIVE CERTIFICATE WARNING (using fallback):", repr(exc))
+            supabase_success = False
+
+    if not supabase_success:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM certificate_history WHERE LOWER(student_email) = ? ORDER BY id DESC",
+                (email_clean,)
+            )
+            for row in cursor.fetchall():
+                candidates.append(dict(row))
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB FIND ACTIVE CERTIFICATE ERROR:", repr(exc))
+
+    for rec in candidates:
+        status = str(rec.get("certificate_status") or "active").strip().lower()
+        if status == "revoked":
+            continue
+
+        rec_email = str(rec.get("student_email") or "").strip().lower()
+        if rec_email != email_clean:
+            continue
+
+        rec_domain = str(rec.get("internship_domain") or rec.get("domain") or "").strip().lower()
+        if rec_domain != domain_clean:
+            continue
+
+        rec_start_norm = _normalize_cert_date(rec.get("start_date"))
+        rec_end_norm = _normalize_cert_date(rec.get("end_date"))
+
+        if rec_start_norm == start_norm and rec_end_norm == end_norm:
+            return rec
+
+    return None
+
+
 def find_existing_certificates_batch(candidate_rows, supabase_client=None):
     """
     Efficient batch lookup to detect active certificates that already exist for a batch of candidate records.
