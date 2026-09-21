@@ -4504,8 +4504,16 @@ def certificate_generate():
             cert_id = str(existing_cert.get("certificate_id") or "").strip()
             student_name_safe = certificate_service.safe_filename(existing_cert.get("student_name") or student_name)
             filename = str(existing_cert.get("pdf_filename") or f"{student_name_safe}_Certificate.pdf").strip()
-            preview_url = f"/verify/{cert_id}/preview"
-            download_url = f"/verify/{cert_id}/download"
+            preview_params = urllib.parse.urlencode({
+                "name": existing_cert.get("student_name") or student_name,
+                "email": student_email,
+                "domain": existing_cert.get("internship_domain") or domain,
+                "start": existing_cert.get("start_date") or formatted_start,
+                "end": existing_cert.get("end_date") or formatted_end,
+                "issued": existing_cert.get("issued_date") or formatted_issued,
+            })
+            preview_url = f"/verify/{cert_id}/preview?{preview_params}"
+            download_url = f"/verify/{cert_id}/download?{preview_params}"
 
             return jsonify({
                 "success": True,
@@ -4540,8 +4548,16 @@ def certificate_generate():
             base_url=base_url,
         )
 
-        preview_url = f"/generated/{filename}"
-        download_url = f"/generated/{filename}"
+        preview_params = urllib.parse.urlencode({
+            "name": student_name,
+            "email": student_email,
+            "domain": domain,
+            "start": formatted_start,
+            "end": formatted_end,
+            "issued": formatted_issued,
+        })
+        preview_url = f"/verify/{cert_id}/preview?{preview_params}"
+        download_url = f"/verify/{cert_id}/download?{preview_params}"
 
         return jsonify({
             "success": True,
@@ -5029,32 +5045,47 @@ def revoke_certificate_api(certificate_id):
 def verify_download_certificate(certificate_id):
     """
     Publicly accessible endpoint to download the authentic certificate PDF.
-    Generates and streams directly from memory on demand from Supabase certificate record.
+    Generates and streams directly from memory on demand from Supabase certificate record or query params.
     NO PERMANENT LOCAL PDF STORAGE REQUIRED.
     """
     cert_id = str(certificate_id).strip()
     record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
 
-    if not record:
-        matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
-        if matched_files:
-            return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=True)
-        return jsonify({"error": "Certificate record not found."}), 404
-
-    if str(record.get("certificate_status") or "").lower() == "revoked":
-        return jsonify({"error": "This certificate has been revoked and is unavailable for download."}), 410
-
-    try:
+    if record:
+        if str(record.get("certificate_status") or "").lower() == "revoked":
+            return jsonify({"error": "This certificate has been revoked and is unavailable for download."}), 410
         data = {
             "student_name": record.get("student_name", ""),
+            "student_email": record.get("student_email", ""),
             "domain": record.get("internship_domain", ""),
             "start_date": record.get("start_date", ""),
             "end_date": record.get("end_date", ""),
             "issued_date": record.get("issued_date", ""),
             "certificate_id": cert_id,
         }
-        base_url = certificate_service.get_public_base_url(request)
         template_version = record.get("template_version") or "v1"
+    else:
+        req_name = request.args.get("name") or request.args.get("student_name")
+        req_domain = request.args.get("domain") or request.args.get("internship_domain")
+        if req_name or req_domain:
+            data = {
+                "student_name": req_name or "Student",
+                "student_email": request.args.get("email") or request.args.get("student_email") or "",
+                "domain": req_domain or "Internship",
+                "start_date": request.args.get("start") or request.args.get("start_date") or "",
+                "end_date": request.args.get("end") or request.args.get("end_date") or "",
+                "issued_date": request.args.get("issued") or request.args.get("issued_date") or "",
+                "certificate_id": cert_id,
+            }
+            template_version = request.args.get("version") or "v1"
+        else:
+            matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
+            if matched_files:
+                return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=True)
+            return jsonify({"error": "Certificate record not found."}), 404
+
+    try:
+        base_url = certificate_service.get_public_base_url(request)
 
         pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
             data=data,
@@ -5062,7 +5093,7 @@ def verify_download_certificate(certificate_id):
             template_version=template_version,
         )
 
-        student_name_safe = certificate_service.safe_filename(record.get("student_name", "Student"))
+        student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
         download_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
 
         return Response(
@@ -5084,32 +5115,47 @@ def verify_download_certificate(certificate_id):
 def verify_preview_certificate(certificate_id):
     """
     Publicly accessible endpoint to stream the certificate PDF for embedded preview.
-    Generates and streams directly from memory on demand from Supabase certificate record.
+    Generates and streams directly from memory on demand from Supabase certificate record or query params.
     NO PERMANENT LOCAL PDF STORAGE REQUIRED.
     """
     cert_id = str(certificate_id).strip()
     record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
 
-    if not record:
-        matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
-        if matched_files:
-            return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=False)
-        return jsonify({"error": "Certificate record not found."}), 404
-
-    if str(record.get("certificate_status") or "").lower() == "revoked":
-        return jsonify({"error": "This certificate has been revoked and is unavailable for preview."}), 410
-
-    try:
+    if record:
+        if str(record.get("certificate_status") or "").lower() == "revoked":
+            return jsonify({"error": "This certificate has been revoked and is unavailable for preview."}), 410
         data = {
             "student_name": record.get("student_name", ""),
+            "student_email": record.get("student_email", ""),
             "domain": record.get("internship_domain", ""),
             "start_date": record.get("start_date", ""),
             "end_date": record.get("end_date", ""),
             "issued_date": record.get("issued_date", ""),
             "certificate_id": cert_id,
         }
-        base_url = certificate_service.get_public_base_url(request)
         template_version = record.get("template_version") or "v1"
+    else:
+        req_name = request.args.get("name") or request.args.get("student_name")
+        req_domain = request.args.get("domain") or request.args.get("internship_domain")
+        if req_name or req_domain:
+            data = {
+                "student_name": req_name or "Student",
+                "student_email": request.args.get("email") or request.args.get("student_email") or "",
+                "domain": req_domain or "Internship",
+                "start_date": request.args.get("start") or request.args.get("start_date") or "",
+                "end_date": request.args.get("end") or request.args.get("end_date") or "",
+                "issued_date": request.args.get("issued") or request.args.get("issued_date") or "",
+                "certificate_id": cert_id,
+            }
+            template_version = request.args.get("version") or "v1"
+        else:
+            matched_files = list(GENERATED_DIR.glob(f"*{cert_id}*.pdf"))
+            if matched_files:
+                return send_from_directory(GENERATED_DIR, matched_files[0].name, as_attachment=False)
+            return jsonify({"error": "Certificate record not found."}), 404
+
+    try:
+        base_url = certificate_service.get_public_base_url(request)
 
         pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
             data=data,
@@ -5117,7 +5163,7 @@ def verify_preview_certificate(certificate_id):
             template_version=template_version,
         )
 
-        student_name_safe = certificate_service.safe_filename(record.get("student_name", "Student"))
+        student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
         preview_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
 
         return Response(
@@ -5139,29 +5185,44 @@ def verify_preview_certificate(certificate_id):
 def verify_image_certificate(certificate_id):
     """
     Publicly accessible endpoint to render and stream a crisp PNG image preview of the certificate.
-    Generates image directly in memory on demand from Supabase certificate record.
+    Generates image directly in memory on demand from Supabase certificate record or query params.
     NO PERMANENT LOCAL PDF STORAGE REQUIRED.
     """
     cert_id = str(certificate_id).strip()
     record = certificate_service.db_get_certificate_by_id(cert_id, supabase)
 
-    if not record:
-        return jsonify({"error": "Certificate record not found."}), 404
-
-    if str(record.get("certificate_status") or "").lower() == "revoked":
-        return jsonify({"error": "This certificate has been revoked."}), 410
-
-    try:
+    if record:
+        if str(record.get("certificate_status") or "").lower() == "revoked":
+            return jsonify({"error": "This certificate has been revoked."}), 410
         data = {
             "student_name": record.get("student_name", ""),
+            "student_email": record.get("student_email", ""),
             "domain": record.get("internship_domain", ""),
             "start_date": record.get("start_date", ""),
             "end_date": record.get("end_date", ""),
             "issued_date": record.get("issued_date", ""),
             "certificate_id": cert_id,
         }
-        base_url = certificate_service.get_public_base_url(request)
         template_version = record.get("template_version") or "v1"
+    else:
+        req_name = request.args.get("name") or request.args.get("student_name")
+        req_domain = request.args.get("domain") or request.args.get("internship_domain")
+        if req_name or req_domain:
+            data = {
+                "student_name": req_name or "Student",
+                "student_email": request.args.get("email") or request.args.get("student_email") or "",
+                "domain": req_domain or "Internship",
+                "start_date": request.args.get("start") or request.args.get("start_date") or "",
+                "end_date": request.args.get("end") or request.args.get("end_date") or "",
+                "issued_date": request.args.get("issued") or request.args.get("issued_date") or "",
+                "certificate_id": cert_id,
+            }
+            template_version = request.args.get("version") or "v1"
+        else:
+            return jsonify({"error": "Certificate record not found."}), 404
+
+    try:
+        base_url = certificate_service.get_public_base_url(request)
 
         img_bytes = certificate_service.generate_certificate_image_bytes(
             data=data,
