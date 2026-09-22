@@ -107,9 +107,31 @@
     </header>
 
     <!-- =====================================================
-         MAIN WORKSPACE
+         MODE SWITCHER: SINGLE vs BULK OFFER LETTERS
          ===================================================== -->
-    <main>
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <button type="button" id="tabSingleOffer" class="mode-pill-btn active" onclick="switchOfferMode('single')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                Single Offer Letter
+            </button>
+            <button type="button" id="tabBulkOffer" class="mode-pill-btn" onclick="switchOfferMode('bulk')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                Bulk Offer Letters
+            </button>
+        </div>
+    </div>
+
+    <!-- =====================================================
+         SINGLE OFFER LETTER WORKSPACE
+         ===================================================== -->
+    <main id="singleOfferWorkspace">
 
         <!-- =================================================
              LEFT FORM SECTION
@@ -363,7 +385,7 @@
                     disabled
                 >
                     <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                     <span>Edit</span>
@@ -454,10 +476,331 @@
 
     </main>
 
+    <!-- =====================================================
+         BULK OFFER LETTER WORKSPACE
+         ===================================================== -->
+    <main id="bulkOfferWorkspace" style="display: none; box-sizing: border-box;">
+        <!-- STEP 1: ADD CANDIDATES CARD -->
+        <section class="card form-card-animate" style="width: 100%; box-sizing: border-box; margin-bottom: 20px;">
+            <div class="card-header" style="justify-content: space-between;">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    Step 1 — Add Candidates
+                </h2>
+                <span class="section-tag">Strict Line-by-Line Matching</span>
+            </div>
+
+            <!-- TWO-COLUMN TEXTAREA GRID -->
+            <div class="bulk-textareas-grid">
+                <!-- Candidate Names -->
+                <div class="bulk-field-wrapper">
+                    <div class="bulk-field-header">
+                        <label for="bulkOfferCandidateNames">Candidate Names</label>
+                        <span class="bulk-counter-badge" id="bulkOfferNamesCountBadge">
+                            <span id="bulkOfferNamesCount">0</span> names
+                        </span>
+                    </div>
+                    <textarea
+                        id="bulkOfferCandidateNames"
+                        class="bulk-textarea"
+                        rows="7"
+                        placeholder="Paste Candidate Names here (one per line):&#10;Rahul Kumar&#10;Priya Sharma&#10;Arjun Reddy&#10;..."
+                        spellcheck="false"
+                        autocomplete="off"
+                        oninput="handleBulkNamesEmailsInput()"
+                    ></textarea>
+                    <div class="bulk-field-hint">One full candidate name per line.</div>
+                </div>
+
+                <!-- Email Addresses -->
+                <div class="bulk-field-wrapper">
+                    <div class="bulk-field-header">
+                        <label for="bulkOfferEmailAddresses">Email Addresses</label>
+                        <span class="bulk-counter-badge" id="bulkOfferEmailsCountBadge">
+                            <span id="bulkOfferEmailsCount">0</span> emails
+                        </span>
+                    </div>
+                    <textarea
+                        id="bulkOfferEmailAddresses"
+                        class="bulk-textarea"
+                        rows="7"
+                        placeholder="Paste Email Addresses here (one per line):&#10;rahul@gmail.com&#10;priya@gmail.com&#10;arjun@gmail.com&#10;..."
+                        spellcheck="false"
+                        autocomplete="off"
+                        oninput="handleBulkNamesEmailsInput()"
+                    ></textarea>
+                    <div class="bulk-field-hint">One email address per line, strictly matching line-by-line.</div>
+                </div>
+            </div>
+
+            <!-- MATCHING STATS BAR -->
+            <div class="bulk-matching-summary" id="bulkOfferMatchingSummary">
+                <div style="display: flex; align-items: center; gap: 12px; font-size: 13px;">
+                    <span>Candidates: <strong id="bulkOfferSummaryNamesCount" style="color: var(--brand-primary);">0</strong></span>
+                    <span style="color: #cbd5e1;">•</span>
+                    <span>Emails: <strong id="bulkOfferSummaryEmailsCount" style="color: var(--brand-primary);">0</strong></span>
+                    <span style="color: #cbd5e1;">•</span>
+                    <span>Matched: <strong id="bulkOfferSummaryMatchedCount" style="color: #059669;">0</strong></span>
+                </div>
+                <div id="bulkOfferMatchStatusBadge" class="bulk-match-status-badge">
+                    Paste names and emails to begin
+                </div>
+            </div>
+
+            <!-- STEP 1 ACTION BUTTONS + FILE/FOLDER UPLOAD & TEMPLATE DOWNLOAD -->
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" id="bulkOfferLoadCandidatesBtn" class="primary" style="padding: 9px 20px; font-size: 13px;" onclick="loadBulkOfferCandidatesFromInputs()">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <polyline points="16 11 18 13 22 9"></polyline>
+                        </svg>
+                        <span>Load Candidates</span>
+                    </button>
+                    <button type="button" class="secondary" style="padding: 9px 14px; font-size: 13px;" onclick="clearBulkNamesEmailsInputs()">
+                        <span>Clear Lists</span>
+                    </button>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <input type="file" id="bulkOfferFileInput" accept=".csv, .xlsx, .xls" style="display: none;" onchange="handleBulkOfferFileSelect(event)">
+                    <input type="file" id="bulkOfferFolderInput" webkitdirectory directory multiple style="display: none;" onchange="handleBulkOfferFolderSelect(event)">
+                    <button type="button" class="bulk-upload-option-btn" onclick="document.getElementById('bulkOfferFileInput').click()">
+                        📁 Upload Excel / CSV
+                    </button>
+                    <button type="button" class="bulk-upload-option-btn" onclick="document.getElementById('bulkOfferFolderInput').click()">
+                        📂 Upload Folder
+                    </button>
+                    <a href="/api/offer-letter/bulk/sample-template?format=csv" class="bulk-upload-option-btn" style="text-decoration: none;" download>
+                        📥 Download Sample File
+                    </a>
+                </div>
+            </div>
+
+            <!-- COMPACT DRAG & DROP ZONE -->
+            <div class="upload-dropzone compact-dropzone" id="bulkOfferDropzone">
+                <div style="font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span><strong>Drag &amp; Drop CSV / Excel files or Folder here</strong> to import candidate records</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- STEP 2: FILL DETAILS & CANDIDATE TABLE CARD -->
+        <section class="card form-card-animate" id="bulkOfferStep2Card" style="width: 100%; box-sizing: border-box;">
+            <div class="card-header" style="justify-content: space-between;">
+                <h2>
+                    <svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                    </svg>
+                    Step 2 — Fill Details &amp; Validate
+                </h2>
+                <span class="section-tag" id="bulkOfferStep2Tag">Editable Candidate Cards</span>
+            </div>
+
+            <!-- LIVE VALIDATION COUNTERS (5 Cards) -->
+            <div id="bulkOfferStatsSection" style="margin-top: 14px;">
+                <div class="validation-summary-grid">
+                    <div class="val-card">
+                        <span class="val-icon">📋</span>
+                        <div class="val-info">
+                            <span class="val-label">Total Rows</span>
+                            <span class="val-val" id="bulkOfferTotalRows">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-valid">
+                        <span class="val-icon">✔</span>
+                        <div class="val-info">
+                            <span class="val-label">Valid Records</span>
+                            <span class="val-val" id="bulkOfferValidRows" style="color: #10b981;">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-invalid">
+                        <span class="val-icon">❌</span>
+                        <div class="val-info">
+                            <span class="val-label">Need Attention</span>
+                            <span class="val-val" id="bulkOfferAttentionRows" style="color: #ef4444;">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card" style="border-left: 4px solid #3b82f6;">
+                        <span class="val-icon">⏱</span>
+                        <div class="val-info">
+                            <span class="val-label">With Hours</span>
+                            <span class="val-val" id="bulkOfferWithHoursRows" style="color: #2563eb;">0</span>
+                        </div>
+                    </div>
+                    <div class="val-card val-dup">
+                        <span class="val-icon">⚠️</span>
+                        <div class="val-info">
+                            <span class="val-label">Duplicate Emails</span>
+                            <span class="val-val" id="bulkOfferDuplicateRows" style="color: #f59e0b;">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CANDIDATE CARDS -->
+            <div style="margin-top: 18px; width: 100%;">
+                <div class="bulk-offer-toolbar">
+                    <div class="bulk-offer-toolbar-left">
+                        <h4 style="margin: 0; font-size: 14px; color: var(--text-main);">
+                            Candidate Records (<span id="bulkOfferTableCount">0</span>)
+                        </h4>
+                        <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--text-muted); cursor: pointer;">
+                            <input type="checkbox" id="bulkOfferSelectAllCheck" checked onchange="toggleSelectAllBulkOffer(event)"> Select All
+                        </label>
+                        <button type="button" class="bulk-btn-action btn-add-row" onclick="addBulkOfferRow()">
+                            ➕ Add Card
+                        </button>
+                        <button type="button" class="bulk-btn-action btn-validate" onclick="revalidateAllRows(true)">
+                            ✔ Validate
+                        </button>
+                        <button type="button" class="bulk-btn-action btn-clear" onclick="clearBulkOfferTable()">
+                            🧹 Clear All
+                        </button>
+                    </div>
+                    <div class="bulk-offer-toolbar-right">
+                        <span id="bulkOfferSelectedCount" style="font-size: 12.5px; color: var(--text-muted);">
+                            0 candidates ready
+                        </span>
+                    </div>
+                </div>
+
+                <!-- RESPONSIVE CANDIDATE CARD LIST -->
+                <div class="bulk-candidate-list" id="bulkOfferTableBody">
+                    <!-- Dynamically populated cards -->
+                </div>
+            </div>
+
+            <!-- STEP 3: ACTION CONTROLS, PROGRESS, & RETRY -->
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                <!-- REAL-TIME PROGRESS CARD -->
+                <div id="bulkOfferProgressArea" class="bulk-progress-card" style="display: none;">
+                    <div class="bulk-progress-header">
+                        <div class="bulk-progress-title-row">
+                            <h4 id="bulkOfferProgressTitle" class="bulk-progress-title">Generating Offer Letters...</h4>
+                            <span id="bulkOfferProgressPercent" class="bulk-progress-badge">0.0%</span>
+                        </div>
+                        <div class="bulk-progress-counter">
+                            <span id="bulkOfferProgressCompleted">0</span> / <span id="bulkOfferProgressTotal">0</span>
+                        </div>
+                    </div>
+
+                    <div class="bulk-progress-container">
+                        <div class="bulk-progress-bar" id="bulkOfferProgressBar" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="bulk-progress-details">
+                        <div class="bulk-progress-current">
+                            <span>Current:</span>
+                            <strong id="bulkOfferProgressCurrentItem" class="current-value">-</strong>
+                        </div>
+                        <div class="bulk-progress-stats">
+                            <span class="stat-item stat-success">Successful: <strong id="bulkOfferProgressSuccess">0</strong></span>
+                            <span class="stat-item stat-breakdown" id="bulkOfferProgressBreakdown" style="font-size: 11.5px; color: var(--text-muted); display: none;">(New: <strong id="bulkOfferProgressNew" style="color: #059669;">0</strong>, Resent: <strong id="bulkOfferProgressExisting" style="color: #2563eb;">0</strong>)</span>
+                            <span class="stat-item stat-failed">Failed: <strong id="bulkOfferProgressFailed">0</strong></span>
+                            <span class="stat-item stat-remaining">Remaining: <strong id="bulkOfferProgressRemaining">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GENERATION FAILED AREA -->
+                <div id="bulkOfferGenFailedArea" class="bulk-failed-card" style="display: none;">
+                    <div class="bulk-failed-header" onclick="toggleOfferGenFailedDetails()">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px;">⚠️</span>
+                            <strong style="color: #b91c1c; font-size: 13.5px;">Failed Letter Generations (<span id="bulkOfferGenFailedCountBadge">0</span>)</strong>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button type="button" class="btn-retry-action" id="bulkOfferRetryGenBtn" onclick="event.stopPropagation(); retryFailedOfferGenerations();">
+                                🔄 Retry Failed Generations
+                            </button>
+                            <span id="bulkOfferGenFailedToggleIcon" class="failed-toggle-hint">▼ View Details</span>
+                        </div>
+                    </div>
+                    <div id="bulkOfferGenFailedDetails" class="bulk-failed-table-wrapper" style="display: none;">
+                        <table class="bulk-failed-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 45px;">#</th>
+                                    <th>Candidate Name</th>
+                                    <th>Email</th>
+                                    <th>Domain</th>
+                                    <th>Dates</th>
+                                    <th>Reason / Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkOfferGenFailedTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- EMAIL FAILED AREA -->
+                <div id="bulkOfferEmailFailedArea" class="bulk-failed-card" style="display: none;">
+                    <div class="bulk-failed-header" onclick="toggleOfferEmailFailedDetails()">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 16px;">⚠️</span>
+                            <strong style="color: #b91c1c; font-size: 13.5px;">Failed Email Dispatches (<span id="bulkOfferEmailFailedCountBadge">0</span>)</strong>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button type="button" class="btn-retry-action" id="bulkOfferRetryEmailBtn" onclick="event.stopPropagation(); retryFailedOfferEmails();">
+                                🔄 Retry Failed Emails
+                            </button>
+                            <span id="bulkOfferEmailFailedToggleIcon" class="failed-toggle-hint">▼ View Details</span>
+                        </div>
+                    </div>
+                    <div id="bulkOfferEmailFailedDetails" class="bulk-failed-table-wrapper" style="display: none;">
+                        <table class="bulk-failed-table">
+                            <thead>
+                                <tr>
+                                    <th>Candidate Name</th>
+                                    <th>Email</th>
+                                    <th>Domain</th>
+                                    <th>Error Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkOfferEmailFailedTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- BOTTOM ACTION BUTTONS -->
+                <div style="display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+                    <button type="button" id="bulkOfferGenerateBtn" class="generate-btn" style="width: auto; padding: 10px 24px;" onclick="executeBulkOfferGeneration()">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span id="bulkOfferGenerateBtnText">Generate All Valid Letters</span>
+                    </button>
+
+                    <button type="button" id="bulkOfferSendEmailsBtn" class="action-btn send-btn" onclick="initiateBulkOfferEmailDispatch()">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                        <span id="bulkOfferSendEmailsBtnText">Send Offer Letters to Selected</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
 </div>
 
 <!-- =========================================================
-     RESEND CONFIRMATION MODAL
+     RESEND CONFIRMATION MODAL (SINGLE)
      ========================================================= -->
 <div
     id="resendModal"
@@ -511,6 +854,155 @@
             >
                 Send Again
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     BULK OFFER LETTER DUPLICATE CONFIRMATION MODAL
+     ========================================================= -->
+<div
+    id="bulkOfferDuplicateModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleBulkOfferDupBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulkOfferDupModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeBulkOfferDupModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="bulkOfferDupModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark); margin: 0 0 8px;">
+            Offer Letters Already Sent
+        </h3>
+
+        <p style="color: var(--text-muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 12px;">
+            <strong id="bulkOfferDupCountText" style="color: #d97706;">0</strong> of the selected candidates have already received an offer letter.
+        </p>
+
+        <div id="bulkOfferDupListPreview" class="modal-target-highlight" style="max-height: 120px; overflow-y: auto; text-align: left; font-size: 12.5px; line-height: 1.4;">
+            <!-- list of duplicate emails -->
+        </div>
+
+        <p style="color: var(--text-body); font-size: 13.5px; font-weight: 500; margin: 12px 0 18px;">
+            How would you like to proceed with sending?
+        </p>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button
+                type="button"
+                class="modal-cancel-btn"
+                onclick="closeBulkOfferDupModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="bulkOfferSendNewOnlyBtn"
+                class="action-btn send-btn"
+                style="padding: 9px 16px; font-size: 13px;"
+                onclick="confirmBulkOfferDispatch('new_only')"
+            >
+                Send Only to New (<span id="bulkOfferNewOnlyCount">0</span>)
+            </button>
+
+            <button
+                type="button"
+                id="bulkOfferSendAllAgainBtn"
+                class="modal-confirm-btn"
+                style="padding: 9px 16px; font-size: 13px;"
+                onclick="confirmBulkOfferDispatch('all')"
+            >
+                Send Again to All (<span id="bulkOfferAllCount">0</span>)
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     FOLDER UPLOAD SUMMARY MODAL
+     ========================================================= -->
+<div
+    id="bulkOfferFolderSummaryModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleFolderSummaryBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="folderSummaryTitle"
+        style="max-width: 500px;"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeFolderSummaryModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header" style="background: #eff6ff; color: #2563eb; border: 1.5px solid #bfdbfe;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </div>
+
+        <h3 id="folderSummaryTitle" style="font-size: 18px; font-weight: 800; color: var(--brand-dark); margin: 0 0 8px;">
+            Folder Upload Summary
+        </h3>
+
+        <div id="folderSummaryBreakdown" class="modal-breakdown-box">
+            <!-- Dynamically populated breakdown -->
+        </div>
+
+        <div class="modal-footer" style="margin-top: 16px;">
+            <button
+                type="button"
+                class="generate-btn"
+                style="width: 100%; padding: 10px;"
+                onclick="closeFolderSummaryModal()"
+            >
+                Import Candidates & Continue
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     INDIVIDUAL ROW PREVIEW MODAL
+     ========================================================= -->
+<div
+    id="bulkOfferRowPreviewModal"
+    class="cert-modal-overlay"
+    style="display: none;"
+    onclick="handleRowPreviewBackdropClick(event)"
+>
+    <div class="cert-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="bulkOfferPreviewTitle">
+        <div class="cert-modal-header">
+            <div>
+                <h3 id="bulkOfferPreviewTitle" class="cert-modal-title">Offer Letter Preview</h3>
+                <p id="bulkOfferPreviewSubtitle" class="cert-modal-subtitle">Candidate Preview</p>
+            </div>
+            <button type="button" class="cert-modal-close-btn" onclick="closeRowPreviewModal()" title="Close Preview (Esc)">✕</button>
+        </div>
+        <div class="cert-modal-body" style="background: #334155; padding: 12px; min-height: 480px;">
+            <div id="bulkOfferPreviewLoading" class="cert-modal-loading" style="display: flex;">
+                <div class="loading-spinner"></div>
+                <p>Generating offer letter preview...</p>
+            </div>
+            <iframe id="bulkOfferPreviewIframe" style="width: 100%; height: 520px; border: none; border-radius: 4px; display: none;" title="PDF Preview"></iframe>
+        </div>
+        <div class="cert-modal-footer">
+            <span class="cert-preview-note">ℹ Preview mode. No permanent history record created.</span>
+            <button type="button" class="clear-btn" onclick="closeRowPreviewModal()">Close Preview</button>
         </div>
     </div>
 </div>
@@ -1164,6 +1656,1246 @@ document.addEventListener("keydown", function (event) {
         message.textContent = "Email sending cancelled.";
     }
 });
+
+/* ==========================================================
+   BULK OFFER LETTER GENERATOR CONTROLLER
+   ========================================================== */
+
+let bulkOfferRows = [];
+let bulkOfferGenFailures = [];
+let bulkOfferEmailFailures = [];
+let bulkOfferPendingDuplicateData = null;
+let bulkOfferIsGenerating = false;
+let bulkOfferIsSending = false;
+
+/* ==========================================================
+   MODE SWITCHER
+   ========================================================== */
+function switchOfferMode(mode) {
+    const singleTab = document.getElementById("tabSingleOffer");
+    const bulkTab = document.getElementById("tabBulkOffer");
+    const singleWorkspace = document.getElementById("singleOfferWorkspace");
+    const bulkWorkspace = document.getElementById("bulkOfferWorkspace");
+
+    if (mode === "single") {
+        if (singleTab) singleTab.classList.add("active");
+        if (bulkTab) bulkTab.classList.remove("active");
+        if (singleWorkspace) singleWorkspace.style.display = "grid";
+        if (bulkWorkspace) bulkWorkspace.style.display = "none";
+    } else {
+        if (singleTab) singleTab.classList.remove("active");
+        if (bulkTab) bulkTab.classList.add("active");
+        if (singleWorkspace) singleWorkspace.style.display = "none";
+        if (bulkWorkspace) bulkWorkspace.style.display = "flex";
+
+        if (bulkOfferRows.length === 0) {
+            addBulkOfferRow();
+        }
+    }
+}
+
+/* ==========================================================
+   STEP 1: TEXTAREA INPUT HANDLERS & LINE-BY-LINE MATCHING
+   ========================================================== */
+function parseLines(raw) {
+    if (!raw) return [];
+    return raw.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+}
+
+function handleBulkNamesEmailsInput() {
+    const namesArea = document.getElementById("bulkOfferCandidateNames");
+    const emailsArea = document.getElementById("bulkOfferEmailAddresses");
+    if (!namesArea || !emailsArea) return;
+
+    const names = parseLines(namesArea.value);
+    const emails = parseLines(emailsArea.value);
+
+    const namesCount = names.length;
+    const emailsCount = emails.length;
+    const matchedCount = Math.min(namesCount, emailsCount);
+
+    const namesBadge = document.getElementById("bulkOfferNamesCount");
+    const emailsBadge = document.getElementById("bulkOfferEmailsCount");
+    const summaryNames = document.getElementById("bulkOfferSummaryNamesCount");
+    const summaryEmails = document.getElementById("bulkOfferSummaryEmailsCount");
+    const summaryMatched = document.getElementById("bulkOfferSummaryMatchedCount");
+    const statusBadge = document.getElementById("bulkOfferMatchStatusBadge");
+
+    if (namesBadge) namesBadge.textContent = String(namesCount);
+    if (emailsBadge) emailsBadge.textContent = String(emailsCount);
+    if (summaryNames) summaryNames.textContent = String(namesCount);
+    if (summaryEmails) summaryEmails.textContent = String(emailsCount);
+    if (summaryMatched) summaryMatched.textContent = String(matchedCount);
+
+    if (statusBadge) {
+        if (namesCount === 0 && emailsCount === 0) {
+            statusBadge.className = "bulk-match-status-badge";
+            statusBadge.textContent = "Paste names and emails to begin";
+        } else if (namesCount === emailsCount && namesCount > 0) {
+            statusBadge.className = "bulk-match-status-badge badge-matched";
+            statusBadge.textContent = `✓ ${namesCount} / ${namesCount} candidates aligned`;
+        } else {
+            statusBadge.className = "bulk-match-status-badge badge-mismatch";
+            if (namesCount > emailsCount) {
+                statusBadge.textContent = `⚠ ${namesCount} names vs ${emailsCount} emails (${namesCount - emailsCount} missing emails)`;
+            } else {
+                statusBadge.textContent = `⚠ ${namesCount} names vs ${emailsCount} emails (${emailsCount - namesCount} missing names)`;
+            }
+        }
+    }
+}
+
+function clearBulkNamesEmailsInputs() {
+    const namesArea = document.getElementById("bulkOfferCandidateNames");
+    const emailsArea = document.getElementById("bulkOfferEmailAddresses");
+    if (namesArea) namesArea.value = "";
+    if (emailsArea) emailsArea.value = "";
+    handleBulkNamesEmailsInput();
+    showToast("Candidate name and email lists cleared.", "info");
+}
+
+function loadBulkOfferCandidatesFromInputs() {
+    const namesArea = document.getElementById("bulkOfferCandidateNames");
+    const emailsArea = document.getElementById("bulkOfferEmailAddresses");
+    if (!namesArea || !emailsArea) return;
+
+    const names = parseLines(namesArea.value);
+    const emails = parseLines(emailsArea.value);
+
+    if (names.length === 0 && emails.length === 0) {
+        showToast("Please paste Candidate Names and Email Addresses first.", "error");
+        return;
+    }
+
+    if (names.length === 0) {
+        showToast("Please provide candidate names.", "error");
+        return;
+    }
+
+    if (emails.length === 0) {
+        showToast("Please provide email addresses.", "error");
+        return;
+    }
+
+    const matchedCount = Math.min(names.length, emails.length);
+    if (matchedCount === 0) {
+        showToast("No matched candidate pairs found to load.", "error");
+        return;
+    }
+
+    // If there is only 1 completely empty row in table, clear it first
+    if (bulkOfferRows.length === 1 && !bulkOfferRows[0].student_name && !bulkOfferRows[0].student_email) {
+        clearBulkOfferTable();
+    }
+
+    // Append matched candidate rows
+    for (let i = 0; i < matchedCount; i++) {
+        addBulkOfferRow({
+            student_name: names[i],
+            student_email: emails[i],
+            domain: "",
+            letter_type: "with_hours",
+            duration: "2 months",
+            start_date: "",
+            end_date: "",
+            stipend: "",
+            weeks: 8,
+            hours_per_week: 15,
+            total_hours: 120
+        });
+    }
+
+    revalidateAllRows(false);
+
+    if (names.length !== emails.length) {
+        const diff = Math.abs(names.length - emails.length);
+        const reason = names.length > emails.length ? `${diff} names had no corresponding email` : `${diff} emails had no corresponding name`;
+        showToast(`Loaded ${matchedCount} candidates. Notice: ${reason} and were skipped.`, "error");
+    } else {
+        showToast(`Successfully loaded ${matchedCount} candidate rows into Step 2!`, "success");
+    }
+
+    // Smooth scroll to Step 2 table
+    const step2Card = document.getElementById("bulkOfferStep2Card");
+    if (step2Card) {
+        step2Card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+
+/* ==========================================================
+   DROPZONE DRAG & DROP
+   ========================================================== */
+const bulkOfferDropzone = document.getElementById("bulkOfferDropzone");
+if (bulkOfferDropzone) {
+    bulkOfferDropzone.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        bulkOfferDropzone.classList.add("dragover");
+    });
+    bulkOfferDropzone.addEventListener("dragleave", function (e) {
+        e.preventDefault();
+        bulkOfferDropzone.classList.remove("dragover");
+    });
+    bulkOfferDropzone.addEventListener("drop", function (e) {
+        e.preventDefault();
+        bulkOfferDropzone.classList.remove("dragover");
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleBulkOfferFilesDirect(e.dataTransfer.files);
+        }
+    });
+}
+
+/* ==========================================================
+   ADD ROW
+   ========================================================== */
+function addBulkOfferRow(initialData = {}) {
+    const rowId = "bo_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+    const durationVal = initialData.duration || "2 months";
+    const monthsNum = parseInt(durationVal, 10) || 2;
+    const calcWeeks = monthsNum * 4;
+    const hoursPerWeekVal = (initialData.hours_per_week !== undefined && initialData.hours_per_week !== null && initialData.hours_per_week !== "") ? initialData.hours_per_week : 15;
+    const hpwNum = parseInt(hoursPerWeekVal, 10);
+    const calcTotalHours = (!isNaN(hpwNum) && hpwNum > 0) ? (calcWeeks * hpwNum) : "";
+
+    const rowObj = {
+        id: rowId,
+        selected: initialData.selected !== undefined ? initialData.selected : true,
+        student_name: initialData.student_name || "",
+        student_email: initialData.student_email || "",
+        domain: initialData.domain || "",
+        letter_type: initialData.letter_type || "with_hours",
+        duration: durationVal,
+        start_date: initialData.start_date || "",
+        end_date: initialData.end_date || "",
+        stipend: initialData.stipend || "",
+        weeks: initialData.weeks || calcWeeks,
+        hours_per_week: hoursPerWeekVal,
+        total_hours: initialData.total_hours || calcTotalHours,
+        status: "incomplete",
+        errors: [],
+        isDuplicate: false,
+        generated_filename: "",
+        preview_url: ""
+    };
+
+    bulkOfferRows.push(rowObj);
+    renderBulkOfferRow(rowObj);
+    revalidateAllRows(false);
+    return rowObj;
+}
+
+/* ==========================================================
+   RENDER SINGLE CANDIDATE CARD
+   ========================================================== */
+function renderBulkOfferRow(row) {
+    const container = document.getElementById("bulkOfferTableBody");
+    if (!container) return;
+
+    const card = document.createElement("div");
+    card.id = row.id;
+    card.className = "bulk-candidate-card bulk-row";
+
+    const index = bulkOfferRows.findIndex(r => r.id === row.id) + 1;
+
+    card.innerHTML = `
+        <div class="bulk-card-header">
+            <div class="bulk-card-header-left">
+                <input type="checkbox" class="row-select-check" ${row.selected ? 'checked' : ''} onchange="handleRowSelectChange('${row.id}', this.checked)">
+                <span class="row-index-cell bulk-card-index">#${index}</span>
+            </div>
+            <div class="bulk-card-header-right">
+                <span class="row-status-cell"><span class="bulk-status-badge status-invalid" title="Incomplete">Incomplete</span></span>
+                <button type="button" class="btn-row-action" onclick="previewBulkOfferRow('${row.id}')" title="Preview Offer Letter">👁</button>
+                <button type="button" class="btn-row-action btn-row-del" onclick="removeBulkOfferRow('${row.id}')" title="Delete Card">🗑</button>
+            </div>
+        </div>
+        <div class="bulk-card-fields">
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Candidate Name *</label>
+                <input type="text" class="bulk-cell-input" placeholder="e.g. Snehil Das" value="${escapeHtml(row.student_name)}" oninput="handleRowInputChange('${row.id}', 'student_name', this.value)">
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Email ID *</label>
+                <input type="email" class="bulk-cell-input" placeholder="e.g. snehil@example.com" value="${escapeHtml(row.student_email)}" oninput="handleRowInputChange('${row.id}', 'student_email', this.value)">
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Domain *</label>
+                <input type="text" class="bulk-cell-input" placeholder="e.g. Data Analytics" value="${escapeHtml(row.domain)}" oninput="handleRowInputChange('${row.id}', 'domain', this.value)">
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Letter Type *</label>
+                <select class="bulk-cell-select" onchange="handleRowInputChange('${row.id}', 'letter_type', this.value)">
+                    <option value="with_hours" ${row.letter_type === 'with_hours' ? 'selected' : ''}>With Hours</option>
+                    <option value="without_hours" ${row.letter_type === 'without_hours' ? 'selected' : ''}>Without Hours</option>
+                </select>
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Duration *</label>
+                <select class="bulk-cell-select" onchange="handleRowInputChange('${row.id}', 'duration', this.value)">
+                    <option value="2 months" ${row.duration === '2 months' ? 'selected' : ''}>2 months</option>
+                    <option value="3 months" ${row.duration === '3 months' ? 'selected' : ''}>3 months</option>
+                    <option value="4 months" ${row.duration === '4 months' ? 'selected' : ''}>4 months</option>
+                    <option value="5 months" ${row.duration === '5 months' ? 'selected' : ''}>5 months</option>
+                    <option value="6 months" ${row.duration === '6 months' ? 'selected' : ''}>6 months</option>
+                </select>
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Start Date *</label>
+                <input type="date" class="bulk-cell-input" value="${escapeHtml(row.start_date)}" onchange="handleRowInputChange('${row.id}', 'start_date', this.value)">
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">End Date *</label>
+                <input type="date" class="bulk-cell-input" value="${escapeHtml(row.end_date)}" onchange="handleRowInputChange('${row.id}', 'end_date', this.value)">
+            </div>
+            <div class="bulk-card-field">
+                <label class="bulk-card-label">Stipend</label>
+                <input type="text" class="bulk-cell-input" placeholder="Optional" value="${escapeHtml(row.stipend)}" oninput="handleRowInputChange('${row.id}', 'stipend', this.value)">
+            </div>
+        </div>
+        <div class="with-hours-panel" id="${row.id}_hours" style="display: none;">
+            <span style="font-weight: 800; color: var(--brand-primary); font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">⏱ Hours Calculation:</span>
+            <div class="with-hours-field">
+                <label>Weeks (Auto):</label>
+                <input type="text" id="${row.id}_weeks_input" value="${escapeHtml(String(row.weeks || ''))}" readonly title="Weeks = Duration Months × 4">
+            </div>
+            <div class="with-hours-field">
+                <label>Hours / Week *:</label>
+                <input type="number" min="1" max="168" step="1" id="${row.id}_hpw_input" value="${escapeHtml(String(row.hours_per_week || ''))}" placeholder="15" oninput="handleRowInputChange('${row.id}', 'hours_per_week', this.value)">
+            </div>
+            <div class="with-hours-field">
+                <label>Total Hours (Auto):</label>
+                <input type="text" id="${row.id}_total_hours_input" value="${escapeHtml(String(row.total_hours || ''))}" readonly title="Total Hours = Weeks × Hours/Week">
+            </div>
+        </div>
+    `;
+
+    container.appendChild(card);
+
+    if (row.letter_type === "with_hours") {
+        const hoursPanel = document.getElementById(row.id + "_hours");
+        if (hoursPanel) hoursPanel.style.display = "grid";
+    }
+}
+
+/* ==========================================================
+   SHOW / HIDE WITH-HOURS PANEL (inline in card)
+   ========================================================== */
+function renderWithHoursSubrow(row) {
+    const hoursPanel = document.getElementById(row.id + "_hours");
+    if (!hoursPanel) return;
+
+    // Update values
+    const weeksIn = document.getElementById(row.id + "_weeks_input");
+    const hpwIn = document.getElementById(row.id + "_hpw_input");
+    const totalIn = document.getElementById(row.id + "_total_hours_input");
+    if (weeksIn) weeksIn.value = row.weeks || "";
+    if (hpwIn) hpwIn.value = row.hours_per_week || "";
+    if (totalIn) totalIn.value = row.total_hours || "";
+
+    hoursPanel.style.display = "grid";
+}
+
+function removeWithHoursSubrow(rowId) {
+    const hoursPanel = document.getElementById(rowId + "_hours");
+    if (hoursPanel) hoursPanel.style.display = "none";
+}
+
+/* ==========================================================
+   REMOVE ROW
+   ========================================================== */
+function removeBulkOfferRow(rowId) {
+    const parentTr = document.getElementById(rowId);
+    if (parentTr) parentTr.remove();
+    removeWithHoursSubrow(rowId);
+
+    bulkOfferRows = bulkOfferRows.filter(r => r.id !== rowId);
+    reindexTableRows();
+    revalidateAllRows(false);
+}
+
+function clearBulkOfferTable() {
+    const tbody = document.getElementById("bulkOfferTableBody");
+    if (tbody) tbody.innerHTML = "";
+    bulkOfferRows = [];
+    bulkOfferGenFailures = [];
+    bulkOfferEmailFailures = [];
+    const genArea = document.getElementById("bulkOfferGenFailedArea");
+    const emailArea = document.getElementById("bulkOfferEmailFailedArea");
+    const progArea = document.getElementById("bulkOfferProgressArea");
+    if (genArea) genArea.style.display = "none";
+    if (emailArea) emailArea.style.display = "none";
+    if (progArea) progArea.style.display = "none";
+    revalidateAllRows(false);
+}
+
+function reindexTableRows() {
+    bulkOfferRows.forEach((row, idx) => {
+        const card = document.getElementById(row.id);
+        if (card) {
+            const indexCell = card.querySelector(".row-index-cell");
+            if (indexCell) indexCell.textContent = `#${idx + 1}`;
+        }
+    });
+}
+
+/* ==========================================================
+   INPUT CHANGE HANDLER
+   ========================================================== */
+function handleRowInputChange(rowId, field, value) {
+    const row = bulkOfferRows.find(r => r.id === rowId);
+    if (!row) return;
+
+    row[field] = value;
+
+    if (field === "letter_type") {
+        if (value === "with_hours") {
+            const monthsNum = parseInt(row.duration, 10) || 2;
+            row.weeks = monthsNum * 4;
+            if (!row.hours_per_week) row.hours_per_week = 15;
+            const hpw = parseInt(row.hours_per_week, 10);
+            row.total_hours = (!isNaN(hpw) && hpw > 0) ? (row.weeks * hpw) : "";
+            renderWithHoursSubrow(row);
+        } else {
+            removeWithHoursSubrow(rowId);
+        }
+    }
+
+    if (field === "duration" || field === "hours_per_week") {
+        const monthsNum = parseInt(row.duration, 10) || 2;
+        row.weeks = monthsNum * 4;
+        const hpw = parseInt(row.hours_per_week, 10);
+        row.total_hours = (!isNaN(hpw) && hpw > 0) ? (row.weeks * hpw) : "";
+
+        const weeksIn = document.getElementById(row.id + "_weeks_input");
+        const hpwIn = document.getElementById(row.id + "_hpw_input");
+        const totalIn = document.getElementById(row.id + "_total_hours_input");
+
+        if (weeksIn) weeksIn.value = row.weeks;
+        if (hpwIn && field === "duration") hpwIn.value = row.hours_per_week;
+        if (totalIn) totalIn.value = row.total_hours;
+    }
+
+    if (row.status === "generated" || row.status === "sent") {
+        row.status = "valid";
+        row.generated_filename = "";
+        row.preview_url = "";
+    }
+
+    revalidateAllRows(false);
+}
+
+function handleRowSelectChange(rowId, isChecked) {
+    const row = bulkOfferRows.find(r => r.id === rowId);
+    if (row) {
+        row.selected = isChecked;
+    }
+    updateSelectedCounts();
+}
+
+function toggleSelectAllBulkOffer(event) {
+    const checked = event.target.checked;
+    bulkOfferRows.forEach(row => {
+        row.selected = checked;
+        const tr = document.getElementById(row.id);
+        if (tr) {
+            const cb = tr.querySelector(".row-select-check");
+            if (cb) cb.checked = checked;
+        }
+    });
+    updateSelectedCounts();
+}
+
+/* ==========================================================
+   REVALIDATE ALL ROWS & LIVE STATS
+   ========================================================== */
+function revalidateAllRows(showSummaryToast = false) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const seenEmails = new Map();
+
+    let totalRows = bulkOfferRows.length;
+    let validRows = 0;
+    let attentionRows = 0;
+    let withHoursRows = 0;
+    let dupRows = 0;
+
+    bulkOfferRows.forEach(row => {
+        row.errors = [];
+        row.isDuplicate = false;
+
+        const name = (row.student_name || "").trim();
+        const email = (row.student_email || "").trim().toLowerCase();
+        const domain = (row.domain || "").trim();
+        const startDate = (row.start_date || "").trim();
+        const endDate = (row.end_date || "").trim();
+
+        if (!name) row.errors.push("Candidate Name is required");
+        if (!email) {
+            row.errors.push("Email is required");
+        } else if (!emailRegex.test(email)) {
+            row.errors.push("Invalid email format");
+        }
+
+        if (!domain) row.errors.push("Domain is required");
+        if (!startDate) row.errors.push("Start Date is required");
+        if (!endDate) row.errors.push("End Date is required");
+
+        if (startDate && endDate) {
+            const s = new Date(startDate);
+            const e = new Date(endDate);
+            if (e <= s) {
+                row.errors.push("End Date must be after Start Date");
+            }
+        }
+
+        if (row.letter_type === "with_hours") {
+            withHoursRows++;
+            const hpw = parseInt(row.hours_per_week, 10);
+            if (isNaN(hpw) || hpw <= 0) {
+                row.errors.push("Hours / Week must be a positive number");
+            }
+        }
+
+        if (email && emailRegex.test(email)) {
+            if (seenEmails.has(email)) {
+                row.isDuplicate = true;
+                row.errors.push("Duplicate email in this batch");
+                dupRows++;
+            } else {
+                seenEmails.set(email, row.id);
+            }
+        }
+
+        if (row.isDuplicate) {
+            row.status = "duplicate";
+            attentionRows++;
+        } else if (row.errors.length > 0) {
+            row.status = "incomplete";
+            attentionRows++;
+        } else {
+            if (row.status !== "generated" && row.status !== "sent" && row.status !== "failed") {
+                row.status = "valid";
+            }
+            validRows++;
+        }
+
+        updateRowDOMValidation(row);
+    });
+
+    // Update 5 live counter badges
+    animateCounter(document.getElementById("bulkOfferTotalRows"), totalRows);
+    animateCounter(document.getElementById("bulkOfferValidRows"), validRows);
+    animateCounter(document.getElementById("bulkOfferAttentionRows"), attentionRows);
+    animateCounter(document.getElementById("bulkOfferWithHoursRows"), withHoursRows);
+    animateCounter(document.getElementById("bulkOfferDuplicateRows"), dupRows);
+
+    const tableCount = document.getElementById("bulkOfferTableCount");
+    if (tableCount) tableCount.textContent = String(totalRows);
+
+    updateSelectedCounts();
+
+    if (showSummaryToast) {
+        if (attentionRows === 0 && totalRows > 0) {
+            showToast(`All ${totalRows} candidate records are valid and ready!`, "success");
+        } else if (totalRows === 0) {
+            showToast("Table is empty. Add or upload candidates.", "info");
+        } else {
+            showToast(`Validation: ${validRows} valid, ${attentionRows} need attention (${dupRows} duplicate emails).`, "error");
+        }
+    }
+}
+
+function updateRowDOMValidation(row) {
+    const tr = document.getElementById(row.id);
+    if (!tr) return;
+
+    tr.classList.toggle("row-invalid", row.status === "incomplete" || row.status === "duplicate");
+
+    const statusCell = tr.querySelector(".row-status-cell");
+    if (statusCell) {
+        let badgeClass = "status-invalid";
+        let badgeText = "Incomplete";
+        let titleText = row.errors.join(", ");
+
+        if (row.status === "valid") {
+            badgeClass = "status-valid";
+            badgeText = "Valid";
+            titleText = "Record is valid";
+        } else if (row.status === "duplicate") {
+            badgeClass = "status-duplicate";
+            badgeText = "Duplicate";
+            titleText = "Duplicate email in this batch";
+        } else if (row.status === "generated") {
+            badgeClass = "status-generated";
+            badgeText = "Generated";
+            titleText = "PDF generated";
+        } else if (row.status === "sent") {
+            badgeClass = "status-sent";
+            badgeText = "Sent";
+            titleText = "Email delivered";
+        } else if (row.status === "failed") {
+            badgeClass = "status-failed";
+            badgeText = "Failed";
+            titleText = row.lastError || "Failed";
+        }
+
+        statusCell.innerHTML = `<span class="bulk-status-badge ${badgeClass}" title="${escapeHtml(titleText)}">${badgeText}</span>`;
+    }
+}
+
+function updateSelectedCounts() {
+    const selectedValid = bulkOfferRows.filter(r => r.selected && (r.status === "valid" || r.status === "generated" || r.status === "sent")).length;
+    const selectedCountElem = document.getElementById("bulkOfferSelectedCount");
+    if (selectedCountElem) {
+        selectedCountElem.textContent = `${selectedValid} candidates selected & ready`;
+    }
+}
+
+/* ==========================================================
+   FILE & FOLDER UPLOAD HANDLERS
+   ========================================================== */
+async function handleBulkOfferFileSelect(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    await processBulkOfferUpload([file], false);
+    event.target.value = "";
+}
+
+async function handleBulkOfferFolderSelect(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    await processBulkOfferUpload(Array.from(files), true);
+    event.target.value = "";
+}
+
+async function handleBulkOfferFilesDirect(fileList) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+    const isFolder = files.length > 1;
+    await processBulkOfferUpload(files, isFolder);
+}
+
+async function processBulkOfferUpload(files, isFolderUpload) {
+    const formData = new FormData();
+    if (files.length === 1 && !isFolderUpload) {
+        formData.append("file", files[0]);
+    } else {
+        files.forEach(f => formData.append("files[]", f));
+    }
+
+    try {
+        showToast("Processing and parsing candidate records...", "info");
+        const response = await fetch("/api/offer-letter/bulk/parse-upload", {
+            method: "POST",
+            body: formData
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to parse files.");
+        }
+
+        const candidates = result.candidates || [];
+        if (candidates.length === 0) {
+            showToast("No candidate records found in uploaded files.", "error");
+            return;
+        }
+
+        candidates.forEach(c => {
+            addBulkOfferRow(c);
+        });
+
+        if (isFolderUpload || (result.skipped_files && result.skipped_files.length > 0)) {
+            openFolderSummaryModal(result.files_summary, result.skipped_files, candidates.length);
+        } else {
+            showToast(`Successfully imported ${candidates.length} candidate records.`, "success");
+        }
+    } catch (err) {
+        console.error("UPLOAD PARSE ERROR:", err);
+        showToast(err.message || "File processing failed.", "error");
+    }
+}
+
+/* ==========================================================
+   FOLDER SUMMARY MODAL
+   ========================================================== */
+function openFolderSummaryModal(summary, skippedFiles, totalImported) {
+    const modal = document.getElementById("bulkOfferFolderSummaryModal");
+    const breakdown = document.getElementById("folderSummaryBreakdown");
+    if (!modal || !breakdown) return;
+
+    summary = summary || {};
+    skippedFiles = skippedFiles || [];
+
+    let skippedHtml = "";
+    if (skippedFiles.length > 0) {
+        skippedHtml = `
+            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #cbd5e1;">
+                <span style="font-weight: 700; color: #b91c1c;">Skipped / Unsupported Files:</span>
+                <ul style="margin: 4px 0 0; padding-left: 18px; font-size: 12px; color: var(--text-muted);">
+                    ${skippedFiles.map(s => `<li><strong>${escapeHtml(s.filename)}</strong>: ${escapeHtml(s.reason)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    breakdown.innerHTML = `
+        <div class="modal-breakdown-row">
+            <span>Total Files Scanned:</span>
+            <strong>${summary.total_files_scanned || (summary.supported_files_parsed || 0) + skippedFiles.length}</strong>
+        </div>
+        <div class="modal-breakdown-row">
+            <span>Supported Files Parsed:</span>
+            <strong style="color: #059669;">${summary.supported_files_parsed || 0}</strong>
+        </div>
+        <div class="modal-breakdown-row">
+            <span>Skipped Files:</span>
+            <strong style="color: ${skippedFiles.length > 0 ? '#dc2626' : '#64748b'};">${skippedFiles.length}</strong>
+        </div>
+        <div class="modal-breakdown-row" style="border-bottom: none; font-weight: 800; color: var(--brand-primary); padding-top: 6px;">
+            <span>Total Candidates Imported:</span>
+            <strong>${totalImported}</strong>
+        </div>
+        ${skippedHtml}
+    `;
+
+    modal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+}
+
+function closeFolderSummaryModal() {
+    const modal = document.getElementById("bulkOfferFolderSummaryModal");
+    if (modal) {
+        modal.style.display = "none";
+        document.body.style.overflow = "";
+    }
+}
+
+function handleFolderSummaryBackdropClick(event) {
+    if (event.target.id === "bulkOfferFolderSummaryModal") {
+        closeFolderSummaryModal();
+    }
+}
+
+/* ==========================================================
+   ROW PREVIEW MODAL
+   ========================================================== */
+async function previewBulkOfferRow(rowId) {
+    const row = bulkOfferRows.find(r => r.id === rowId);
+    if (!row) return;
+
+    const modal = document.getElementById("bulkOfferRowPreviewModal");
+    const iframe = document.getElementById("bulkOfferPreviewIframe");
+    const loading = document.getElementById("bulkOfferPreviewLoading");
+    const title = document.getElementById("bulkOfferPreviewTitle");
+    const subtitle = document.getElementById("bulkOfferPreviewSubtitle");
+
+    if (!modal || !iframe || !loading) return;
+
+    if (title) title.textContent = `Offer Letter Preview - ${row.student_name || 'Candidate'}`;
+    if (subtitle) subtitle.textContent = `${row.student_email || ''} (${row.domain || 'Domain'})`;
+
+    modal.style.display = "flex";
+    iframe.style.display = "none";
+    loading.style.display = "flex";
+    document.body.style.overflow = "hidden";
+
+    try {
+        const payload = {
+            student_name: row.student_name || "Candidate Name",
+            student_email: row.student_email || "candidate@example.com",
+            domain: row.domain || "Data Analytics",
+            duration: row.duration || "2 months",
+            start_date: row.start_date || "2026-09-01",
+            end_date: row.end_date || "2026-11-01",
+            stipend: row.stipend || "",
+            letter_type: row.letter_type || "with_hours",
+            weeks: row.weeks || 8,
+            hours_per_week: row.hours_per_week || 15,
+            total_hours: row.total_hours || 120
+        };
+
+        const response = await fetch("/api/offer-letter/bulk/generate-item", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Preview generation failed.");
+        }
+
+        row.generated_filename = result.filename;
+        row.preview_url = result.url;
+
+        iframe.src = result.url + "?t=" + Date.now();
+        loading.style.display = "none";
+        iframe.style.display = "block";
+    } catch (err) {
+        console.error("PREVIEW ERROR:", err);
+        loading.innerHTML = `<p style="color: #ef4444;">Preview Failed: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+function closeRowPreviewModal() {
+    const modal = document.getElementById("bulkOfferRowPreviewModal");
+    const iframe = document.getElementById("bulkOfferPreviewIframe");
+    if (iframe) iframe.src = "about:blank";
+    if (modal) {
+        modal.style.display = "none";
+        document.body.style.overflow = "";
+    }
+}
+
+function handleRowPreviewBackdropClick(event) {
+    if (event.target.id === "bulkOfferRowPreviewModal") {
+        closeRowPreviewModal();
+    }
+}
+
+/* ==========================================================
+   GENERATE ALL VALID LETTERS (PDF ONLY)
+   ========================================================== */
+async function executeBulkOfferGeneration() {
+    if (bulkOfferIsGenerating || bulkOfferIsSending) return;
+
+    revalidateAllRows(false);
+    const validRows = bulkOfferRows.filter(r => r.selected && (r.status === "valid" || r.status === "generated" || r.status === "sent"));
+    if (validRows.length === 0) {
+        showToast("No valid candidates selected for generation.", "error");
+        return;
+    }
+
+    bulkOfferIsGenerating = true;
+    bulkOfferGenFailures = [];
+    const genFailedArea = document.getElementById("bulkOfferGenFailedArea");
+    if (genFailedArea) genFailedArea.style.display = "none";
+
+    const generateBtn = document.getElementById("bulkOfferGenerateBtn");
+    const generateBtnText = document.getElementById("bulkOfferGenerateBtnText");
+    if (generateBtn) generateBtn.disabled = true;
+    if (generateBtnText) generateBtnText.textContent = "Generating PDFs...";
+
+    const progressArea = document.getElementById("bulkOfferProgressArea");
+    const progressBar = document.getElementById("bulkOfferProgressBar");
+    const progressTitle = document.getElementById("bulkOfferProgressTitle");
+    const progressPercent = document.getElementById("bulkOfferProgressPercent");
+    const progressCompleted = document.getElementById("bulkOfferProgressCompleted");
+    const progressTotal = document.getElementById("bulkOfferProgressTotal");
+    const progressCurrentItem = document.getElementById("bulkOfferProgressCurrentItem");
+    const progressSuccess = document.getElementById("bulkOfferProgressSuccess");
+    const progressFailed = document.getElementById("bulkOfferProgressFailed");
+    const progressRemaining = document.getElementById("bulkOfferProgressRemaining");
+    const progressBreakdown = document.getElementById("bulkOfferProgressBreakdown");
+
+    if (progressArea) progressArea.style.display = "block";
+    if (progressBreakdown) progressBreakdown.style.display = "none";
+    if (progressTitle) progressTitle.textContent = "Generating Offer Letter PDFs...";
+
+    const total = validRows.length;
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < total; i++) {
+        const row = validRows[i];
+        const currentIdx = i + 1;
+        const pct = Math.round((currentIdx / total) * 100);
+
+        if (progressBar) progressBar.style.width = pct + "%";
+        if (progressPercent) progressPercent.textContent = pct + "%";
+        if (progressCompleted) progressCompleted.textContent = String(currentIdx);
+        if (progressTotal) progressTotal.textContent = String(total);
+        if (progressCurrentItem) progressCurrentItem.textContent = `${row.student_name} (${row.student_email})`;
+        if (progressSuccess) progressSuccess.textContent = String(successCount);
+        if (progressFailed) progressFailed.textContent = String(failedCount);
+        if (progressRemaining) progressRemaining.textContent = String(total - currentIdx);
+
+        try {
+            const payload = {
+                student_name: row.student_name,
+                student_email: row.student_email,
+                domain: row.domain,
+                duration: row.duration,
+                start_date: row.start_date,
+                end_date: row.end_date,
+                stipend: row.stipend,
+                letter_type: row.letter_type,
+                weeks: row.weeks,
+                hours_per_week: row.hours_per_week,
+                total_hours: row.total_hours
+            };
+
+            const response = await fetch("/api/offer-letter/bulk/generate-item", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "Generation error.");
+            }
+
+            row.generated_filename = result.filename;
+            row.preview_url = result.url;
+            row.status = "generated";
+            successCount++;
+        } catch (err) {
+            console.error("ROW GEN ERROR:", err);
+            row.status = "failed";
+            row.lastError = err.message;
+            failedCount++;
+            bulkOfferGenFailures.push({ row, error: err.message });
+        }
+
+        updateRowDOMValidation(row);
+    }
+
+    if (progressSuccess) progressSuccess.textContent = String(successCount);
+    if (progressFailed) progressFailed.textContent = String(failedCount);
+    if (progressRemaining) progressRemaining.textContent = "0";
+
+    if (generateBtn) generateBtn.disabled = false;
+    if (generateBtnText) generateBtnText.textContent = "Generate All Valid Letters";
+    bulkOfferIsGenerating = false;
+
+    if (failedCount > 0) {
+        populateOfferGenFailedTable();
+        showToast(`Generation completed: ${successCount} succeeded, ${failedCount} failed.`, "error");
+    } else {
+        showToast(`Successfully generated all ${successCount} offer letter PDFs!`, "success");
+    }
+}
+
+/* ==========================================================
+   INITIATE BULK EMAIL DISPATCH (DUPLICATE CHECK FIRST)
+   ========================================================== */
+async function initiateBulkOfferEmailDispatch() {
+    if (bulkOfferIsGenerating || bulkOfferIsSending) return;
+
+    revalidateAllRows(false);
+    const validRows = bulkOfferRows.filter(r => r.selected && (r.status === "valid" || r.status === "generated" || r.status === "sent"));
+    if (validRows.length === 0) {
+        showToast("No valid candidates selected for email dispatch.", "error");
+        return;
+    }
+
+    const sendBtn = document.getElementById("bulkOfferSendEmailsBtn");
+    const sendBtnText = document.getElementById("bulkOfferSendEmailsBtnText");
+    if (sendBtn) sendBtn.disabled = true;
+    if (sendBtnText) sendBtnText.textContent = "Checking records...";
+
+    try {
+        const emails = validRows.map(r => (r.student_email || '').trim().toLowerCase()).filter(Boolean);
+        const dupResponse = await fetch("/api/offer-letter/bulk/check-duplicates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ emails })
+        });
+
+        const dupResult = await dupResponse.json();
+        if (!dupResponse.ok) {
+            throw new Error(dupResult.error || "Duplicate verification failed.");
+        }
+
+        const existingEmails = new Set((dupResult.existing_emails || []).map(e => e.toLowerCase()));
+        const duplicatesCount = dupResult.duplicates_count || existingEmails.size;
+
+        if (duplicatesCount > 0) {
+            bulkOfferPendingDuplicateData = {
+                validRows,
+                existingEmails
+            };
+            openBulkOfferDupModal(duplicatesCount, validRows.length, Array.from(existingEmails));
+            if (sendBtn) sendBtn.disabled = false;
+            if (sendBtnText) sendBtnText.textContent = "Send Offer Letters to Selected";
+            return;
+        }
+
+        // No duplicates found, dispatch all directly
+        await executeBulkOfferDispatch(validRows, existingEmails);
+    } catch (err) {
+        console.error("DISPATCH CHECK ERROR:", err);
+        showToast(err.message || "Failed to initiate email dispatch.", "error");
+        if (sendBtn) sendBtn.disabled = false;
+        if (sendBtnText) sendBtnText.textContent = "Send Offer Letters to Selected";
+    }
+}
+
+/* ==========================================================
+   BULK DUPLICATE MODAL HANDLERS
+   ========================================================== */
+function openBulkOfferDupModal(dupCount, totalSelected, duplicateEmailList) {
+    const modal = document.getElementById("bulkOfferDuplicateModal");
+    const countText = document.getElementById("bulkOfferDupCountText");
+    const listPreview = document.getElementById("bulkOfferDupListPreview");
+    const newOnlyCount = document.getElementById("bulkOfferNewOnlyCount");
+    const allCount = document.getElementById("bulkOfferAllCount");
+
+    if (!modal) return;
+
+    if (countText) countText.textContent = String(dupCount);
+    if (newOnlyCount) newOnlyCount.textContent = String(totalSelected - dupCount);
+    if (allCount) allCount.textContent = String(totalSelected);
+
+    if (listPreview) {
+        listPreview.innerHTML = duplicateEmailList.map(e => `<div>• <strong>${escapeHtml(e)}</strong> (Already received offer letter)</div>`).join('');
+    }
+
+    modal.style.display = "flex";
+    document.body.style.overflow = "hidden";
+}
+
+function closeBulkOfferDupModal() {
+    const modal = document.getElementById("bulkOfferDuplicateModal");
+    if (modal) {
+        modal.style.display = "none";
+        document.body.style.overflow = "";
+    }
+    bulkOfferPendingDuplicateData = null;
+}
+
+function handleBulkOfferDupBackdropClick(event) {
+    if (event.target.id === "bulkOfferDuplicateModal") {
+        closeBulkOfferDupModal();
+    }
+}
+
+async function confirmBulkOfferDispatch(dispatchChoice) {
+    if (!bulkOfferPendingDuplicateData) return;
+
+    const { validRows, existingEmails } = bulkOfferPendingDuplicateData;
+    closeBulkOfferDupModal();
+
+    let rowsToDispatch = validRows;
+    if (dispatchChoice === "new_only") {
+        rowsToDispatch = validRows.filter(r => !existingEmails.has((r.student_email || '').toLowerCase()));
+    }
+
+    if (rowsToDispatch.length === 0) {
+        showToast("No new candidates to send to.", "info");
+        return;
+    }
+
+    await executeBulkOfferDispatch(rowsToDispatch, existingEmails);
+}
+
+/* ==========================================================
+   EXECUTE BULK EMAIL DISPATCH ENGINE
+   ========================================================== */
+async function executeBulkOfferDispatch(rowsToDispatch, existingEmailsSet) {
+    bulkOfferIsSending = true;
+    bulkOfferEmailFailures = [];
+    const emailFailedArea = document.getElementById("bulkOfferEmailFailedArea");
+    if (emailFailedArea) emailFailedArea.style.display = "none";
+
+    const sendBtn = document.getElementById("bulkOfferSendEmailsBtn");
+    const sendBtnText = document.getElementById("bulkOfferSendEmailsBtnText");
+    if (sendBtn) sendBtn.disabled = true;
+    if (sendBtnText) sendBtnText.textContent = "Dispatching Emails...";
+
+    const progressArea = document.getElementById("bulkOfferProgressArea");
+    const progressBar = document.getElementById("bulkOfferProgressBar");
+    const progressTitle = document.getElementById("bulkOfferProgressTitle");
+    const progressPercent = document.getElementById("bulkOfferProgressPercent");
+    const progressCompleted = document.getElementById("bulkOfferProgressCompleted");
+    const progressTotal = document.getElementById("bulkOfferProgressTotal");
+    const progressCurrentItem = document.getElementById("bulkOfferProgressCurrentItem");
+    const progressSuccess = document.getElementById("bulkOfferProgressSuccess");
+    const progressFailed = document.getElementById("bulkOfferProgressFailed");
+    const progressRemaining = document.getElementById("bulkOfferProgressRemaining");
+    const progressBreakdown = document.getElementById("bulkOfferProgressBreakdown");
+    const progressNew = document.getElementById("bulkOfferProgressNew");
+    const progressExisting = document.getElementById("bulkOfferProgressExisting");
+
+    if (progressArea) progressArea.style.display = "block";
+    if (progressBreakdown) progressBreakdown.style.display = "inline";
+    if (progressTitle) progressTitle.textContent = "Sending Offer Letter Emails...";
+
+    const total = rowsToDispatch.length;
+    let successCount = 0;
+    let newCount = 0;
+    let resentCount = 0;
+    let failedCount = 0;
+
+    for (let i = 0; i < total; i++) {
+        const row = rowsToDispatch[i];
+        const currentIdx = i + 1;
+        const pct = Math.round((currentIdx / total) * 100);
+        const emailLower = (row.student_email || '').toLowerCase();
+        const isSendAgain = existingEmailsSet && existingEmailsSet.has(emailLower);
+
+        if (progressBar) progressBar.style.width = pct + "%";
+        if (progressPercent) progressPercent.textContent = pct + "%";
+        if (progressCompleted) progressCompleted.textContent = String(currentIdx);
+        if (progressTotal) progressTotal.textContent = String(total);
+        if (progressCurrentItem) progressCurrentItem.textContent = `${row.student_name} (${row.student_email})`;
+        if (progressSuccess) progressSuccess.textContent = String(successCount);
+        if (progressNew) progressNew.textContent = String(newCount);
+        if (progressExisting) progressExisting.textContent = String(resentCount);
+        if (progressFailed) progressFailed.textContent = String(failedCount);
+        if (progressRemaining) progressRemaining.textContent = String(total - currentIdx);
+
+        try {
+            const payload = {
+                student_name: row.student_name,
+                student_email: row.student_email,
+                domain: row.domain,
+                duration: row.duration,
+                start_date: row.start_date,
+                end_date: row.end_date,
+                stipend: row.stipend,
+                letter_type: row.letter_type,
+                weeks: row.weeks,
+                hours_per_week: row.hours_per_week,
+                total_hours: row.total_hours,
+                send_again: isSendAgain
+            };
+
+            const response = await fetch("/api/offer-letter/bulk/send-item", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "Email dispatch failed.");
+            }
+
+            row.status = "sent";
+            row.generated_filename = result.filename;
+            successCount++;
+            if (result.resent) {
+                resentCount++;
+            } else {
+                newCount++;
+            }
+
+            localStorage.setItem("persevex_history_updated", Date.now().toString());
+            updateEmailStatusCounts();
+        } catch (err) {
+            console.error("DISPATCH ERROR:", err);
+            row.status = "failed";
+            row.lastError = err.message;
+            failedCount++;
+            bulkOfferEmailFailures.push({ row, error: err.message });
+            localStorage.setItem("persevex_history_updated", Date.now().toString());
+            updateEmailStatusCounts();
+        }
+
+        updateRowDOMValidation(row);
+    }
+
+    if (progressSuccess) progressSuccess.textContent = String(successCount);
+    if (progressNew) progressNew.textContent = String(newCount);
+    if (progressExisting) progressExisting.textContent = String(resentCount);
+    if (progressFailed) progressFailed.textContent = String(failedCount);
+    if (progressRemaining) progressRemaining.textContent = "0";
+
+    if (sendBtn) sendBtn.disabled = false;
+    if (sendBtnText) sendBtnText.textContent = "Send Offer Letters to Selected";
+    bulkOfferIsSending = false;
+
+    if (failedCount > 0) {
+        populateOfferEmailFailedTable();
+        showToast(`Email dispatch completed: ${successCount} sent (${newCount} new, ${resentCount} resent), ${failedCount} failed.`, "error");
+    } else {
+        showToast(`All ${successCount} offer letter emails sent successfully (${newCount} new, ${resentCount} resent)!`, "success");
+    }
+}
+
+/* ==========================================================
+   FAILED QUEUES & RETRY HANDLERS
+   ========================================================== */
+function populateOfferGenFailedTable() {
+    const area = document.getElementById("bulkOfferGenFailedArea");
+    const countBadge = document.getElementById("bulkOfferGenFailedCountBadge");
+    const tbody = document.getElementById("bulkOfferGenFailedTableBody");
+    if (!area || !tbody) return;
+
+    countBadge.textContent = String(bulkOfferGenFailures.length);
+    tbody.innerHTML = bulkOfferGenFailures.map((item, idx) => `
+        <tr>
+            <td>${idx + 1}</td>
+            <td><strong>${escapeHtml(item.row.student_name)}</strong></td>
+            <td>${escapeHtml(item.row.student_email)}</td>
+            <td>${escapeHtml(item.row.domain)}</td>
+            <td>${escapeHtml(item.row.start_date)} - ${escapeHtml(item.row.end_date)}</td>
+            <td style="color: #dc2626; font-weight: 600;">${escapeHtml(item.error)}</td>
+        </tr>
+    `).join('');
+
+    area.style.display = "block";
+}
+
+function toggleOfferGenFailedDetails() {
+    const details = document.getElementById("bulkOfferGenFailedDetails");
+    const icon = document.getElementById("bulkOfferGenFailedToggleIcon");
+    if (!details) return;
+    const isHidden = details.style.display === "none";
+    details.style.display = isHidden ? "block" : "none";
+    if (icon) icon.textContent = isHidden ? "▲ Hide Details" : "▼ View Details";
+}
+
+async function retryFailedOfferGenerations() {
+    if (bulkOfferGenFailures.length === 0) return;
+    bulkOfferGenFailures = [];
+    const area = document.getElementById("bulkOfferGenFailedArea");
+    if (area) area.style.display = "none";
+    await executeBulkOfferGeneration();
+}
+
+function populateOfferEmailFailedTable() {
+    const area = document.getElementById("bulkOfferEmailFailedArea");
+    const countBadge = document.getElementById("bulkOfferEmailFailedCountBadge");
+    const tbody = document.getElementById("bulkOfferEmailFailedTableBody");
+    if (!area || !tbody) return;
+
+    countBadge.textContent = String(bulkOfferEmailFailures.length);
+    tbody.innerHTML = bulkOfferEmailFailures.map((item) => `
+        <tr>
+            <td><strong>${escapeHtml(item.row.student_name)}</strong></td>
+            <td>${escapeHtml(item.row.student_email)}</td>
+            <td>${escapeHtml(item.row.domain)}</td>
+            <td style="color: #dc2626; font-weight: 600;">${escapeHtml(item.error)}</td>
+        </tr>
+    `).join('');
+
+    area.style.display = "block";
+}
+
+function toggleOfferEmailFailedDetails() {
+    const details = document.getElementById("bulkOfferEmailFailedDetails");
+    const icon = document.getElementById("bulkOfferEmailFailedToggleIcon");
+    if (!details) return;
+    const isHidden = details.style.display === "none";
+    details.style.display = isHidden ? "block" : "none";
+    if (icon) icon.textContent = isHidden ? "▲ Hide Details" : "▼ View Details";
+}
+
+async function retryFailedOfferEmails() {
+    if (bulkOfferEmailFailures.length === 0) return;
+    const failedRows = bulkOfferEmailFailures.map(f => f.row);
+    bulkOfferEmailFailures = [];
+    const area = document.getElementById("bulkOfferEmailFailedArea");
+    if (area) area.style.display = "none";
+    await executeBulkOfferDispatch(failedRows, new Set());
+}
+
+/* ==========================================================
+   ESCAPE HTML UTILITY
+   ========================================================== */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 /* ==========================================================
    INITIAL STATE

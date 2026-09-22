@@ -708,6 +708,92 @@ def get_previous_offer_letter_by_email(email):
     return None
 
 
+def find_existing_offer_letters_batch(candidate_rows_or_emails, supabase_client=None):
+    """
+    Efficient batch lookup to detect successfully sent Offer Letter records in public.email_history.
+    Considers ONLY records where email_status = 'sent' (ignores 'pending', 'failed', etc.).
+    Normalizes candidate emails and database emails using email.strip().lower().
+    Authoritative source of truth: Supabase (when configured and operational).
+    Fallback source: Local SQLite (used ONLY if Supabase is unconfigured or throws an exception).
+    Returns: dict mapping lowercase trimmed email -> existing Offer Letter record dict
+    """
+    if not candidate_rows_or_emails:
+        return {}
+
+    clean_emails_set = set()
+    query_variants_set = set()
+
+    for item in candidate_rows_or_emails:
+        if isinstance(item, dict):
+            em = item.get("student_email") or item.get("email") or ""
+        else:
+            em = str(item or "")
+        em_str = str(em).strip()
+        em_norm = em_str.lower()
+        if em_norm:
+            clean_emails_set.add(em_norm)
+            query_variants_set.add(em_norm)
+            if em_str:
+                query_variants_set.add(em_str)
+
+    if not clean_emails_set:
+        return {}
+
+    query_variants_list = list(query_variants_set)
+    clean_emails_list = list(clean_emails_set)
+    existing_records = []
+    supabase_success = False
+
+    # 1. Authoritative batch query to Supabase
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = (
+                sb.table("email_history")
+                .select("*")
+                .in_("student_email", query_variants_list)
+                .eq("email_status", "sent")
+                .execute()
+            )
+            if res.data is not None:
+                supabase_success = True
+                for row in res.data:
+                    rec = dict(row)
+                    st = str(rec.get("email_status") or "").strip().lower()
+                    if st == "sent":
+                        existing_records.append(rec)
+        except Exception as exc:
+            print("SUPABASE FIND EXISTING OFFER LETTERS BATCH WARNING (falling back to local DB):", repr(exc))
+            supabase_success = False
+
+    # 2. Local SQLite fallback query — ONLY used if Supabase is unconfigured or query failed
+    if not supabase_success:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            placeholders = ",".join("?" for _ in clean_emails_list)
+            cursor.execute(
+                f"SELECT * FROM email_history WHERE LOWER(TRIM(student_email)) IN ({placeholders}) AND email_status = 'sent'",
+                clean_emails_list
+            )
+            for row in cursor.fetchall():
+                existing_records.append(dict(row))
+            conn.close()
+        except Exception as exc:
+            print("LOCAL DB FIND EXISTING OFFER LETTERS BATCH ERROR:", repr(exc))
+
+    # 3. Build lookup map with normalized email keys (trimmed & lowercased)
+    lookup = {}
+    for r in existing_records:
+        row_email = str(r.get("student_email") or "").strip().lower()
+        if row_email and row_email in clean_emails_set:
+            if row_email not in lookup or int(r.get("send_count") or 0) > int(lookup[row_email].get("send_count") or 0):
+                lookup[row_email] = r
+
+    return lookup
+
+
 def delete_offer_letter_record(record_id, document_id=None):
     """
     Delete an offer letter record from history.

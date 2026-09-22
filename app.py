@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 import imaplib
 import urllib.parse
+import sqlite3
 
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -39,6 +40,7 @@ import certificate_service
 import database.repository as repository
 import services.bulk_certificate_service as bulk_certificate_service
 from services.ca_bulk_service import parse_ca_file
+import services.bulk_offer_letter_service as bulk_offer_letter_service
 
 
 # ============================================================
@@ -190,7 +192,9 @@ def clean_stipend(value):
         "",
     )
 
-    return value.strip()
+    s_clean = value.strip()
+
+    return s_clean
 
 
 def format_date(value):
@@ -1801,7 +1805,10 @@ def replace_without_hours_stipend_amount(page, template, stipend):
 
     fontsize = stipend_line["size"]
     color = rgb_from_pdf_color(stipend_line["color"])
-    formatted = f"{int(stipend):,}."
+    try:
+        formatted = f"{int(float(stipend)):,}."
+    except (ValueError, TypeError):
+        formatted = f"{stipend}."
 
     # --------------------------------------------------------
     # IMPORTANT:
@@ -3316,6 +3323,499 @@ Warm regards,<br>
         "success": True,
         "message": "Email sent successfully."
     })
+
+
+# ============================================================
+# BULK OFFER LETTER ROUTES
+# ============================================================
+
+@app.post("/api/offer-letter/bulk/parse-upload")
+def bulk_offer_letter_parse_upload():
+    """
+    Parse uploaded CSV/Excel file or folder of files for bulk offer letters.
+    """
+    try:
+        uploaded_files = request.files.getlist("files") or request.files.getlist("file")
+        if not uploaded_files:
+            file = request.files.get("file")
+            if file:
+                uploaded_files = [file]
+
+        if not uploaded_files:
+            return jsonify({"success": False, "error": "No files selected."}), 400
+
+        all_candidates = []
+        files_scanned = 0
+        files_supported = 0
+        files_skipped = 0
+        skipped_names = []
+        row_counter = 1
+
+        for f in uploaded_files:
+            if not f or not f.filename:
+                continue
+            files_scanned += 1
+            ext = Path(f.filename).suffix.lower()
+            if ext not in (".csv", ".xlsx", ".xls"):
+                files_skipped += 1
+                skipped_names.append(Path(f.filename).name)
+                continue
+
+            files_supported += 1
+            file_bytes = f.read()
+            res = bulk_offer_letter_service.parse_offer_file(file_bytes, f.filename)
+            if res.get("success"):
+                for c in res.get("candidates", []):
+                    c["row_id"] = row_counter
+                    row_counter += 1
+                    all_candidates.append(c)
+
+        if files_supported == 0:
+            return jsonify({
+                "success": False,
+                "error": "No supported CSV or Excel files found. Supported formats: .csv, .xlsx, .xls",
+                "files_scanned": files_scanned,
+                "files_skipped": files_skipped,
+                "skipped_files": skipped_names
+            }), 400
+
+        # Recalculate in-batch duplicates across the whole aggregated list
+        seen_emails = set()
+        duplicate_count = 0
+        valid_count = 0
+        with_hours_count = 0
+
+        for c in all_candidates:
+            em = str(c.get("student_email") or "").strip().lower()
+            if em:
+                if em in seen_emails:
+                    c["is_duplicate"] = True
+                    duplicate_count += 1
+                else:
+                    seen_emails.add(em)
+                    c["is_duplicate"] = False
+            if c.get("is_valid"):
+                valid_count += 1
+            if c.get("letter_type") == "with_hours":
+                with_hours_count += 1
+
+        return jsonify({
+            "success": True,
+            "total_rows": len(all_candidates),
+            "valid_rows": valid_count,
+            "invalid_rows": len(all_candidates) - valid_count,
+            "duplicate_rows": duplicate_count,
+            "with_hours_rows": with_hours_count,
+            "candidates": all_candidates,
+            "files_scanned": files_scanned,
+            "files_supported": files_supported,
+            "files_skipped": files_skipped,
+            "skipped_files": skipped_names
+        })
+
+    except Exception as exc:
+        print("BULK OFFER LETTER PARSE UPLOAD ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/offer-letter/bulk/check-duplicates")
+def bulk_offer_letter_check_duplicates():
+    """
+    Check batch emails against email_history for previously sent recipients.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        records = data.get("records") or data.get("emails") or []
+        if not records:
+            return jsonify({
+                "success": True,
+                "total_checked": 0,
+                "duplicate_count": 0,
+                "duplicates_count": 0,
+                "duplicates": [],
+                "existing_emails": [],
+                "duplicate_map": {}
+            })
+
+        duplicate_map = repository.find_existing_offer_letters_batch(records, supabase_client=supabase)
+        duplicate_emails = list(duplicate_map.keys())
+
+        return jsonify({
+            "success": True,
+            "total_checked": len(records),
+            "duplicate_count": len(duplicate_emails),
+            "duplicates_count": len(duplicate_emails),
+            "duplicates": duplicate_emails,
+            "existing_emails": duplicate_emails,
+            "duplicate_map": duplicate_map
+        })
+    except Exception as exc:
+        print("BULK OFFER LETTER CHECK DUPLICATES ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/offer-letter/bulk/generate-item")
+def bulk_offer_letter_generate_item():
+    """
+    Generate a single Offer Letter PDF for bulk flow without dispatching email or creating history records.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        letter_type = data.get("letter_type") or "with_hours"
+        if letter_type not in ("with_hours", "without_hours"):
+            return jsonify({"success": False, "error": "Invalid letter type."}), 400
+
+        student_name = str(data.get("student_name") or data.get("candidate_name") or "").strip()
+        student_email = str(data.get("student_email") or data.get("candidate_email") or "").strip().lower()
+        domain = str(data.get("domain") or data.get("internship_domain") or "").strip()
+        duration_raw = data.get("duration") or "2 months"
+        duration = normalize_duration(duration_raw)
+        start_date = str(data.get("start_date") or "").strip()
+        end_date = str(data.get("end_date") or "").strip()
+        stipend = clean_stipend(data.get("stipend"))
+
+        if not student_name or not student_email or not domain or not start_date or not end_date:
+            return jsonify({"success": False, "error": "Missing required fields."}), 400
+
+        # Format dates to DD/MM/YYYY for template
+        try:
+            if "-" in start_date and len(start_date.split("-")[0]) == 4:
+                s_obj = datetime.strptime(start_date, "%Y-%m-%d")
+                formatted_start = format_date(start_date)
+            else:
+                s_obj = datetime.strptime(start_date, "%d/%m/%Y")
+                formatted_start = start_date
+
+            if "-" in end_date and len(end_date.split("-")[0]) == 4:
+                e_obj = datetime.strptime(end_date, "%Y-%m-%d")
+                formatted_end = format_date(end_date)
+            else:
+                e_obj = datetime.strptime(end_date, "%d/%m/%Y")
+                formatted_end = end_date
+        except ValueError:
+            return jsonify({"success": False, "error": "Invalid date format."}), 400
+
+        if e_obj < s_obj:
+            return jsonify({"success": False, "error": "End date cannot be before start date."}), 400
+
+        data_payload = {
+            "student_name": student_name,
+            "student_email": student_email,
+            "domain": domain,
+            "duration": duration,
+            "start_date": formatted_start,
+            "end_date": formatted_end,
+            "stipend": stipend,
+        }
+
+        if letter_type == "with_hours":
+            weeks = DURATION_WEEKS.get(duration, 8)
+            try:
+                hours_per_week = int(data.get("hours_per_week") or 20)
+            except (ValueError, TypeError):
+                return jsonify({"success": False, "error": "Hours per week must be a number."}), 400
+            if hours_per_week <= 0:
+                return jsonify({"success": False, "error": "Hours per week must be greater than zero."}), 400
+
+            total_hours = weeks * hours_per_week
+            data_payload["weeks"] = str(weeks)
+            data_payload["hours_per_week"] = str(hours_per_week)
+            data_payload["total_hours"] = str(total_hours)
+
+        filename = generate_pdf(letter_type, data_payload)
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "url": f"/generated/{filename}",
+            "student_name": student_name,
+            "student_email": student_email
+        })
+
+    except Exception as exc:
+        print("BULK OFFER LETTER GENERATE ITEM ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/offer-letter/bulk/send-item")
+def bulk_offer_letter_send_item():
+    """
+    Send a single offer letter email and update history using existing offer letter persistence rules.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        filename = (data.get("filename") or "").strip()
+        recipient = (data.get("student_email") or "").strip().lower()
+        student_name = (data.get("student_name") or "Student").strip()
+        domain = (data.get("domain") or data.get("internship_domain") or "").strip()
+        duration = normalize_duration(data.get("duration") or "2 months")
+        start_date = str(data.get("start_date") or "").strip()
+        end_date = str(data.get("end_date") or "").strip()
+        letter_type = data.get("letter_type") or data.get("offer_letter_type") or "with_hours"
+        stipend = clean_stipend(data.get("stipend"))
+        send_again = bool(data.get("send_again", False))
+
+        if not recipient:
+            return jsonify({"success": False, "error": "Student email is required."}), 400
+
+        # Generate PDF on demand if not present on disk
+        if not filename or not (GENERATED_DIR / Path(filename).name).exists():
+            if "-" in start_date and len(start_date.split("-")[0]) == 4:
+                formatted_start = format_date(start_date)
+            else:
+                formatted_start = start_date
+
+            if "-" in end_date and len(end_date.split("-")[0]) == 4:
+                formatted_end = format_date(end_date)
+            else:
+                formatted_end = end_date
+
+            data_payload = {
+                "student_name": student_name,
+                "student_email": recipient,
+                "domain": domain,
+                "duration": duration,
+                "start_date": formatted_start,
+                "end_date": formatted_end,
+                "stipend": stipend,
+            }
+            if letter_type == "with_hours":
+                weeks = DURATION_WEEKS.get(duration, 8)
+                hours_per_week = int(data.get("hours_per_week") or 20)
+                total_hours = weeks * hours_per_week
+                data_payload["weeks"] = str(weeks)
+                data_payload["hours_per_week"] = str(hours_per_week)
+                data_payload["total_hours"] = str(total_hours)
+
+            filename = generate_pdf(letter_type, data_payload)
+
+        safe_fn = Path(filename).name
+        pdf_path = GENERATED_DIR / safe_fn
+
+        # --------------------------------------------------------
+        # DUPLICATE CHECK & RESEND DETECTION
+        # --------------------------------------------------------
+        previous_record = get_previous_email_record(recipient)
+        if previous_record and not send_again and str(previous_record.get("email_status") or "").lower() == "sent":
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "skipped": True,
+                "error": f"Email '{recipient}' already has a sent Offer Letter.",
+                "previous_record": previous_record
+            }), 409
+
+        if not SENDER_EMAIL or not SENDER_PASSWORD:
+            return jsonify({"success": False, "error": "Email is not configured on server."}), 500
+
+        # Helper to construct history record
+        def _build_bulk_history_data(status, sent_at=None, send_count=0, error_message=None):
+            offer_letter_id = data.get("offer_letter_id") or Path(safe_fn).stem
+            return {
+                "student_name": student_name,
+                "student_email": recipient,
+                "phone_number": data.get("phone_number"),
+                "college_name": data.get("college_name"),
+                "internship_domain": domain,
+                "internship_duration": duration,
+                "start_date": start_date,
+                "end_date": end_date,
+                "offer_letter_type": letter_type,
+                "email_status": status,
+                "sent_at": sent_at,
+                "offer_letter_id": offer_letter_id,
+                "pdf_filename": safe_fn,
+                "send_count": send_count,
+                "error_message": error_message
+            }
+
+        # Prepare Email Message
+        message = EmailMessage()
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+        message["To"] = recipient
+        message["Subject"] = "Internship Acceptance Letter"
+
+        message.set_content(
+f"""Dear {student_name},
+
+Warm greetings from Persevex LLP!
+
+We are delighted to inform you that your Internship Acceptance Letter has been attached with this email. Please review the document carefully and feel free to reach out if you need any clarification.
+
+We are truly excited to welcome you onboard at Persevex and look forward to your active contribution and learning journey with us. Your enthusiasm and dedication will play a key role in shaping meaningful experiences throughout this internship.
+
+Kindly acknowledge the receipt of this email and confirm your acceptance at your earliest convenience.
+
+Wishing you a wonderful start with us!
+
+Warm regards,
+Team Persevex"""
+        )
+
+        message.add_alternative(
+f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
+
+<p>Dear {student_name},</p>
+
+<p>Warm greetings from Persevex LLP!</p>
+
+<p>
+We are delighted to inform you that your
+<strong>Internship Acceptance Letter</strong>
+has been attached with this email. Please review the document carefully
+and feel free to reach out if you need any clarification.
+</p>
+
+<p>
+We are truly excited to welcome you onboard at Persevex and look forward
+to your active contribution and learning journey with us. Your enthusiasm
+and dedication will play a key role in shaping meaningful experiences
+throughout this internship.
+</p>
+
+<p>
+Kindly acknowledge the receipt of this email and confirm your acceptance
+at your earliest convenience.
+</p>
+
+<p>Wishing you a wonderful start with us!</p>
+
+<p>
+Warm regards,<br>
+<strong>Team Persevex</strong>
+</p>
+
+</body>
+</html>
+""",
+            subtype="html"
+        )
+
+        message.add_attachment(
+            pdf_path.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=safe_fn
+        )
+
+        # Connect and Send
+        try:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+                smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+                smtp.send_message(message)
+        except Exception as smtp_exc:
+            err_msg = str(smtp_exc)
+            try:
+                if previous_record:
+                    p_id = previous_record.get("id")
+                    p_count = int(previous_record.get("send_count") or 0)
+                    failed_data = _build_bulk_history_data(status="failed", send_count=p_count + 1, error_message=err_msg)
+                    if supabase:
+                        try:
+                            supabase.table("email_history").update(failed_data).eq("id", p_id).execute()
+                        except Exception:
+                            pass
+                else:
+                    failed_data = _build_bulk_history_data(status="failed", send_count=1, error_message=err_msg)
+                    repository.save_offer_letter_record(failed_data)
+            except Exception:
+                pass
+            return jsonify({"success": False, "error": err_msg, "email_status": "failed", "student_email": recipient}), 500
+
+        # Successful Send
+        sent_time = datetime.now(timezone.utc).isoformat()
+        is_resend = bool(previous_record and send_again)
+        current_send_count = (int(previous_record.get("send_count") or 0) + 1) if is_resend else 1
+
+        # Save to IMAP sent folder if possible
+        try:
+            with imaplib.IMAP4_SSL(IMAP_HOST, 993) as imap:
+                imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+                imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+        except Exception as imap_err:
+            print("WARNING: Could not save bulk email to IMAP Sent folder:", repr(imap_err))
+
+        # Save/Update history record
+        if is_resend:
+            try:
+                p_id = previous_record.get("id")
+                update_data = _build_bulk_history_data(status="sent", sent_at=sent_time, send_count=current_send_count, error_message=None)
+                if supabase:
+                    try:
+                        supabase.table("email_history").update(update_data).eq("id", p_id).execute()
+                    except Exception as exc:
+                        print("SUPABASE BULK RESEND UPDATE ERROR:", repr(exc))
+                try:
+                    conn = sqlite3.connect(repository.SQLITE_DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        UPDATE email_history SET
+                            student_name = ?, internship_domain = ?, internship_duration = ?,
+                            start_date = ?, end_date = ?, offer_letter_type = ?,
+                            email_status = 'sent', sent_at = ?, send_count = ?,
+                            pdf_filename = ?, error_message = NULL
+                        WHERE id = ? OR LOWER(TRIM(student_email)) = ?
+                    """, (
+                        student_name, domain, duration, start_date, end_date,
+                        letter_type, sent_time, current_send_count, safe_fn,
+                        p_id, recipient
+                    ))
+                    conn.commit()
+                    conn.close()
+                except Exception as db_exc:
+                    print("SQLITE BULK RESEND UPDATE ERROR:", db_exc)
+            except Exception as hist_err:
+                print("BULK RESEND HISTORY ERROR:", repr(hist_err))
+        else:
+            new_history_data = _build_bulk_history_data(status="sent", sent_at=sent_time, send_count=1, error_message=None)
+            repository.save_offer_letter_record(new_history_data)
+
+        return jsonify({
+            "success": True,
+            "student_name": student_name,
+            "student_email": recipient,
+            "send_count": current_send_count,
+            "resent": is_resend
+        })
+
+    except Exception as exc:
+        print("BULK OFFER LETTER SEND ITEM ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/api/offer-letter/bulk/sample-template")
+def bulk_offer_letter_sample_template():
+    """
+    Download sample template for Bulk Offer Letters.
+    """
+    try:
+        fmt = (request.args.get("format") or "csv").strip().lower()
+        if fmt in ("excel", "xlsx"):
+            excel_bytes = bulk_offer_letter_service.get_sample_excel_template()
+            if excel_bytes:
+                return Response(
+                    excel_bytes,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={
+                        "Content-Disposition": 'attachment; filename="Persevex_Bulk_Offer_Letters_Sample.xlsx"',
+                        "Cache-Control": "no-cache",
+                    },
+                )
+        csv_bytes = bulk_offer_letter_service.get_sample_csv_template()
+        return Response(
+            csv_bytes,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="Persevex_Bulk_Offer_Letters_Sample.csv"',
+                "Cache-Control": "no-cache",
+            },
+        )
+    except Exception as exc:
+        print("BULK OFFER LETTER SAMPLE TEMPLATE ERROR:", repr(exc))
+        return jsonify({"error": str(exc)}), 500
 
 
 # ============================================================
