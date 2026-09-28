@@ -1814,14 +1814,14 @@ button:disabled,
    ========================================================== */
 .history-summary-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 14px;
     margin-bottom: 22px;
 }
 
 @media (max-width: 1300px) {
     .history-summary-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 }
 
@@ -2850,6 +2850,23 @@ button:disabled,
     .app {
         padding: 14px 16px 28px;
     }
+
+    .ca-bulk-results-layout{display:grid;grid-template-columns:minmax(280px,30%) minmax(0,70%);gap:20px;align-items:start}
+    .ca-bulk-results-card{min-width:0}
+    .ca-bulk-empty{min-height:260px;display:grid;place-items:center;text-align:center;color:#64748b;padding:32px}
+    .ca-bulk-file-meta{margin:0 0 16px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;color:#475569;font-size:.9rem}
+    .ca-bulk-clear{border:0;cursor:pointer;background:#eef2ff;color:#3730a3}
+    .ca-bulk-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(100px,1fr));gap:10px;margin-bottom:18px}
+    .ca-bulk-summary-card{padding:14px;border-radius:10px;border:1px solid transparent;display:flex;flex-direction:column;gap:3px}
+    .ca-bulk-summary-card strong{font-size:1.5rem}.ca-bulk-summary-card span{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .ca-bulk-summary-card.total{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}.ca-bulk-summary-card.valid{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}.ca-bulk-summary-card.invalid{background:#fef2f2;border-color:#fecaca;color:#b91c1c}.ca-bulk-summary-card.duplicate{background:#fffbeb;border-color:#fde68a;color:#b45309}
+    .ca-bulk-table-tools,.ca-bulk-pagination{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:12px 0}
+    .ca-bulk-filters{display:flex;gap:6px;flex-wrap:wrap}.ca-bulk-filters button,.ca-bulk-pagination button{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:7px 10px;cursor:pointer}.ca-bulk-filters button.active{background:#172554;color:#fff}
+    .ca-bulk-table-tools input{min-width:220px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px}
+    .ca-bulk-table-wrap{overflow:auto;max-height:560px;border:1px solid #e2e8f0;border-radius:8px}.ca-bulk-table-wrap table{width:100%;min-width:760px;border-collapse:collapse}.ca-bulk-table-wrap th{position:sticky;top:0;background:#f8fafc;z-index:1}.ca-bulk-table-wrap th,.ca-bulk-table-wrap td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}.ca-bulk-status{font-size:.75rem;font-weight:700;text-transform:uppercase}.ca-bulk-status.valid{color:#15803d}.ca-bulk-status.invalid{color:#b91c1c}.ca-bulk-status.duplicate{color:#b45309}
+    .ca-bulk-progress{min-height:24px;margin:12px 0;color:#475569}
+    @media (max-width:900px){.ca-bulk-results-layout{grid-template-columns:1fr}.ca-bulk-summary-grid{grid-template-columns:repeat(2,minmax(120px,1fr))}}
+    @media (max-width:560px){.ca-bulk-table-tools,.ca-bulk-pagination{align-items:stretch;flex-direction:column}.ca-bulk-table-tools input{width:100%;min-width:0}.ca-bulk-summary-grid{grid-template-columns:1fr 1fr}}
     
     header {
         flex-wrap: wrap;
@@ -5804,6 +5821,121 @@ button:active:not(:disabled) {
     height: 16px;
 }
 
+.ca-bulk-layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+}
+
+.ca-certificate-layout .section-tag,
+.ca-bulk-layout .section-tag {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+    .ca-certificate-layout .card-header,
+    .ca-bulk-layout .card-header {
+        align-items: flex-start;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .ca-certificate-layout .card-header h2,
+    .ca-bulk-layout .card-header h2 {
+        min-width: 0;
+        font-size: 14px;
+    }
+
+    .ca-certificate-layout .section-tag,
+    .ca-bulk-layout .section-tag {
+        font-size: 9px;
+        padding-inline: 6px;
+        margin-left: auto;
+    }
+}
+
+.ca-bulk-layout .filter-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.ca-bulk-layout .filter-actions > * {
+    width: 100%;
+    margin: 0;
+}
+
+.ca-bulk-layout .bulk-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ca-bulk-layout .preview-actions {
+    margin-top: 16px;
+}
+
+.ca-bulk-layout .preview-actions > * {
+    min-height: 44px;
+}
+
+.ca-bulk-layout .cert-preview-container,
+.ca-certificate-preview {
+    min-height: 420px;
+}
+
+.ca-bulk-layout #preview {
+    width: 100%;
+    height: 560px;
+    border: 0;
+}
+
+.ca-bulk-layout #progress,
+.ca-bulk-layout #validationSummary {
+    margin-top: 12px;
+    color: var(--text-body);
+    font-size: 13px;
+}
+
+#caCertForm .form-group {
+    margin-bottom: 14px;
+}
+
+#caCertForm label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-body);
+    margin-bottom: 6px;
+}
+
+#caCertForm input {
+    width: 100%;
+}
+
+#message {
+    margin-top: 12px;
+    min-height: 20px;
+    color: var(--text-body);
+    font-size: 13px;
+}
+
+@media (max-width: 960px) {
+    .ca-bulk-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .ca-bulk-layout .filter-actions,
+    .ca-bulk-layout .preview-actions {
+        grid-template-columns: 1fr;
+        display: grid;
+    }
+}
+
 /* Certificate Form Controls Polish */
 #certificateForm .form-group {
     margin-bottom: 14px;
@@ -7966,6 +8098,181 @@ button:active:not(:disabled) {
     border: 1px solid #bbf7d0;
 }
 
+.ca-bulk-results-layout{display:grid;grid-template-columns:minmax(280px,30%) minmax(0,70%);gap:20px;align-items:start}
+.ca-bulk-results-card{min-width:0}.ca-bulk-empty{min-height:260px;display:grid;place-items:center;text-align:center;color:#64748b;padding:32px}
+.ca-bulk-file-meta{margin:0 0 16px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;color:#475569;font-size:.9rem}.ca-bulk-clear{border:0;cursor:pointer;background:#eef2ff;color:#3730a3}
+.ca-bulk-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(100px,1fr));gap:10px;margin-bottom:18px}.ca-bulk-summary-card{padding:14px;border-radius:10px;border:1px solid transparent;display:flex;flex-direction:column;gap:3px}.ca-bulk-summary-card strong{font-size:1.5rem}.ca-bulk-summary-card span{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.ca-bulk-summary-card.total{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}.ca-bulk-summary-card.valid{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}.ca-bulk-summary-card.invalid{background:#fef2f2;border-color:#fecaca;color:#b91c1c}.ca-bulk-summary-card.duplicate{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.ca-bulk-table-tools,.ca-bulk-pagination{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:12px 0}.ca-bulk-filters{display:flex;gap:6px;flex-wrap:wrap}.ca-bulk-filters button,.ca-bulk-pagination button{border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:7px 10px;cursor:pointer}.ca-bulk-filters button.active{background:#172554;color:#fff}.ca-bulk-table-tools input{min-width:220px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px}
+.ca-bulk-table-wrap{overflow:auto;max-height:560px;border:1px solid #e2e8f0;border-radius:8px}.ca-bulk-table-wrap table{width:100%;min-width:760px;border-collapse:collapse}.ca-bulk-table-wrap th{position:sticky;top:0;background:#f8fafc;z-index:1}.ca-bulk-table-wrap th,.ca-bulk-table-wrap td{padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}.ca-bulk-status{font-size:.75rem;font-weight:700;text-transform:uppercase}.ca-bulk-status.valid{color:#15803d}.ca-bulk-status.invalid{color:#b91c1c}.ca-bulk-status.duplicate{color:#b45309}.ca-bulk-progress{min-height:24px;margin:12px 0;color:#475569}
+@media (max-width:900px){.ca-bulk-results-layout{grid-template-columns:1fr}.ca-bulk-summary-grid{grid-template-columns:repeat(2,minmax(120px,1fr))}}@media (max-width:560px){.ca-bulk-table-tools,.ca-bulk-pagination{align-items:stretch;flex-direction:column}.ca-bulk-table-tools input{width:100%;min-width:0}}
+
+/* Bulk CA Certificate form alignment */
+.ca-bulk-results-layout,
+.ca-bulk-results-layout > .card {
+    min-width: 0;
+}
+
+.ca-bulk-input-card .card-header {
+    gap: 12px;
+}
+
+.ca-bulk-input-card .bulk-textareas-grid {
+    margin-bottom: 18px;
+}
+
+.ca-bulk-input-card .form-group {
+    margin-bottom: 20px;
+}
+
+.ca-bulk-form-actions {
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.ca-bulk-form-actions > button {
+    width: 100%;
+    min-height: 44px;
+    height: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 11px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 9px;
+    border-radius: var(--radius-sm);
+    line-height: 1.25;
+    white-space: nowrap;
+    text-align: left;
+}
+
+.ca-bulk-form-actions > button .btn-icon-svg {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.ca-bulk-form-actions > button span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ca-bulk-results-card .card-header {
+    gap: 12px;
+}
+
+.ca-bulk-results-card .card-header h2 {
+    min-width: 0;
+}
+
+.ca-bulk-results-card .ca-bulk-clear {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.ca-bulk-summary-card {
+    min-width: 0;
+}
+
+.ca-bulk-summary-card strong,
+.ca-bulk-summary-card span {
+    overflow-wrap: anywhere;
+}
+
+.ca-bulk-table-wrap {
+    max-width: 100%;
+}
+
+.bulk-ca-certificate-page .ca-bulk-generation-progress {
+    margin: 0 0 18px;
+    padding: 12px 14px;
+    border: 1px solid #dbeafe;
+    border-radius: var(--radius-md);
+    background: #f8fbff;
+}
+
+.bulk-ca-certificate-page .ca-bulk-generation-progress[hidden] {
+    display: none !important;
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-main);
+    font-size: 12.5px;
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-heading > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-heading .btn-icon-svg {
+    width: 16px;
+    height: 16px;
+    color: var(--brand-primary);
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-track {
+    height: 8px;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: var(--radius-full);
+    background: #dbeafe;
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-bar {
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--brand-primary);
+    transition: width 180ms ease-out;
+}
+
+.bulk-ca-certificate-page .ca-bulk-progress-detail {
+    margin-top: 7px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+}
+
+@media (max-width: 900px) {
+    .ca-bulk-input-card .bulk-textareas-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .ca-bulk-input-card .bulk-textareas-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ca-bulk-results-card .card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .ca-bulk-results-card .ca-bulk-clear {
+        align-self: stretch;
+        text-align: center;
+    }
+}
+
+@media (max-width: 380px) {
+    .ca-bulk-summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .bulk-status-badge.status-failed,
 .status-failed {
     background: #fef2f2;
@@ -7989,6 +8296,106 @@ button:active:not(:disabled) {
     transition: all var(--transition-fast);
     margin: 0 2px;
     color: var(--text-body);
+}
+
+/* Bulk CA Certificate dashboard refinements */
+.bulk-ca-certificate-page .mode-switcher-container {
+    margin-bottom: 18px;
+}
+
+.bulk-ca-certificate-page .ca-bulk-results-layout {
+    margin-top: 0;
+}
+
+.bulk-ca-certificate-page #emptyResults[hidden],
+.bulk-ca-certificate-page #resultsDashboard[hidden],
+.bulk-ca-certificate-page #fileMeta[hidden] {
+    display: none !important;
+}
+
+.bulk-ca-certificate-page .bulk-textareas-grid {
+    align-items: stretch;
+}
+
+.bulk-ca-certificate-page .bulk-textarea {
+    min-height: 220px;
+    height: 220px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    overflow-y: auto;
+}
+
+.bulk-ca-certificate-page #names,
+.bulk-ca-certificate-page #emails {
+    white-space: pre;
+}
+
+.bulk-ca-certificate-page #emails {
+    overflow-x: auto;
+}
+
+.bulk-ca-certificate-page .ca-bulk-table-tools {
+    flex-wrap: nowrap;
+}
+
+.bulk-ca-certificate-page .ca-bulk-filters {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+
+.bulk-ca-certificate-page .ca-bulk-filters button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.bulk-ca-certificate-page .ca-bulk-table-tools input {
+    flex: 1 1 220px;
+    min-width: 160px;
+}
+
+@media (max-width: 900px) {
+    .bulk-ca-certificate-page .ca-bulk-results-layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 18px;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-results-layout > .card {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-table-tools {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-filters {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-table-tools input {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 560px) {
+    .bulk-ca-certificate-page .mode-switcher-container {
+        margin-bottom: 18px;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-table-tools {
+        flex-wrap: nowrap;
+    }
+
+    .bulk-ca-certificate-page .ca-bulk-progress-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+    }
 }
 
 .btn-row-action:hover {

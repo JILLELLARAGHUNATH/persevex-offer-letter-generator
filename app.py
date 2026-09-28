@@ -1,6 +1,7 @@
 import tempfile
 import os
 import io
+import zipfile
 import csv
 import hmac
 from pathlib import Path
@@ -11,9 +12,14 @@ from email.message import EmailMessage
 import imaplib
 import urllib.parse
 import sqlite3
+import uuid
+from datetime import timedelta
 
-from dotenv import load_dotenv
+from environment_config import load_application_environment, require_environment_variable, get_environment_info
 from supabase import create_client, Client
+
+APP_ENV = load_application_environment(Path(__file__).resolve().parent)
+APP_LOCAL_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
 
 import sys
 if hasattr(sys.stdout, "reconfigure"):
@@ -33,6 +39,7 @@ from flask import (
     url_for,
     session,
     Response,
+    send_file,
 )
 
 import pymupdf
@@ -41,6 +48,7 @@ import database.repository as repository
 import services.bulk_certificate_service as bulk_certificate_service
 from services.ca_bulk_service import parse_ca_file
 import services.bulk_offer_letter_service as bulk_offer_letter_service
+from services import ca_certificate_service
 
 
 # ============================================================
@@ -48,8 +56,6 @@ import services.bulk_offer_letter_service as bulk_offer_letter_service
 # ============================================================
 
 app = Flask(__name__)
-
-load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -67,10 +73,7 @@ supabase: Client = create_client(SUPABASE_URL,SUPABASE_KEY)
 # ============================================================
 LOGIN_USERNAME = os.getenv("PERSEVEX_LOGIN_USERNAME", "").strip()
 LOGIN_PASSWORD = os.getenv("PERSEVEX_LOGIN_PASSWORD", "").strip()
-SESSION_SECRET = os.getenv("PERSEVEX_SESSION_SECRET", "").strip()
-
-if not SESSION_SECRET:
-    SESSION_SECRET = "local-development-secret-change-me"
+SESSION_SECRET = require_environment_variable("PERSEVEX_SESSION_SECRET")
 
 app.secret_key = SESSION_SECRET
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -4582,6 +4585,7 @@ def history():
                 "total_offer_letters": history_data["total_offer_letters"],
                 "total_ca_letters": history_data.get("total_ca_letters", 0),
                 "total_certificates": history_data["total_certificates"],
+                "total_ca_certificates": history_data.get("total_ca_certificates", 0),
                 "total_sent": history_data["total_sent"],
                 "total_failed": history_data["total_failed"],
                 "total_pending": history_data["total_pending"],
@@ -4607,6 +4611,7 @@ def history():
             total_offer_letters=history_data["total_offer_letters"],
             total_ca_letters=history_data.get("total_ca_letters", 0),
             total_certificates=history_data["total_certificates"],
+            total_ca_certificates=history_data.get("total_ca_certificates", 0),
             total_sent=history_data["total_sent"],
             total_failed=history_data["total_failed"],
             total_pending=history_data["total_pending"],
@@ -4655,6 +4660,7 @@ def history():
             total_offer_letters=0,
             total_ca_letters=0,
             total_certificates=0,
+            total_ca_certificates=0,
             total_sent=0,
             total_failed=0,
             total_pending=0,
@@ -4695,6 +4701,8 @@ def export_history():
             filename_prefix = "Persevex_CA_Offer_Letter_History"
         elif record_type in ("certificate", "cert", "certificates"):
             filename_prefix = "Persevex_Certificate_History"
+        elif record_type in ("ca_certificate", "ca_certificates", "ca_cert"):
+            filename_prefix = "Persevex_CA_Certificate_History"
 
         date_suffix = datetime.now().strftime("%Y-%m-%d")
         if from_date and to_date:
@@ -4836,11 +4844,19 @@ def delete_unified_history_record(record_type, record_id):
     try:
         rec_type = str(record_type or "").strip().lower()
         if rec_type in ("ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
-            repository.delete_campus_ambassador_record(record_id)
+            deleted = repository.delete_campus_ambassador_record(record_id)
+        elif rec_type in ("ca_certificate", "ca_certificates", "ca_cert"):
+            deleted = repository.delete_ca_certificate_record(record_id)
         elif rec_type in ("offer_letter", "offer", "offer_letters", "email_history"):
-            repository.delete_offer_letter_record(record_id)
+            deleted = repository.delete_offer_letter_record(record_id)
         else:
-            repository.delete_certificate_record(record_id)
+            deleted = repository.delete_certificate_record(record_id)
+
+        if not deleted:
+            return jsonify({
+                "success": False,
+                "error": "Record not found or already deleted."
+            }), 404
 
         return jsonify({
             "success": True,
@@ -4848,20 +4864,22 @@ def delete_unified_history_record(record_type, record_id):
         })
     except Exception as exc:
         print("DELETE UNIFIED RECORD ERROR:", repr(exc))
-        return jsonify({"success": False, "error": str(exc)}), 500
+        return jsonify({"success": False, "error": "Failed to delete record. Please check server logs."}), 500
 
 
 @app.delete("/history/<int:record_id>")
 def delete_history_record(record_id):
     try:
-        repository.delete_offer_letter_record(record_id)
+        deleted = repository.delete_offer_letter_record(record_id)
+        if not deleted:
+            return jsonify({"success": False, "error": "Record not found or already deleted."}), 404
         return jsonify({
             "success": True,
             "message": "Offer letter history record deleted successfully."
         })
     except Exception as exc:
         print("DELETE HISTORY ERROR:", repr(exc))
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({"success": False, "error": "Failed to delete record. Please check server logs."}), 500
 
 
 @app.post("/api/history/bulk-delete")
@@ -4879,11 +4897,12 @@ def bulk_delete_history_records():
             "offer_letters_deleted": result.get("offer_letters_deleted", 0),
             "ca_letters_deleted": result.get("ca_letters_deleted", 0),
             "certificates_deleted": result.get("certificates_deleted", 0),
+            "ca_certificates_deleted": result.get("ca_certificates_deleted", 0),
             "message": f"{result.get('total_deleted', 0)} records deleted successfully."
         })
     except Exception as exc:
         print("BULK DELETE API ERROR:", repr(exc))
-        return jsonify({"success": False, "error": str(exc)}), 500
+        return jsonify({"success": False, "error": "Failed to delete records. Please check server logs."}), 500
 
 
 @app.post("/api/history/delete-all")
@@ -4906,16 +4925,552 @@ def delete_all_history_endpoint():
             "offer_letters_deleted": result.get("offer_letters_deleted", 0),
             "ca_letters_deleted": result.get("ca_letters_deleted", 0),
             "certificates_deleted": result.get("certificates_deleted", 0),
+            "ca_certificates_deleted": result.get("ca_certificates_deleted", 0),
             "message": "All history records deleted successfully."
         })
     except Exception as exc:
         print("DELETE ALL API ERROR:", repr(exc))
-        return jsonify({"success": False, "error": str(exc)}), 500
+        return jsonify({"success": False, "error": "Failed to purge history records. Please check server logs."}), 500
 
 
 # ============================================================
 # CERTIFICATE GENERATOR & BULK ROUTES
 # ============================================================
+
+@app.get("/ca-certificate")
+@app.get("/ca-certificate/single")
+def ca_certificate_page():
+    stats = repository.get_unified_history(record_type="ca_certificate", page=1, per_page=1)
+    return render_template(
+        "ca_certificate.html",
+        today_iso=datetime.now(APP_LOCAL_TIMEZONE).strftime("%Y-%m-%d"),
+        today_formatted=datetime.now(APP_LOCAL_TIMEZONE).strftime("%B %d, %Y"),
+        success_count=stats.get("total_sent", 0),
+        failed_count=stats.get("total_failed", 0),
+    )
+
+
+@app.get("/ca-certificate/bulk")
+def ca_certificate_bulk_page():
+    stats = repository.get_unified_history(record_type="ca_certificate", page=1, per_page=1)
+    return render_template(
+        "ca_certificate_bulk.html",
+        today_iso=datetime.now(APP_LOCAL_TIMEZONE).strftime("%Y-%m-%d"),
+        today_formatted=datetime.now(APP_LOCAL_TIMEZONE).strftime("%B %d, %Y"),
+        success_count=stats.get("total_sent", 0),
+        failed_count=stats.get("total_failed", 0),
+    )
+
+
+@app.post("/api/ca-certificate/generate")
+def ca_certificate_generate():
+    data = request.get_json(force=True) or {}
+    name = str(data.get("participant_name") or "").strip()
+    email = str(data.get("participant_email") or "").strip().lower()
+    date_value = str(data.get("program_date") or "").strip()
+    if not name or not date_value:
+        return jsonify({"success": False, "error": "Participant name and program date are required."}), 400
+    try:
+        formatted_date = ca_certificate_service.format_program_date(date_value)
+        filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+        ca_certificate_service.generate_pdf_bytes(name, date_value)
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "date": formatted_date,
+            "document_id": f"CA-CERT-{uuid.uuid4().hex}",
+        })
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        print("CA CERTIFICATE GENERATION ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/ca-certificate/pdf")
+def ca_certificate_pdf():
+    data = request.get_json(force=True) or {}
+    name = str(data.get("participant_name") or "").strip()
+    date_value = str(data.get("program_date") or "").strip()
+    try:
+        pdf_bytes, _ = ca_certificate_service.generate_pdf_bytes(name, date_value)
+        filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=bool(data.get("download")),
+            download_name=filename,
+        )
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        print("CA CERTIFICATE PDF ERROR:", repr(exc))
+        return jsonify({"success": False, "error": "Certificate PDF generation failed."}), 500
+
+
+@app.post("/api/ca-certificate/send-email")
+def ca_certificate_send_email():
+    data = request.get_json(force=True) or {}
+    name = str(data.get("participant_name") or "").strip()
+    email = str(data.get("participant_email") or "").strip().lower()
+    date_value = str(data.get("program_date") or "").strip()
+    if not name or not email or not date_value:
+        return jsonify({"success": False, "error": "A generated certificate and complete participant details are required."}), 400
+    filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+    resend = data.get("send_again") is True
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return jsonify({"success": False, "error": "Enter a valid email address."}), 400
+    document_id = str(data.get("document_id") or "")
+    if not re.fullmatch(r"CA-CERT-[0-9a-f]{32}", document_id):
+        document_id = f"CA-CERT-{uuid.uuid4().hex}"
+    claim_token = str(uuid.uuid4())
+    try:
+        claim = repository.claim_ca_certificate_single_email(
+            {
+                "participant_name": name,
+                "participant_email": email,
+                "program_date": ca_certificate_service.format_program_date(date_value),
+                "document_id": document_id,
+                "pdf_filename": filename,
+            },
+            claim_token=claim_token,
+            allow_resend=resend,
+        )
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+    except Exception as exc:
+        print("CA CERTIFICATE SINGLE CLAIM ERROR:", repr(exc))
+        return jsonify({"success": False, "error": "Unable to claim certificate delivery safely."}), 503
+    if not claim.get("claimed"):
+        return jsonify({
+            "success": False,
+            "duplicate": True,
+            "email_status": claim.get("email_status"),
+            "message": "A certificate delivery is already recorded or in progress for this email address.",
+        }), 409
+    existing_id = claim["record_id"]
+    send_count = int(claim.get("send_count") or 1)
+    send_attempted = False
+    try:
+        message = EmailMessage()
+        message["Subject"] = "Campus Ambassador Certificate – Persevex"
+        message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+        message["To"] = email
+        message.set_content(
+            f"Dear {name},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
+            "Congratulations on your participation.\n\nWarm regards,\nTeam Persevex"
+        )
+        pdf_bytes, _ = ca_certificate_service.generate_pdf_bytes(name, date_value)
+        message.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+            smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+            send_attempted = True
+            smtp.send_message(message)
+    except Exception as exc:
+        email_status = "uncertain" if send_attempted else "failed"
+        try:
+            persistence = repository.finish_ca_certificate_single_email(
+                existing_id,
+                claim_token,
+                {
+                    "participant_name": name, "participant_email": email,
+                    "program_date": ca_certificate_service.format_program_date(date_value),
+                    "document_id": document_id,
+                    "pdf_filename": filename,
+                    "email_status": email_status, "send_count": send_count, "error_message": str(exc),
+                },
+            )
+        except Exception as history_exc:
+            print("CA CERTIFICATE FAILED-DELIVERY HISTORY ERROR:", repr(history_exc))
+            persistence = {"saved": False, "status": "not_saved"}
+        return jsonify({
+            "success": False,
+            "error": str(exc),
+            "email_status": email_status,
+            "history_saved": persistence["saved"],
+            "history_status": persistence["status"],
+        }), 202 if email_status == "uncertain" else 500
+    try:
+        persistence = repository.finish_ca_certificate_single_email(
+            existing_id,
+            claim_token,
+            {
+                "participant_name": name, "participant_email": email,
+                "program_date": ca_certificate_service.format_program_date(date_value),
+                "document_id": document_id, "pdf_filename": filename,
+                "email_status": "sent", "sent_at": datetime.now(timezone.utc).isoformat(),
+                "send_count": send_count,
+            },
+        )
+    except Exception as history_exc:
+        print("CA CERTIFICATE DELIVERY HISTORY ERROR:", repr(history_exc))
+        persistence = {"saved": False, "status": "not_saved", "error": str(history_exc)}
+    response = {
+        "success": True,
+        "message": "CA Certificate sent successfully.",
+        "send_count": send_count,
+        "email_delivered": True,
+        "history_saved": persistence["saved"],
+        "history_status": persistence["status"],
+    }
+    if persistence["status"] == "local_only" and SUPABASE_URL and SUPABASE_KEY:
+        response["warning"] = "Email delivered, but Supabase history was unavailable. A local reconciliation copy was retained; do not resend this email."
+    elif persistence["status"] == "not_saved":
+        response["warning"] = "Email delivered, but the history record could not be saved. Do not resend this email; reconcile this delivery before retrying."
+    elif not persistence.get("saved"):
+        response["warning"] = "Email delivered, but the delivery claim could not be finalized. Do not resend; reconcile the uncertain history record."
+    return jsonify(response)
+
+
+@app.post("/api/ca-certificate/bulk/validate")
+def ca_certificate_bulk_validate():
+    data = request.get_json(force=True) or {}
+    names = [line.strip() for line in str(data.get("names") or "").splitlines()]
+    emails = [line.strip().lower() for line in str(data.get("emails") or "").splitlines()]
+    date_value = str(data.get("program_date") or "").strip()
+    rows = []
+    seen_emails = set()
+    total_rows = max(len(names), len(emails))
+    historical_sent = repository.get_previous_sent_ca_certificates(emails)
+    for index in range(total_rows):
+        name = names[index] if index < len(names) else ""
+        email = emails[index] if index < len(emails) else ""
+        errors = []
+        if not name: errors.append("Missing participant name")
+        if not email:
+            errors.append("Missing email address")
+        elif not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            errors.append("Invalid email address")
+        duplicate = bool(email and not errors and email in seen_emails)
+        if duplicate:
+            errors.append("Duplicate email address")
+        elif email and not errors and email in historical_sent:
+            errors.append("Email already received a CA Certificate")
+            duplicate = True
+        if email and not errors:
+            seen_emails.add(email)
+        rows.append({
+            "row": index + 1,
+            "participant_name": name,
+            "participant_email": email,
+            "valid": not errors,
+            "duplicate": duplicate,
+            "errors": errors,
+            "status": "duplicate" if duplicate else ("valid" if not errors else "invalid"),
+            "remarks": "; ".join(errors) if errors else "Ready for generation"
+        })
+    try:
+        ca_certificate_service.format_program_date(date_value)
+    except ValueError as exc:
+        for row in rows:
+            if row["valid"]:
+                row["errors"].append(str(exc))
+                row["remarks"] = str(exc)
+                row["valid"] = False
+                row["status"] = "invalid"
+    duplicate_count = sum(1 for row in rows if row["duplicate"])
+    invalid_count = sum(1 for row in rows if not row["valid"] and not row["duplicate"])
+    return jsonify({
+        "success": True,
+        "rows": rows,
+        "total_rows": total_rows,
+        "valid_count": sum(1 for row in rows if row["valid"]),
+        "invalid_count": invalid_count,
+        "duplicate_count": duplicate_count
+    })
+
+
+@app.post("/api/ca-certificate/bulk/jobs")
+def ca_certificate_bulk_create_job():
+    data = request.get_json(force=True) or {}
+    date_value = str(data.get("program_date") or "").strip()
+    rows = data.get("rows") or []
+    try:
+        formatted_date = ca_certificate_service.format_program_date(date_value)
+        items = []
+        seen = set()
+        for row in rows:
+            if not row.get("valid"):
+                continue
+            email = str(row.get("participant_email") or "").strip().lower()
+            if email in seen:
+                continue
+            seen.add(email)
+            items.append({
+                "source_row": row.get("row"),
+                "participant_name": str(row.get("participant_name") or "").strip(),
+                "participant_email": email,
+            })
+        if not items:
+            return jsonify({"success": False, "error": "No valid rows are available for processing."}), 400
+        job = repository.create_ca_certificate_job(
+            formatted_date,
+            items,
+            skipped_count=len(rows) - len(items),
+        )
+        return jsonify({"success": True, "job": job, "count": len(items)})
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+
+@app.get("/api/ca-certificate/bulk/jobs/<job_id>")
+def ca_certificate_bulk_job_status(job_id):
+    try:
+        job = repository.get_ca_certificate_job(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "CA Certificate job not found."}), 404
+        job["items"] = repository.get_ca_certificate_job_items(job_id)
+        return jsonify({"success": True, "job": job})
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+
+@app.post("/api/ca-certificate/bulk/jobs/<job_id>/send")
+def ca_certificate_bulk_send_job(job_id):
+    data = request.get_json(force=True) or {}
+    try:
+        items = repository.claim_ca_certificate_email_items(
+            job_id, 1, retry_failed=data.get("retry") is True
+        )
+        sent = failed = 0
+        uncertain = 0
+        failed_items = []
+        history_warnings = []
+        for item in items[:1]:
+            document_id = item.get("document_id") or f"CA-CERT-{uuid.uuid4().hex}"
+            filename = f"{ca_certificate_service.safe_filename(item['participant_name'])}_CA_Certificate.pdf"
+            send_attempted = False
+            try:
+                claim_record = repository.save_ca_certificate_record({
+                    "participant_name": item["participant_name"],
+                    "participant_email": item["participant_email"],
+                    "program_date": item["program_date"],
+                    "document_id": document_id,
+                    "pdf_filename": filename,
+                    "email_status": "sending",
+                    "send_count": int(item.get("send_count") or 0),
+                })
+                if not claim_record.get("supabase_saved"):
+                    raise RuntimeError("Could not persist the CA Certificate delivery claim.")
+            except Exception as exc:
+                history_warnings.append(document_id)
+                repository.update_ca_certificate_job_item(item["id"], {
+                    "document_id": document_id,
+                    "email_status": "failed",
+                    "attempt_count": int(item.get("attempt_count") or 0) + 1,
+                    "error_message": str(exc),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }, claim_token=item.get("claim_token"))
+                failed += 1
+                failed_items.append({
+                    "participant_name": item["participant_name"],
+                    "participant_email": item["participant_email"],
+                    "program_date": item["program_date"],
+                    "error": str(exc),
+                })
+                continue
+            try:
+                pdf_bytes, formatted_date = ca_certificate_service.generate_pdf_bytes(
+                    item["participant_name"], item["program_date"]
+                )
+                message = EmailMessage()
+                message["Subject"] = "Campus Ambassador Certificate – Persevex"
+                message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+                message["To"] = item["participant_email"]
+                message.set_content(
+                    f"Dear {item['participant_name']},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
+                    "Congratulations on your participation.\n\nWarm regards,\nTeam Persevex"
+                )
+                message.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
+                with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+                    smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+                    send_attempted = True
+                    smtp.send_message(message)
+            except Exception as exc:
+                email_status = "uncertain" if send_attempted else "failed"
+                try:
+                    persistence = repository.save_ca_certificate_record({
+                        "participant_name": item["participant_name"],
+                        "participant_email": item["participant_email"],
+                        "program_date": item["program_date"],
+                        "document_id": document_id,
+                        "pdf_filename": filename,
+                        "email_status": email_status,
+                        "send_count": int(item.get("send_count") or 0),
+                        "error_message": str(exc),
+                    })
+                    if not persistence.get("supabase_saved"):
+                        history_warnings.append(document_id)
+                except Exception as history_exc:
+                    print("CA CERTIFICATE DELIVERY HISTORY ERROR:", repr(history_exc))
+                    history_warnings.append(document_id)
+                repository.update_ca_certificate_job_item(item["id"], {
+                    "document_id": document_id,
+                    "email_status": email_status,
+                    "attempt_count": int(item.get("attempt_count") or 0) + 1,
+                    "error_message": str(exc),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }, claim_token=item.get("claim_token"))
+                if email_status == "uncertain":
+                    uncertain += 1
+                else:
+                    failed += 1
+                    failed_items.append({
+                        "participant_name": item["participant_name"],
+                        "participant_email": item["participant_email"],
+                        "program_date": item["program_date"],
+                        "error": str(exc),
+                    })
+                continue
+
+            try:
+                persistence = repository.save_ca_certificate_record({
+                    "participant_name": item["participant_name"],
+                    "participant_email": item["participant_email"],
+                    "program_date": formatted_date,
+                    "document_id": document_id,
+                    "pdf_filename": filename,
+                    "email_status": "sent",
+                    "sent_at": datetime.now(timezone.utc).isoformat(),
+                    "send_count": int(item.get("send_count") or 0) + 1,
+                })
+                if not persistence.get("supabase_saved"):
+                    history_warnings.append(document_id)
+            except Exception as history_exc:
+                print("CA CERTIFICATE DELIVERY HISTORY ERROR:", repr(history_exc))
+                history_warnings.append(document_id)
+            repository.update_ca_certificate_job_item(item["id"], {
+                "document_id": document_id,
+                "email_status": "sent",
+                "send_count": int(item.get("send_count") or 0) + 1,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "error_message": None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }, claim_token=item.get("claim_token"))
+            sent += 1
+        counts = repository.reconcile_ca_certificate_job(job_id)
+        eligible_statuses = ("failed",) if data.get("retry") is True else ("pending",)
+        remaining_items = repository.get_ca_certificate_job_items(job_id, eligible_statuses)
+        return jsonify({
+            "success": True,
+            "claimed": len(items),
+            "sent": sent,
+            "failed": failed,
+            "uncertain": uncertain,
+            "failed_items": failed_items,
+            "remaining": len(remaining_items),
+            "counts": counts,
+            "history_warnings": history_warnings,
+        })
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+
+@app.post("/api/ca-certificate/bulk/jobs/<job_id>/process")
+def ca_certificate_bulk_process_job(job_id):
+    data = request.get_json(force=True) or {}
+    try:
+        job = repository.get_ca_certificate_job(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "CA Certificate job not found."}), 404
+        batch = repository.claim_ca_certificate_job_items(job_id, data.get("batch_size", 10))
+        if not batch:
+            counts = repository.reconcile_ca_certificate_job(job_id)
+            return jsonify({"success": True, "job_id": job_id, "processed": 0, "remaining": 0, "complete": counts["status"] != "running", "counts": counts})
+        processed = generated = failed = 0
+        for item in batch:
+            processed += 1
+            name = item["participant_name"]
+            email = item["participant_email"]
+            filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+            try:
+                pdf_bytes, formatted_date = ca_certificate_service.generate_pdf_bytes(name, item["program_date"])
+                document_id = f"CA-CERT-{uuid.uuid4().hex}"
+                repository.update_ca_certificate_job_item(item["id"], {
+                    "generation_status": "generated",
+                    "email_status": "pending",
+                    "document_id": document_id,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }, claim_token=item.get("claim_token"))
+                generated += 1
+            except Exception as exc:
+                failed += 1
+                repository.update_ca_certificate_job_item(item["id"], {
+                    "generation_status": "failed",
+                    "email_status": "failed",
+                    "attempt_count": int(item.get("attempt_count") or 0) + 1,
+                    "error_message": str(exc),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }, claim_token=item.get("claim_token"))
+        counts = repository.reconcile_ca_certificate_job(job_id)
+        return jsonify({"success": True, "job_id": job_id, "processed": processed, "generated": generated, "failed": failed, "counts": counts, "complete": len(batch) < min(max(int(data.get("batch_size", 10)), 1), 25)})
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+
+@app.post("/api/ca-certificate/bulk/parse-upload")
+def ca_certificate_bulk_parse_upload():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify({"success": False, "error": "CSV or Excel file is required."}), 400
+    try:
+        file_bytes = uploaded.read()
+        rows = parse_ca_file(file_bytes, uploaded.filename, preserve_blank_rows=True)
+        if not rows.get("success"):
+            return jsonify(rows), 400
+        rows["file_size_bytes"] = len(file_bytes)
+        rows["file_size_label"] = (
+            f"{len(file_bytes) / 1024:.1f} KB"
+            if len(file_bytes) < 1024 * 1024
+            else f"{len(file_bytes) / (1024 * 1024):.1f} MB"
+        )
+        return jsonify(rows)
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+
+@app.post("/api/ca-certificate/bulk/generate")
+def ca_certificate_bulk_generate():
+    data = request.get_json(force=True) or {}
+    rows = data.get("rows") or []
+    date_value = str(data.get("program_date") or "").strip()
+    generated = []
+    errors = []
+    for index, row in enumerate(rows, 1):
+        name = str(row.get("participant_name") or row.get("student_name") or "").strip()
+        email = str(row.get("participant_email") or row.get("student_email") or "").strip().lower()
+        if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+            errors.append({"row": index, "error": "Invalid participant name or email."})
+            continue
+        try:
+            filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+            ca_certificate_service.generate_pdf_bytes(name, date_value)
+            generated.append({"row": index, "participant_name": name, "participant_email": email, "filename": filename})
+        except Exception as exc:
+            errors.append({"row": index, "error": str(exc)})
+    return jsonify({"success": True, "generated": generated, "errors": errors})
+
+
+@app.post("/api/ca-certificate/bulk/download")
+def ca_certificate_bulk_download():
+    data = request.get_json(force=True) or {}
+    certificates = data.get("certificates") or []
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for certificate in certificates[:25]:
+            name = str(certificate.get("participant_name") or "").strip()
+            date_value = str(certificate.get("program_date") or "").strip()
+            if not name or not date_value:
+                continue
+            pdf_bytes, _ = ca_certificate_service.generate_pdf_bytes(name, date_value)
+            filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
+            bundle.writestr(filename, pdf_bytes)
+    archive.seek(0)
+    return Response(
+        archive.read(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": "attachment; filename=Persevex_CA_Certificates.zip"},
+    )
 
 @app.get("/certificate")
 def certificate_page():
@@ -5749,30 +6304,13 @@ def verify_image_certificate(certificate_id):
 # ============================================================
 
 if __name__ == "__main__":
-
-    print(
-        "========================================"
-    )
-
-    print(
-        "Persevex Offer Letter Generator"
-    )
-
-    print(
-        "========================================"
-    )
-
-    print(
-        "Running at:"
-    )
-
-    print(
-        "http://127.0.0.1:5000"
-    )
-
-    print(
-        "========================================"
-    )
+    env_info = get_environment_info()
+    print("========================================")
+    print("Persevex Offer Letter Generator")
+    print(f"Environment : {env_info['mode'].upper()}")
+    print(f"Supabase Ref: {env_info['supabase_ref']}")
+    print("Running at  : http://127.0.0.1:5000")
+    print("========================================")
 
     app.run(
         host="0.0.0.0",

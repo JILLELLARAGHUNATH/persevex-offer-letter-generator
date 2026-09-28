@@ -70,7 +70,7 @@ def is_valid_email(email_str):
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", s))
 
 
-def parse_ca_file(file_bytes, filename):
+def parse_ca_file(file_bytes, filename, preserve_blank_rows=False):
     """
     Parse uploaded Excel (.xlsx, .xls) or CSV (.csv) file bytes.
     Extracts ONLY Candidate Name and Candidate Email columns.
@@ -190,6 +190,7 @@ def parse_ca_file(file_bytes, filename):
     unique_candidates = []
     all_valid_candidates = []
     invalid_rows = []
+    result_rows = []
     seen_emails = set()
     duplicate_count = 0
 
@@ -197,10 +198,8 @@ def parse_ca_file(file_bytes, filename):
     total_data_rows = 0
 
     for idx, r in enumerate(data_rows, start=2):  # Row 2 in Excel is first data row
-        # Skip completely blank rows
-        if not any(c is not None and str(c).strip() for c in r):
+        if not preserve_blank_rows and not any(c is not None and str(c).strip() for c in r):
             continue
-
         total_data_rows += 1
 
         raw_name = str(r[name_col_idx]).strip() if name_col_idx < len(r) and r[name_col_idx] is not None else ""
@@ -215,14 +214,19 @@ def parse_ca_file(file_bytes, filename):
 
         if is_name_ok and is_email_ok:
             norm_email = raw_email.strip().lower()
-            all_valid_candidates.append({
+            row_data = {
                 "row_num": idx,
                 "name": raw_name,
                 "email": norm_email,
-                "valid": True
-            })
+                "valid": True,
+                "duplicate": norm_email in seen_emails,
+                "reason": ""
+            }
+            all_valid_candidates.append(row_data)
             if norm_email in seen_emails:
                 duplicate_count += 1
+                row_data["valid"] = False
+                row_data["reason"] = "Duplicate email address"
             else:
                 seen_emails.add(norm_email)
                 unique_candidates.append({
@@ -240,12 +244,25 @@ def parse_ca_file(file_bytes, filename):
             elif not is_email_ok:
                 reason_parts.append(f"Invalid email format: '{raw_email}'")
 
-            invalid_rows.append({
+            reason = " & ".join(reason_parts)
+            invalid_row = {
                 "row_num": idx,
                 "name": raw_name or "—",
                 "email": raw_email or "—",
-                "reason": " & ".join(reason_parts)
+                "reason": reason
+            }
+            invalid_rows.append(invalid_row)
+            result_rows.append({
+                "row_num": idx,
+                "name": raw_name,
+                "email": raw_email,
+                "valid": False,
+                "duplicate": False,
+                "reason": reason
             })
+
+        if is_name_ok and is_email_ok:
+            result_rows.append(row_data)
 
     if total_data_rows == 0:
         return {
@@ -253,20 +270,27 @@ def parse_ca_file(file_bytes, filename):
             "error": "The uploaded file has headers but contains no data rows."
         }
 
-    names_text = "\n".join(c["name"] for c in all_valid_candidates)
-    emails_text = "\n".join(c["email"] for c in all_valid_candidates)
+    names_text = "\n".join(
+        str(r.get("name") or "") for r in result_rows
+    )
+    emails_text = "\n".join(
+        str(r.get("email") or "") for r in result_rows
+    )
+    valid_count = len(unique_candidates)
+    invalid_count = len(invalid_rows)
 
     return {
         "success": True,
         "filename": filename,
         "total_rows": total_data_rows,
-        "valid_count": len(unique_candidates),
+        "valid_count": valid_count,
         "total_valid_rows": len(all_valid_candidates),
         "unique_count": len(unique_candidates),
-        "invalid_count": len(invalid_rows),
+        "invalid_count": invalid_count,
         "duplicate_count": duplicate_count,
         "candidates": unique_candidates,
         "invalid_rows": invalid_rows,
+        "rows": result_rows,
         "names_text": names_text,
         "emails_text": emails_text,
     }

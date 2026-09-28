@@ -1,10 +1,9 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv()
+from environment_config import load_application_environment
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_application_environment(BASE_DIR)
 
 # Database configuration
 DATABASE_TYPE = os.getenv("DATABASE_TYPE", "supabase").strip().lower()
@@ -25,4 +24,7 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-1").strip()
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "").strip()
 
 # Local SQLite database path
-SQLITE_DB_PATH = BASE_DIR / "certificates_local.db"
+SQLITE_DB_PATH = Path(os.getenv(
+    "PERSEVEX_SQLITE_DB_PATH",
+    str(BASE_DIR / "certificates_local.db"),
+))

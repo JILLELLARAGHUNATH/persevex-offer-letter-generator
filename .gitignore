@@ -42,3 +42,6 @@ Thumbs.db
 
 generated_certificates/
 scratch/
+ca_pdf_visual_tests/
+.env
+.env.*

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CA Certificate Generator | Persevex</title>
+    <link rel="icon" href="/static/persevex-icon.png">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+    <header>
+        <div class="brand-group">
+            <div class="brand-icon-wrapper"><img src="/static/persevex-icon.png" width="32" height="32" alt="Persevex Logo"></div>
+            <div class="brand-text-block"><div class="brand">persevex <span class="brand-llp">LLP</span></div><div class="tagline">LEARN, GROW, SUCCEED</div></div>
+        </div>
+        <h1>CA <span class="highlight">CERTIFICATE</span></h1>
+        <nav class="nav-links-wrapper" aria-label="Primary navigation">
+            <a href="/" class="nav-tab-link" title="Offer Letter Generator"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2-2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>Offer Letter</span></a>
+            <a href="/campus-ambassador" class="nav-tab-link" title="CA Letter"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><span>CA Letter</span></a>
+            <a href="/certificate" class="nav-tab-link" title="Internship Certificate"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg><span>Certificate</span></a>
+            <a href="/ca-certificate" class="nav-tab-link active" title="CA Certificate"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path></svg><span>CA Certificate</span></a>
+            <a href="/history" class="nav-tab-link" title="Unified History"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>History</span></a>
+        </nav>
+        <div class="header-stats" aria-label="CA Certificate delivery summary">
+            <div class="header-stat success-stat"><div class="stat-icon-wrapper"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div><span>Success: <strong id="successCount">{{ success_count or 0 }}</strong></span></div>
+            <div class="header-stat failed-stat"><div class="stat-icon-wrapper"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div><span>Failed: <strong id="failedCount">{{ failed_count or 0 }}</strong></span></div>
+        </div>
+        <div class="header-actions"><a href="/logout" class="logout-btn" title="Sign out of Persevex"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>Logout</span></a></div>
+    </header>
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <a class="mode-pill-btn active" href="/ca-certificate"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>Single CA Certificate</a>
+            <a class="mode-pill-btn" href="/ca-certificate/bulk"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>Bulk CA Certificates</a>
+        </div>
+    </div>
+    <main class="ca-certificate-layout">
+        <section class="card form-card-animate">
+            <div class="card-header"><h2><svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>Candidate Details</h2><span class="section-tag">CA Certificate</span></div>
+            <form id="caCertForm" autocomplete="off">
+                <div class="form-group"><label for="participantName">Participant Name <span class="required-star">*</span></label><input id="participantName" type="text" required placeholder="e.g. Rkl Anurag" autocomplete="off"></div>
+                <div class="form-group"><label for="participantEmail">Email Address</label><input id="participantEmail" type="email" placeholder="e.g. participant@gmail.com" autocomplete="off"></div>
+                <div class="form-group"><label for="programDate">Program Date <span class="required-star">*</span></label><input id="programDate" type="date" value="{{ today_iso }}" required><div class="hours-note">Defaults to today's date ({{ today_formatted }}).</div></div>
+                <button class="generate-btn" type="submit" id="generateBtn"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg><span>Generate CA Certificate</span></button>
+            </form>
+            <div id="message" aria-live="polite"></div>
+        </section>
+        <section class="card preview-card-animate">
+            <div class="card-header"><h2><svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>Certificate Preview</h2><span id="previewStatusBadge" class="section-tag">Awaiting Generation</span></div>
+            <div class="preview-container cert-preview-container" id="previewContainer">
+                <div id="emptyPreview" class="preview-placeholder"><div class="placeholder-icon-ring"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg></div><p class="placeholder-title">No CA Certificate Generated Yet</p><p class="placeholder-desc">Fill out the participant details and click <strong>Generate CA Certificate</strong> to create the PDF preview.</p></div>
+                <iframe id="pdfPreview" class="pdf-preview-frame" title="CA Certificate PDF Preview" style="display:none"></iframe>
+            </div>
+            <div class="preview-actions" id="previewActions">
+                <a id="downloadBtn" class="action-btn download-btn" download aria-disabled="true"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>Download PDF</span></a>
+                <button id="sendBtn" class="action-btn send-btn" type="button" disabled><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg><span>Send to Candidate</span></button>
+            </div>
+        </section>
+    </main>
+</div>
+<script>
+const form=document.getElementById('caCertForm'), preview=document.getElementById('pdfPreview'), empty=document.getElementById('emptyPreview'), download=document.getElementById('downloadBtn'), send=document.getElementById('sendBtn'), message=document.getElementById('message'), generate=document.getElementById('generateBtn'); let generated=null;
+function invalidate(){generated=null;preview.style.display='none';empty.style.display='flex';download.style.pointerEvents='none';download.style.opacity='.5';download.removeAttribute('href');download.setAttribute('aria-disabled','true');send.disabled=true}
+['participantName','participantEmail','programDate'].forEach(id=>document.getElementById(id).addEventListener('input',invalidate));
+form.addEventListener('submit',async e=>{e.preventDefault();if(generate.disabled)return;invalidate();generate.disabled=true;generate.classList.add('is-generating');message.textContent='Generating CA Certificate...';const payload={participant_name:participantName.value.trim(),participant_email:participantEmail.value.trim(),program_date:programDate.value};try{const r=await fetch('/api/ca-certificate/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok||!d.success){message.textContent=d.error||'Generation failed.';return}const pdf=await fetch('/api/ca-certificate/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!pdf.ok)throw new Error('Certificate PDF generation failed.');const blob=await pdf.blob();const blobUrl=URL.createObjectURL(blob);generated={...payload,document_id:d.document_id};generated.filename=d.filename;preview.src=blobUrl;preview.style.display='block';empty.style.display='none';download.href=blobUrl;download.download=d.filename;download.style.pointerEvents='auto';download.style.opacity='1';download.removeAttribute('aria-disabled');send.disabled=false;message.textContent='Certificate generated.'}catch(err){message.textContent=err.message||'Generation failed. Please try again.'}finally{generate.disabled=false;generate.classList.remove('is-generating')}});
+send.addEventListener('click',async()=>{if(!generated||send.disabled)return;if(!participantEmail.value.trim()){message.textContent='Enter an email address to send the certificate.';return}send.disabled=true;send.classList.add('is-sending');try{const r=await fetch('/api/ca-certificate/send-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...generated,participant_email:participantEmail.value.trim()})});const d=await r.json();if(r.status===409){message.textContent=d.message;send.disabled=true}else if(r.status===202){message.textContent='Delivery outcome is uncertain. Do not retry; reconcile the delivery before sending again.';send.disabled=true}else if(d.success){localStorage.setItem('persevex_history_updated',Date.now().toString());message.textContent=d.warning||d.message;send.disabled=true}else{message.textContent=d.error||'Send failed.';send.disabled=false}}catch(err){message.textContent='Delivery request failed. Check delivery history before retrying.';send.disabled=true}finally{send.classList.remove('is-sending')}});
+</script>
+</body>
+</html>

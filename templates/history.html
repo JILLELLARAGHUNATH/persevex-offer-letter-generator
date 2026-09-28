@@ -58,6 +58,7 @@
                 </svg>
                 <span>Certificate</span>
             </a>
+            <a href="/ca-certificate" class="nav-tab-link" title="CA Certificate Generator"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path></svg><span>CA Certificate</span></a>
             <a href="/history" class="nav-tab-link active" title="Unified History">
                 <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -100,13 +101,14 @@
                     <button type="button" class="type-filter-pill {% if record_type in ('offer_letter', 'offer') %}active{% endif %}" data-type="offer_letter">Offer Letters</button>
                     <button type="button" class="type-filter-pill {% if record_type in ('ca_letter', 'ca', 'campus_ambassador') %}active{% endif %}" data-type="ca_letter">CA Offer Letters</button>
                     <button type="button" class="type-filter-pill {% if record_type in ('certificate', 'cert') %}active{% endif %}" data-type="certificate">Certificates</button>
+                    <button type="button" class="type-filter-pill {% if record_type in ('ca_certificate', 'ca_certificates', 'ca_cert') %}active{% endif %}" data-type="ca_certificate">CA Certificates</button>
                 </div>
             </div>
 
             <!-- =================================================
                  DASHBOARD SUMMARY METRICS (GLOBAL COUNTS)
                  ================================================= -->
-            <div class="history-summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+            <div class="history-summary-grid">
                 <div class="summary-stat-card stat-total">
                     <div class="stat-icon-wrapper">
                         <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -159,6 +161,18 @@
                     <div class="stat-info">
                         <span class="stat-label">Certificates</span>
                         <span class="stat-value" id="summaryTotalCerts">{{ total_certificates or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card" style="border-left: 4px solid #14b8a6;">
+                    <div class="stat-icon-wrapper" style="background: #f0fdfa; color: #0f766e;">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3v18"></path><path d="M3 12h18"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">CA Certificates</span>
+                        <span class="stat-value" id="summaryTotalCaCertificates">{{ total_ca_certificates or 0 }}</span>
                     </div>
                 </div>
 
@@ -384,6 +398,8 @@
                                     <td class="cell-type" data-label="Type">
                                         {% if record.record_type == 'ca_letter' %}
                                             <span class="type-badge-ca">CA Offer Letter</span>
+                                        {% elif record.record_type == 'ca_certificate' %}
+                                            <span class="type-badge-ca">CA Certificate</span>
                                         {% elif record.record_type == 'offer_letter' %}
                                             <span class="type-badge-offer">Offer Letter</span>
                                         {% else %}
@@ -418,6 +434,8 @@
                                                 {{ record.start_date }} → {{ record.end_date }}
                                             {% elif record.issued_date %}
                                                 Issued: {{ record.issued_date }}
+                                            {% elif record.record_type == 'ca_certificate' %}
+                                                Program: {{ record.start_date }}
                                             {% else %}
                                                 -
                                             {% endif %}
@@ -839,9 +857,11 @@ function updateDashboardMetrics(data) {
     animateCounter(document.getElementById('summaryTotalOffers'), data.total_offer_letters || 0);
     animateCounter(document.getElementById('summaryTotalCaOffers'), data.total_ca_letters || 0);
     animateCounter(document.getElementById('summaryTotalCerts'), data.total_certificates || 0);
+    animateCounter(document.getElementById('summaryTotalCaCertificates'), data.total_ca_certificates || 0);
     animateCounter(document.getElementById('summarySentRecords'), data.total_sent || 0);
     animateCounter(document.getElementById('summaryFailedRecords'), data.total_failed || 0);
 }
+
 
 function renderTableRecords(records) {
     const tbody = document.getElementById('historyTableBody');

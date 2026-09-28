@@ -5,7 +5,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from dotenv import load_dotenv
+from environment_config import load_application_environment
 
 from database.config import (
     DATABASE_TYPE,
@@ -14,7 +14,7 @@ from database.config import (
     SUPABASE_KEY,
 )
 
-load_dotenv()
+load_application_environment(Path(__file__).resolve().parent.parent)
 
 # Global Supabase client singleton
 _supabase_client = None
@@ -140,6 +140,31 @@ def init_database_tables():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS campus_ambassador_certificate_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                participant_name TEXT NOT NULL,
+                participant_email TEXT NOT NULL,
+                program_date TEXT NOT NULL,
+                document_id TEXT UNIQUE NOT NULL,
+                pdf_filename TEXT,
+                email_status TEXT DEFAULT 'pending',
+                sent_at TEXT,
+                send_count INTEGER DEFAULT 0,
+                error_message TEXT,
+                created_at TEXT,
+                template_version TEXT DEFAULT 'v1',
+                claim_token TEXT,
+                claimed_at TEXT
+            )
+        """)
+        cursor.execute("PRAGMA table_info(campus_ambassador_certificate_history)")
+        ca_cert_columns = [row[1] for row in cursor.fetchall()]
+        if "claim_token" not in ca_cert_columns:
+            cursor.execute("ALTER TABLE campus_ambassador_certificate_history ADD COLUMN claim_token TEXT")
+        if "claimed_at" not in ca_cert_columns:
+            cursor.execute("ALTER TABLE campus_ambassador_certificate_history ADD COLUMN claimed_at TEXT")
+
         conn.commit()
         conn.close()
     except Exception as exc:
@@ -147,6 +172,430 @@ def init_database_tables():
 
 
 init_database_tables()
+
+
+def get_ca_certificate_by_id(record_id):
+    try:
+        rec_id = int(record_id)
+    except (TypeError, ValueError):
+        return None
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = sb.table("campus_ambassador_certificate_history").select("*").eq("id", rec_id).limit(1).execute()
+            return dict(result.data[0]) if result.data else None
+        except Exception as exc:
+            print("SUPABASE GET CA CERTIFICATE ERROR (using fallback):", repr(exc))
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM campus_ambassador_certificate_history WHERE id = ?", (rec_id,)).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as exc:
+        print("LOCAL DB GET CA CERTIFICATE ERROR:", repr(exc))
+        return None
+
+
+def get_previous_sent_ca_certificate(email):
+    email = str(email or "").strip().lower()
+    if not email:
+        return None
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = (sb.table("campus_ambassador_certificate_history").select("*")
+                      .ilike("participant_email", email).eq("email_status", "sent")
+                      .order("created_at", desc=True).limit(1).execute())
+            return dict(result.data[0]) if result.data else None
+        except Exception as exc:
+            print("SUPABASE FIND CA CERTIFICATE ERROR (using fallback):", repr(exc))
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM campus_ambassador_certificate_history WHERE LOWER(TRIM(participant_email)) = ? AND email_status = 'sent' ORDER BY id DESC LIMIT 1",
+            (email,),
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as exc:
+        print("LOCAL DB FIND CA CERTIFICATE ERROR:", repr(exc))
+        return None
+
+
+def get_previous_sent_ca_certificates(emails):
+    normalized = sorted({str(email or "").strip().lower() for email in emails if str(email or "").strip()})
+    if not normalized:
+        return {}
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = (sb.table("campus_ambassador_certificate_history").select("*")
+                      .in_("participant_email", normalized).eq("email_status", "sent")
+                      .order("created_at", desc=True).execute())
+            records = {}
+            for raw in result.data or []:
+                email = str(raw.get("participant_email") or "").strip().lower()
+                records.setdefault(email, dict(raw))
+            return records
+        except Exception as exc:
+            print("SUPABASE FIND CA CERTIFICATE BATCH ERROR (using fallback):", repr(exc))
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        placeholders = ", ".join("?" for _ in normalized)
+        rows = conn.execute(
+            f"SELECT * FROM campus_ambassador_certificate_history "
+            f"WHERE LOWER(TRIM(participant_email)) IN ({placeholders}) AND email_status = 'sent' "
+            "ORDER BY id DESC",
+            tuple(normalized),
+        ).fetchall()
+        conn.close()
+        records = {}
+        for row in rows:
+            record = dict(row)
+            email = str(record.get("participant_email") or "").strip().lower()
+            records.setdefault(email, record)
+        return records
+    except Exception as exc:
+        print("LOCAL DB FIND CA CERTIFICATE BATCH ERROR:", repr(exc))
+        return {}
+
+
+def save_ca_certificate_record(data, existing_id=None):
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        "participant_name": str(data.get("participant_name") or "").strip(),
+        "participant_email": str(data.get("participant_email") or "").strip().lower(),
+        "program_date": str(data.get("program_date") or "").strip(),
+        "document_id": str(data.get("document_id") or "").strip(),
+        "pdf_filename": str(data.get("pdf_filename") or "").strip(),
+        "email_status": str(data.get("email_status") or "pending").strip().lower(),
+        "sent_at": data.get("sent_at"),
+        "send_count": int(data.get("send_count") or 0),
+        "error_message": data.get("error_message"),
+        "created_at": data.get("created_at") or now,
+        "template_version": str(data.get("template_version") or "v1"),
+    }
+    if not record["participant_name"] or not record["participant_email"] or not record["document_id"]:
+        raise ValueError("CA Certificate record is missing required fields.")
+    supabase_configured = bool(SUPABASE_URL and SUPABASE_KEY)
+    supabase_saved = not supabase_configured
+    supabase_error = None
+    sb = get_supabase_client()
+    if sb:
+        try:
+            if existing_id:
+                result = sb.table("campus_ambassador_certificate_history").update(record).eq("id", int(existing_id)).execute()
+            else:
+                result = sb.table("campus_ambassador_certificate_history").upsert(
+                    record, on_conflict="document_id"
+                ).execute()
+            if result.data is None or (existing_id and not result.data):
+                raise RuntimeError("Supabase did not confirm the CA Certificate history write.")
+            supabase_saved = True
+        except Exception as exc:
+            supabase_error = str(exc)
+            print("SUPABASE SAVE CA CERTIFICATE ERROR (local reconciliation copy retained):", repr(exc))
+    elif supabase_configured:
+        supabase_error = "Supabase client could not be initialized."
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    if existing_id:
+        columns = ", ".join(f"{key} = ?" for key in record)
+        cursor = conn.execute(
+            f"UPDATE campus_ambassador_certificate_history SET {columns} WHERE id = ?",
+            tuple(record.values()) + (int(existing_id),),
+        )
+        if cursor.rowcount == 0:
+            conn.execute(
+                f"INSERT OR REPLACE INTO campus_ambassador_certificate_history ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
+                tuple(record.values()),
+            )
+    else:
+        columns = ", ".join(record)
+        placeholders = ", ".join("?" for _ in record)
+        update_columns = ", ".join(
+            f"{key} = excluded.{key}" for key in record if key != "document_id"
+        )
+        conn.execute(
+            f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
+            tuple(record.values()),
+        )
+    conn.commit()
+    conn.close()
+    if not supabase_configured:
+        persistence_status = "local_only"
+    elif supabase_saved:
+        persistence_status = "supabase_and_local"
+    else:
+        persistence_status = "local_only"
+    return {
+        "saved": True,
+        "supabase_saved": supabase_saved,
+        "local_saved": True,
+        "status": persistence_status,
+        "error": supabase_error,
+    }
+
+
+def claim_ca_certificate_single_email(data, claim_token, allow_resend=False):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required to safely claim single CA Certificate email delivery.")
+    result = sb.rpc("claim_ca_certificate_single_email", {
+        "p_participant_name": data["participant_name"],
+        "p_participant_email": data["participant_email"],
+        "p_program_date": data["program_date"],
+        "p_document_id": data["document_id"],
+        "p_pdf_filename": data["pdf_filename"],
+        "p_claim_token": str(claim_token),
+        "p_allow_resend": bool(allow_resend),
+    }).execute()
+    rows = result.data or []
+    row = rows[0] if isinstance(rows, list) and rows else rows
+    return dict(row) if row else {"claimed": False, "email_status": "unknown"}
+
+
+def finish_ca_certificate_single_email(record_id, claim_token, data):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required to finalize single CA Certificate email delivery.")
+    now = datetime.now(timezone.utc).isoformat()
+    values = {
+        "participant_name": str(data["participant_name"]).strip(),
+        "participant_email": str(data["participant_email"]).strip().lower(),
+        "program_date": str(data["program_date"]).strip(),
+        "document_id": str(data["document_id"]).strip(),
+        "pdf_filename": str(data.get("pdf_filename") or "").strip(),
+        "email_status": str(data["email_status"]).strip().lower(),
+        "sent_at": data.get("sent_at"),
+        "send_count": int(data.get("send_count") or 0),
+        "error_message": data.get("error_message"),
+        "template_version": "v1",
+        "claim_token": None,
+        "claimed_at": None,
+    }
+    result = (sb.table("campus_ambassador_certificate_history").update(values)
+              .eq("id", int(record_id)).eq("claim_token", str(claim_token)).execute())
+    if not result.data:
+        return {
+            "saved": False,
+            "supabase_saved": False,
+            "local_saved": False,
+            "status": "claim_lost",
+            "error": "Delivery claim expired or was replaced; reconcile its outcome before retrying.",
+        }
+    local_values = {
+        **values,
+        "created_at": now,
+        "template_version": "v1",
+    }
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    columns = ", ".join(local_values)
+    placeholders = ", ".join("?" for _ in local_values)
+    update_columns = ", ".join(
+        f"{key} = excluded.{key}" for key in local_values if key != "document_id"
+    )
+    conn.execute(
+        f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
+        f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
+        tuple(local_values.values()),
+    )
+    conn.commit()
+    conn.close()
+    return {
+        "saved": True,
+        "supabase_saved": True,
+        "local_saved": True,
+        "status": "supabase_and_local",
+        "error": None,
+    }
+
+
+def delete_ca_certificate_record(record_id, document_id=None):
+    identifiers = {str(value).strip() for value in (record_id, document_id) if str(value or "").strip()}
+    if not identifiers:
+        return False
+
+    sb = get_supabase_client()
+    if sb:
+        deleted_count = 0
+        for ident in identifiers:
+            try:
+                if ident.isdigit():
+                    res = sb.table("campus_ambassador_certificate_history").delete().eq("id", int(ident)).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+                else:
+                    res = sb.table("campus_ambassador_certificate_history").delete().eq("document_id", ident).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+            except Exception as exc:
+                print("SUPABASE DELETE CA CERTIFICATE ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to delete CA certificate from Supabase: {exc}") from exc
+
+        if deleted_count > 0:
+            try:
+                conn = sqlite3.connect(SQLITE_DB_PATH)
+                for ident in identifiers:
+                    if ident.isdigit():
+                        conn.execute("DELETE FROM campus_ambassador_certificate_history WHERE id = ?", (int(ident),))
+                    else:
+                        conn.execute("DELETE FROM campus_ambassador_certificate_history WHERE document_id = ?", (ident,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                print("LOCAL DB DELETE CA CERTIFICATE SYNC WARNING:", repr(exc))
+            return True
+
+        return False
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    total_local_deleted = 0
+    for ident in identifiers:
+        if ident.isdigit():
+            cursor.execute("DELETE FROM campus_ambassador_certificate_history WHERE id = ?", (int(ident),))
+            total_local_deleted += cursor.rowcount
+        else:
+            cursor.execute("DELETE FROM campus_ambassador_certificate_history WHERE document_id = ?", (ident,))
+            total_local_deleted += cursor.rowcount
+    conn.commit()
+    conn.close()
+    return total_local_deleted > 0
+
+
+def create_ca_certificate_job(program_date, items, skipped_count=0):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    job = sb.table("campus_ambassador_certificate_jobs").insert({
+        "program_date": program_date,
+        "total_count": len(items) + int(skipped_count or 0),
+        "skipped_count": int(skipped_count or 0),
+        "status": "queued",
+    }).execute()
+    if not job.data:
+        raise RuntimeError("Supabase did not create the CA Certificate job.")
+    job_id = job.data[0]["id"]
+    payload = [{
+        "job_id": job_id,
+        "source_row": int(item["source_row"]),
+        "participant_name": item["participant_name"],
+        "participant_email": item["participant_email"],
+        "program_date": program_date,
+    } for item in items]
+    if payload:
+        result = sb.table("campus_ambassador_certificate_job_items").insert(payload).execute()
+        if not result.data:
+            raise RuntimeError("Supabase did not create CA Certificate job items.")
+    return job.data[0]
+
+
+def get_ca_certificate_job(job_id):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    result = sb.table("campus_ambassador_certificate_jobs").select("*").eq("id", str(job_id)).limit(1).execute()
+    return dict(result.data[0]) if result.data else None
+
+
+def claim_ca_certificate_job_items(job_id, batch_size):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    token = str(uuid.uuid4())
+    result = sb.rpc("claim_ca_certificate_job_items", {
+        "target_job": str(job_id),
+        "batch_size": min(max(int(batch_size), 1), 25),
+        "token": token,
+    }).execute()
+    return [dict(item) for item in (result.data or [])]
+
+
+def claim_ca_certificate_email_items(job_id, batch_size, retry_failed=False):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    token = str(uuid.uuid4())
+    result = sb.rpc("claim_ca_certificate_email_items", {
+        "target_job": str(job_id),
+        "batch_size": 1,
+        "token": token,
+        "retry_failed": bool(retry_failed),
+    }).execute()
+    return [dict(item) for item in (result.data or [])]
+
+
+def update_ca_certificate_job_item(item_id, values, claim_token=None):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    query = sb.table("campus_ambassador_certificate_job_items").update(values).eq("id", str(item_id))
+    if claim_token:
+        query = query.eq("claim_token", str(claim_token))
+    result = query.execute()
+    return bool(result.data)
+
+
+def update_ca_certificate_job(job_id, values):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    result = sb.table("campus_ambassador_certificate_jobs").update(values).eq("id", str(job_id)).execute()
+    return bool(result.data)
+
+
+def get_ca_certificate_job_items(job_id, statuses=None):
+    sb = get_supabase_client()
+    if not sb:
+        raise RuntimeError("Supabase is required for resumable CA Certificate jobs.")
+    query = sb.table("campus_ambassador_certificate_job_items").select("*").eq("job_id", str(job_id))
+    if statuses:
+        query = query.in_("email_status", list(statuses))
+    result = query.order("source_row").execute()
+    return [dict(item) for item in (result.data or [])]
+
+
+def reconcile_ca_certificate_job(job_id):
+    items = get_ca_certificate_job_items(job_id)
+    job = get_ca_certificate_job(job_id) or {}
+    generation_terminal = {"generated", "failed", "skipped"}
+    item_skipped = sum(
+        1 for item in items
+        if item.get("generation_status") == "skipped"
+        or item.get("email_status") == "skipped"
+    )
+    skipped = max(int(job.get("skipped_count") or 0), item_skipped)
+    processed = sum(1 for item in items if item.get("generation_status") in generation_terminal) + skipped
+    generated = sum(1 for item in items if item.get("generation_status") == "generated")
+    sent = sum(1 for item in items if item.get("email_status") == "sent")
+    failed = sum(
+        1 for item in items
+        if item.get("generation_status") == "failed"
+        or item.get("email_status") in {"failed", "uncertain"}
+    )
+    active = any(
+        item.get("generation_status") in {"pending", "processing"}
+        or item.get("email_status") in {"pending", "sending"}
+        for item in items
+    )
+    status = "running" if active else ("completed_with_errors" if failed else "completed")
+    values = {
+        "status": status,
+        "processed_count": processed,
+        "generated_count": generated,
+        "sent_count": sent,
+        "failed_count": failed,
+        "skipped_count": skipped,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if not active:
+        values["completed_at"] = datetime.now(timezone.utc).isoformat()
+    update_ca_certificate_job(job_id, values)
+    return values
 
 
 # ============================================================
@@ -431,44 +880,62 @@ def delete_campus_ambassador_record(record_id, document_id=None):
     Targets ONLY exact numeric ID or exact offer_letter_id.
     Never deletes from email_history.
     """
-    deleted = False
-    sb = get_supabase_client()
     identifiers = set()
     if record_id is not None and str(record_id).strip():
         identifiers.add(str(record_id).strip())
     if document_id is not None and str(document_id).strip():
         identifiers.add(str(document_id).strip())
 
-    if sb and identifiers:
-        for ident in identifiers:
-            if ident.isdigit():
-                try:
-                    sb.table("campus_ambassador_history").delete().eq("id", int(ident)).execute()
-                    deleted = True
-                except Exception as exc:
-                    print("SUPABASE DELETE CA ID ERROR:", repr(exc))
-            else:
-                try:
-                    sb.table("campus_ambassador_history").delete().eq("offer_letter_id", ident).execute()
-                    deleted = True
-                except Exception:
-                    pass
+    if not identifiers:
+        return False
 
-    try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        cursor = conn.cursor()
+    sb = get_supabase_client()
+    if sb:
+        deleted_count = 0
         for ident in identifiers:
-            if ident.isdigit():
-                cursor.execute("DELETE FROM campus_ambassador_history WHERE id = ?", (int(ident),))
-            else:
-                cursor.execute("DELETE FROM campus_ambassador_history WHERE offer_letter_id = ?", (ident,))
-        conn.commit()
-        conn.close()
-        deleted = True
-    except Exception as exc:
-        print("LOCAL DB DELETE CA ERROR:", repr(exc))
+            try:
+                if ident.isdigit():
+                    res = sb.table("campus_ambassador_history").delete().eq("id", int(ident)).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+                else:
+                    res = sb.table("campus_ambassador_history").delete().eq("offer_letter_id", ident).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+            except Exception as exc:
+                print("SUPABASE DELETE CA ID ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to delete CA offer letter from Supabase: {exc}") from exc
 
-    return deleted
+        if deleted_count > 0:
+            try:
+                conn = sqlite3.connect(SQLITE_DB_PATH)
+                cursor = conn.cursor()
+                for ident in identifiers:
+                    if ident.isdigit():
+                        cursor.execute("DELETE FROM campus_ambassador_history WHERE id = ?", (int(ident),))
+                    else:
+                        cursor.execute("DELETE FROM campus_ambassador_history WHERE offer_letter_id = ?", (ident,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                print("LOCAL DB DELETE CA SYNC WARNING:", repr(exc))
+            return True
+
+        return False
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    total_local_deleted = 0
+    for ident in identifiers:
+        if ident.isdigit():
+            cursor.execute("DELETE FROM campus_ambassador_history WHERE id = ?", (int(ident),))
+            total_local_deleted += cursor.rowcount
+        else:
+            cursor.execute("DELETE FROM campus_ambassador_history WHERE offer_letter_id = ?", (ident,))
+            total_local_deleted += cursor.rowcount
+    conn.commit()
+    conn.close()
+    return total_local_deleted > 0
 
 
 def get_previous_sent_campus_ambassador_by_email(email):
@@ -800,44 +1267,62 @@ def delete_offer_letter_record(record_id, document_id=None):
     Targets ONLY exact numeric ID or exact offer_letter_id (e.g. OL-123 or document filename stem).
     Never deletes by email address to prevent accidental cascades.
     """
-    deleted = False
-    sb = get_supabase_client()
     identifiers = set()
     if record_id is not None and str(record_id).strip():
         identifiers.add(str(record_id).strip())
     if document_id is not None and str(document_id).strip():
         identifiers.add(str(document_id).strip())
 
-    if sb and identifiers:
-        for ident in identifiers:
-            if ident.isdigit():
-                try:
-                    sb.table("email_history").delete().eq("id", int(ident)).execute()
-                    deleted = True
-                except Exception as exc:
-                    print("SUPABASE DELETE ID ERROR:", repr(exc))
-            else:
-                try:
-                    sb.table("email_history").delete().eq("offer_letter_id", ident).execute()
-                    deleted = True
-                except Exception:
-                    pass
+    if not identifiers:
+        return False
 
-    try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        cursor = conn.cursor()
+    sb = get_supabase_client()
+    if sb:
+        deleted_count = 0
         for ident in identifiers:
-            if ident.isdigit():
-                cursor.execute("DELETE FROM email_history WHERE id = ?", (int(ident),))
-            else:
-                cursor.execute("DELETE FROM email_history WHERE offer_letter_id = ?", (ident,))
-        conn.commit()
-        conn.close()
-        deleted = True
-    except Exception as exc:
-        print("LOCAL DB DELETE OFFER LETTER ERROR:", repr(exc))
+            try:
+                if ident.isdigit():
+                    res = sb.table("email_history").delete().eq("id", int(ident)).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+                else:
+                    res = sb.table("email_history").delete().eq("offer_letter_id", ident).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+            except Exception as exc:
+                print("SUPABASE DELETE ID ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to delete offer letter from Supabase: {exc}") from exc
 
-    return deleted
+        if deleted_count > 0:
+            try:
+                conn = sqlite3.connect(SQLITE_DB_PATH)
+                cursor = conn.cursor()
+                for ident in identifiers:
+                    if ident.isdigit():
+                        cursor.execute("DELETE FROM email_history WHERE id = ?", (int(ident),))
+                    else:
+                        cursor.execute("DELETE FROM email_history WHERE offer_letter_id = ?", (ident,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                print("LOCAL DB DELETE OFFER LETTER SYNC WARNING:", repr(exc))
+            return True
+
+        return False
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    total_local_deleted = 0
+    for ident in identifiers:
+        if ident.isdigit():
+            cursor.execute("DELETE FROM email_history WHERE id = ?", (int(ident),))
+            total_local_deleted += cursor.rowcount
+        else:
+            cursor.execute("DELETE FROM email_history WHERE offer_letter_id = ?", (ident,))
+            total_local_deleted += cursor.rowcount
+    conn.commit()
+    conn.close()
+    return total_local_deleted > 0
 
 
 # ============================================================
@@ -1659,51 +2144,70 @@ def delete_certificate_record(record_id, document_id=None):
     Targets ONLY exact ID or exact certificate_id (PXL-CERT-...).
     Never deletes by email address to prevent accidental cascades.
     """
-    deleted = False
-    sb = get_supabase_client()
     identifiers = set()
     if record_id is not None and str(record_id).strip():
         identifiers.add(str(record_id).strip())
     if document_id is not None and str(document_id).strip():
         identifiers.add(str(document_id).strip())
 
-    if sb and identifiers:
-        for ident in identifiers:
-            if ident.isdigit():
-                try:
-                    sb.table("certificate_history").delete().eq("id", int(ident)).execute()
-                    deleted = True
-                except Exception as exc:
-                    print("SUPABASE DELETE CERT ID ERROR:", repr(exc))
-            if ident.startswith("PXL-CERT-") or "CERT" in ident:
-                try:
-                    sb.table("certificate_history").delete().eq("certificate_id", ident).execute()
-                    deleted = True
-                except Exception as exc:
-                    print("SUPABASE DELETE CERTIFICATE_ID ERROR:", repr(exc))
+    if not identifiers:
+        return False
 
-    try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        cursor = conn.cursor()
+    sb = get_supabase_client()
+    if sb:
+        deleted_count = 0
         for ident in identifiers:
-            if ident.isdigit():
-                cursor.execute("DELETE FROM certificate_history WHERE id = ?", (int(ident),))
-            if ident.startswith("PXL-CERT-") or "CERT" in ident:
-                cursor.execute("DELETE FROM certificate_history WHERE certificate_id = ?", (ident,))
-        conn.commit()
-        conn.close()
-        deleted = True
-    except Exception as exc:
-        print("LOCAL DB DELETE CERTIFICATE ERROR:", repr(exc))
+            try:
+                if ident.isdigit():
+                    res = sb.table("certificate_history").delete().eq("id", int(ident)).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+                if ident.startswith("PXL-CERT-") or "CERT" in ident:
+                    res = sb.table("certificate_history").delete().eq("certificate_id", ident).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+            except Exception as exc:
+                print("SUPABASE DELETE CERTIFICATE ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to delete certificate from Supabase: {exc}") from exc
 
-    return deleted
+        if deleted_count > 0:
+            try:
+                conn = sqlite3.connect(SQLITE_DB_PATH)
+                cursor = conn.cursor()
+                for ident in identifiers:
+                    if ident.isdigit():
+                        cursor.execute("DELETE FROM certificate_history WHERE id = ?", (int(ident),))
+                    if ident.startswith("PXL-CERT-") or "CERT" in ident:
+                        cursor.execute("DELETE FROM certificate_history WHERE certificate_id = ?", (ident,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                print("LOCAL DB DELETE CERTIFICATE SYNC WARNING:", repr(exc))
+            return True
+
+        return False
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    total_local_deleted = 0
+    for ident in identifiers:
+        if ident.isdigit():
+            cursor.execute("DELETE FROM certificate_history WHERE id = ?", (int(ident),))
+            total_local_deleted += cursor.rowcount
+        if ident.startswith("PXL-CERT-") or "CERT" in ident:
+            cursor.execute("DELETE FROM certificate_history WHERE certificate_id = ?", (ident,))
+            total_local_deleted += cursor.rowcount
+    conn.commit()
+    conn.close()
+    return total_local_deleted > 0
 
 
 def bulk_delete_records(items):
     """
-    Safely delete multiple records from email_history, campus_ambassador_history, and certificate_history.
-    items is a list of dicts: [{'record_type': 'offer_letter'|'ca_letter'|'certificate', 'id': ..., 'document_id': ...}, ...]
-    Returns: dict with total_deleted, offer_letters_deleted, ca_letters_deleted, certificates_deleted.
+    Safely delete multiple records from email_history, campus_ambassador_history,
+    certificate_history, and campus_ambassador_certificate_history.
+    items is a list of dicts: [{'record_type': 'offer_letter'|'ca_letter'|'certificate'|'ca_certificate', 'id': ..., 'document_id': ...}, ...]
+    Returns: dict with total_deleted, offer_letters_deleted, ca_letters_deleted, certificates_deleted, ca_certificates_deleted.
     """
     if not items or not isinstance(items, list):
         return {"success": False, "error": "No items provided for deletion.", "total_deleted": 0}
@@ -1711,6 +2215,7 @@ def bulk_delete_records(items):
     offer_items_to_delete = []
     ca_items_to_delete = []
     cert_items_to_delete = []
+    ca_cert_items_to_delete = []
 
     for item in items:
         if isinstance(item, dict):
@@ -1723,6 +2228,8 @@ def bulk_delete_records(items):
                 ca_items_to_delete.append((rec_id, doc_id))
             elif rec_type in ("offer_letter", "offer", "email_history"):
                 offer_items_to_delete.append((rec_id, doc_id))
+            elif rec_type in ("ca_certificate", "ca_certificates", "ca_cert"):
+                ca_cert_items_to_delete.append((rec_id, doc_id))
             elif rec_type in ("certificate", "cert", "certificate_history"):
                 cert_items_to_delete.append((rec_id, doc_id))
         elif isinstance(item, (int, str)):
@@ -1735,6 +2242,7 @@ def bulk_delete_records(items):
     deleted_offers = 0
     deleted_cas = 0
     deleted_certs = 0
+    deleted_ca_certs = 0
 
     for rec_id, doc_id in offer_items_to_delete:
         if delete_offer_letter_record(rec_id, doc_id):
@@ -1748,85 +2256,124 @@ def bulk_delete_records(items):
         if delete_certificate_record(rec_id, doc_id):
             deleted_certs += 1
 
+    for rec_id, doc_id in ca_cert_items_to_delete:
+        if delete_ca_certificate_record(rec_id, doc_id):
+            deleted_ca_certs += 1
+
     return {
         "success": True,
-        "total_deleted": deleted_offers + deleted_cas + deleted_certs,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
         "offer_letters_deleted": deleted_offers,
         "ca_letters_deleted": deleted_cas,
         "certificates_deleted": deleted_certs,
+        "ca_certificates_deleted": deleted_ca_certs,
     }
 
 
 def delete_all_history_records(record_type="all"):
     """
-    Safely purge all records from email_history, campus_ambassador_history, and/or certificate_history.
+    Safely purge all records from email_history, campus_ambassador_history,
+    certificate_history, and/or campus_ambassador_certificate_history.
     """
     rec_type = str(record_type or "all").strip().lower()
     sb = get_supabase_client()
     deleted_offers = 0
     deleted_cas = 0
     deleted_certs = 0
+    deleted_ca_certs = 0
 
-    # 1. Purge Offer Letters if requested
-    if rec_type in ("all", "offer_letter", "offer", "offer_letters"):
-        if sb:
+    if sb:
+        # 1. Purge Offer Letters if requested
+        if rec_type in ("all", "offer_letter", "offer", "offer_letters"):
             try:
-                sb.table("email_history").delete().neq("id", -999999).execute()
+                res = sb.table("email_history").delete().neq("id", -999999).execute()
+                deleted_offers = len(res.data) if res and res.data else 0
             except Exception as exc:
                 print("SUPABASE DELETE ALL OFFER LETTERS ERROR:", repr(exc))
-        try:
-            conn = sqlite3.connect(SQLITE_DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("SELECT count(*) FROM email_history")
-            deleted_offers = cursor.fetchone()[0]
-            cursor.execute("DELETE FROM email_history")
-            conn.commit()
-            conn.close()
-        except Exception as exc:
-            print("LOCAL DB DELETE ALL OFFER LETTERS ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to purge offer letters from Supabase: {exc}") from exc
 
-    # 2. Purge CA Offer Letters if requested
-    if rec_type in ("all", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
-        if sb:
+        # 2. Purge CA Offer Letters if requested
+        if rec_type in ("all", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
             try:
-                sb.table("campus_ambassador_history").delete().neq("id", -999999).execute()
+                res = sb.table("campus_ambassador_history").delete().neq("id", -999999).execute()
+                deleted_cas = len(res.data) if res and res.data else 0
             except Exception as exc:
                 print("SUPABASE DELETE ALL CA LETTERS ERROR:", repr(exc))
-        try:
-            conn = sqlite3.connect(SQLITE_DB_PATH)
-            cursor = conn.cursor()
-            cursor.execute("SELECT count(*) FROM campus_ambassador_history")
-            deleted_cas = cursor.fetchone()[0]
-            cursor.execute("DELETE FROM campus_ambassador_history")
-            conn.commit()
-            conn.close()
-        except Exception as exc:
-            print("LOCAL DB DELETE ALL CA LETTERS ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to purge CA offer letters from Supabase: {exc}") from exc
 
-    # 3. Purge Certificates if requested
-    if rec_type in ("all", "certificate", "cert", "certificate_history", "certificates"):
-        if sb:
+        # 3. Purge Certificates if requested
+        if rec_type in ("all", "certificate", "cert", "certificate_history", "certificates"):
             try:
-                sb.table("certificate_history").delete().neq("id", -999999).execute()
+                res = sb.table("certificate_history").delete().neq("id", -999999).execute()
+                deleted_certs = len(res.data) if res and res.data else 0
             except Exception as exc:
                 print("SUPABASE DELETE ALL CERTIFICATES ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to purge certificates from Supabase: {exc}") from exc
+
+        # 4. Purge CA Certificates if requested
+        if rec_type in ("all", "ca_certificate", "ca_certificates", "ca_cert"):
+            try:
+                res = sb.table("campus_ambassador_certificate_history").delete().neq("id", -999999).execute()
+                deleted_ca_certs = len(res.data) if res and res.data else 0
+            except Exception as exc:
+                print("SUPABASE DELETE ALL CA CERTIFICATES ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to purge CA certificates from Supabase: {exc}") from exc
+
+        # Sync purges to local SQLite mirror if local DB exists
         try:
             conn = sqlite3.connect(SQLITE_DB_PATH)
             cursor = conn.cursor()
-            cursor.execute("SELECT count(*) FROM certificate_history")
-            deleted_certs = cursor.fetchone()[0]
-            cursor.execute("DELETE FROM certificate_history")
+            if rec_type in ("all", "offer_letter", "offer", "offer_letters"):
+                cursor.execute("DELETE FROM email_history")
+            if rec_type in ("all", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+                cursor.execute("DELETE FROM campus_ambassador_history")
+            if rec_type in ("all", "certificate", "cert", "certificate_history", "certificates"):
+                cursor.execute("DELETE FROM certificate_history")
+            if rec_type in ("all", "ca_certificate", "ca_certificates", "ca_cert"):
+                cursor.execute("DELETE FROM campus_ambassador_certificate_history")
             conn.commit()
             conn.close()
         except Exception as exc:
-            print("LOCAL DB DELETE ALL CERTIFICATES ERROR:", repr(exc))
+            print("LOCAL DB PURGE SYNC WARNING:", repr(exc))
+
+        return {
+            "success": True,
+            "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
+            "offer_letters_deleted": deleted_offers,
+            "ca_letters_deleted": deleted_cas,
+            "certificates_deleted": deleted_certs,
+            "ca_certificates_deleted": deleted_ca_certs,
+        }
+
+    # Offline / local fallback only when no Supabase client is configured
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    if rec_type in ("all", "offer_letter", "offer", "offer_letters"):
+        cursor.execute("SELECT count(*) FROM email_history")
+        deleted_offers = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM email_history")
+    if rec_type in ("all", "ca_letter", "ca", "campus_ambassador", "ca_offer_letter", "ca_offer_letters"):
+        cursor.execute("SELECT count(*) FROM campus_ambassador_history")
+        deleted_cas = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM campus_ambassador_history")
+    if rec_type in ("all", "certificate", "cert", "certificate_history", "certificates"):
+        cursor.execute("SELECT count(*) FROM certificate_history")
+        deleted_certs = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM certificate_history")
+    if rec_type in ("all", "ca_certificate", "ca_certificates", "ca_cert"):
+        cursor.execute("SELECT count(*) FROM campus_ambassador_certificate_history")
+        deleted_ca_certs = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM campus_ambassador_certificate_history")
+    conn.commit()
+    conn.close()
 
     return {
         "success": True,
-        "total_deleted": deleted_offers + deleted_cas + deleted_certs,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
         "offer_letters_deleted": deleted_offers,
         "ca_letters_deleted": deleted_cas,
         "certificates_deleted": deleted_certs,
+        "ca_certificates_deleted": deleted_ca_certs,
     }
 
 
@@ -1875,10 +2422,10 @@ def _fetch_all_raw_offer_letters():
     if sb:
         try:
             res = sb.table("email_history").select("*").order("created_at", desc=True).execute()
-            if res.data is not None:
-                return res.data
+            return [dict(r) for r in (res.data or [])]
         except Exception as exc:
-            print("SUPABASE FETCH OFFER LETTERS ERROR (using fallback):", repr(exc))
+            print("SUPABASE FETCH OFFER LETTERS ERROR:", repr(exc))
+            raise RuntimeError(f"Failed to fetch offer letters from Supabase: {exc}") from exc
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -1898,10 +2445,10 @@ def _fetch_all_raw_campus_ambassador():
     if sb:
         try:
             res = sb.table("campus_ambassador_history").select("*").order("created_at", desc=True).execute()
-            if res.data is not None:
-                return res.data
+            return [dict(r) for r in (res.data or [])]
         except Exception as exc:
-            print("SUPABASE FETCH CA ERROR (using fallback):", repr(exc))
+            print("SUPABASE FETCH CA ERROR:", repr(exc))
+            raise RuntimeError(f"Failed to fetch CA offer letters from Supabase: {exc}") from exc
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -1921,10 +2468,10 @@ def _fetch_all_raw_certificates():
     if sb:
         try:
             res = sb.table("certificate_history").select("*").order("created_at", desc=True).execute()
-            if res.data is not None:
-                return res.data
+            return [dict(r) for r in (res.data or [])]
         except Exception as exc:
-            print("SUPABASE FETCH CERTIFICATES ERROR (using fallback):", repr(exc))
+            print("SUPABASE FETCH CERTIFICATES ERROR:", repr(exc))
+            raise RuntimeError(f"Failed to fetch certificates from Supabase: {exc}") from exc
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -1936,6 +2483,27 @@ def _fetch_all_raw_certificates():
         return [dict(r) for r in rows]
     except Exception as exc:
         print("LOCAL DB FETCH CERTIFICATES ERROR:", repr(exc))
+        return []
+
+
+def _fetch_all_raw_ca_certificates():
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = sb.table("campus_ambassador_certificate_history").select("*").order("created_at", desc=True).execute()
+            return [dict(row) for row in (result.data or [])]
+        except Exception as exc:
+            print("SUPABASE FETCH CA CERTIFICATES ERROR:", repr(exc))
+            raise RuntimeError(f"Failed to fetch CA certificates from Supabase: {exc}") from exc
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM campus_ambassador_certificate_history ORDER BY id DESC").fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as exc:
+        print("LOCAL DB FETCH CA CERTIFICATES ERROR:", repr(exc))
         return []
 
 
@@ -2002,6 +2570,7 @@ def get_unified_history(
     raw_offers = _fetch_all_raw_offer_letters()
     raw_cas = _fetch_all_raw_campus_ambassador()
     raw_certs = _fetch_all_raw_certificates()
+    raw_ca_certs = _fetch_all_raw_ca_certificates()
 
     unified_list = []
 
@@ -2137,6 +2706,40 @@ def get_unified_history(
             "sort_key": created_ts or sent_ts or "0"
         })
 
+    for r in raw_ca_certs:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        status_clean = "sent" if status_raw in ("sent", "success", "successful") else (
+            "uncertain" if status_raw == "uncertain"
+            else ("failed" if status_raw in ("failed", "failure", "error") else "pending")
+        )
+        created_ts = str(r.get("created_at") or r.get("sent_at") or "")
+        sent_ts = str(r.get("sent_at") or "")
+        document_id = r.get("document_id") or f"CA-CERT-{r.get('id')}"
+        filename = r.get("pdf_filename") or ""
+        unified_list.append({
+            "id": r.get("id"),
+            "record_type": "ca_certificate",
+            "type_label": "CA Certificate",
+            "document_id": document_id,
+            "student_name": r.get("participant_name") or "",
+            "student_email": r.get("participant_email") or "",
+            "domain": "Campus Ambassador",
+            "duration": "",
+            "start_date": r.get("program_date") or "",
+            "end_date": "",
+            "issued_date": "",
+            "letter_type": "CA Certificate",
+            "email_status": status_clean,
+            "sent_at": sent_ts,
+            "sent_at_display": format_ist_timestamp(sent_ts),
+            "created_at": created_ts,
+            "send_count": r.get("send_count") or 0,
+            "pdf_filename": filename,
+            "download_url": "",
+            "error_message": r.get("error_message") or "",
+            "sort_key": created_ts or sent_ts or "0"
+        })
+
     # Sort descending by sort_key
     unified_list.sort(key=lambda x: x.get("sort_key", ""), reverse=True)
 
@@ -2170,6 +2773,8 @@ def get_unified_history(
             records = [r for r in records if r["record_type"] == "ca_letter"]
         elif rec_type_clean in ("cert", "certificate", "certificates"):
             records = [r for r in records if r["record_type"] == "certificate"]
+        elif rec_type_clean in ("ca_certificate", "ca_certificates", "ca_cert"):
+            records = [r for r in records if r["record_type"] == "ca_certificate"]
 
     # 2. Filter: Live Search
     if search:
@@ -2187,7 +2792,12 @@ def get_unified_history(
     # 3. Filter: Status
     if status_filter and status_filter != "all":
         st_clean = status_filter.strip().lower()
-        records = [r for r in records if r["email_status"] == st_clean]
+        records = [
+            r for r in records
+            if r["email_status"] == st_clean
+            or (st_clean == "failed" and r["record_type"] == "ca_certificate"
+                and r["email_status"] == "uncertain")
+        ]
 
     # 4. Filter: Month (YYYY-MM)
     if month_filter and month_filter != "all":
@@ -2243,8 +2853,12 @@ def get_unified_history(
     total_offer_letters = sum(1 for r in records if r["record_type"] == "offer_letter")
     total_ca_letters = sum(1 for r in records if r["record_type"] == "ca_letter")
     total_certificates = sum(1 for r in records if r["record_type"] == "certificate")
+    total_ca_certificates = sum(1 for r in records if r["record_type"] == "ca_certificate")
     total_sent = sum(1 for r in records if r["email_status"] == "sent")
-    total_failed = sum(1 for r in records if r["email_status"] == "failed")
+    total_failed = sum(
+        1 for r in records
+        if r["email_status"] in {"failed", "uncertain"}
+    )
     total_pending = sum(1 for r in records if r["email_status"] == "pending")
 
     # Pagination
@@ -2276,6 +2890,7 @@ def get_unified_history(
         "total_offer_letters": total_offer_letters,
         "total_ca_letters": total_ca_letters,
         "total_certificates": total_certificates,
+        "total_ca_certificates": total_ca_certificates,
         "total_sent": total_sent,
         "total_failed": total_failed,
         "total_pending": total_pending,
