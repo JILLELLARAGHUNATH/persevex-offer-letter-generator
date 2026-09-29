@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 import unittest
 from io import BytesIO
@@ -420,6 +421,150 @@ class MigrationReleaseTests(unittest.TestCase):
         self.assertIn("LIMIT 1", sql)
         self.assertIn("SET search_path = pg_catalog, public", sql)
         self.assertNotIn("email_status = 'uncertain'\n", sql[sql.index("RETURN QUERY"):])
+
+
+
+class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
+    def test_finish_ca_certificate_single_email_handles_readonly_sqlite_safely(self):
+        sb_mock = MagicMock()
+        sb_mock.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": 99, "email_status": "sent"}]
+        )
+        with patch.object(repository, "get_supabase_client", return_value=sb_mock), \
+             patch("sqlite3.connect", side_effect=sqlite3.OperationalError("attempt to write a readonly database")):
+            result = repository.finish_ca_certificate_single_email(
+                99,
+                "claim-token-123",
+                {
+                    "participant_name": "Readonly Test",
+                    "participant_email": "readonly@example.invalid",
+                    "program_date": "29-09-2026",
+                    "document_id": "CA-CERT-readonly-test",
+                    "pdf_filename": "Readonly_CA_Certificate.pdf",
+                    "email_status": "sent",
+                    "send_count": 1,
+                },
+            )
+        self.assertTrue(result["saved"])
+        self.assertTrue(result["supabase_saved"])
+        self.assertFalse(result["local_saved"])
+        self.assertEqual(result["status"], "supabase_only")
+        self.assertIsNone(result["error"])
+
+    def test_save_ca_certificate_record_handles_readonly_sqlite_safely(self):
+        sb_mock = MagicMock()
+        sb_mock.table.return_value.upsert.return_value.execute.return_value = MagicMock(
+            data=[{"id": 101, "document_id": "CA-CERT-upsert"}]
+        )
+        with patch.object(repository, "get_supabase_client", return_value=sb_mock), \
+             patch("sqlite3.connect", side_effect=sqlite3.OperationalError("attempt to write a readonly database")):
+            result = repository.save_ca_certificate_record({
+                "participant_name": "Readonly Save",
+                "participant_email": "readonly_save@example.invalid",
+                "program_date": "29-09-2026",
+                "document_id": "CA-CERT-upsert",
+                "pdf_filename": "Readonly_Save.pdf",
+                "email_status": "sent",
+                "send_count": 1,
+            })
+        self.assertTrue(result["saved"])
+        self.assertTrue(result["supabase_saved"])
+        self.assertFalse(result["local_saved"])
+        self.assertEqual(result["status"], "supabase_only")
+        self.assertIsNone(result["error"])
+
+    def test_single_send_api_with_readonly_sqlite_returns_success_without_warning(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        claim_data = {"claimed": True, "record_id": 88, "send_count": 1}
+        smtp = MagicMock()
+        payload = {
+            "participant_name": "API Readonly",
+            "participant_email": "api_readonly@example.invalid",
+            "program_date": "2026-09-29",
+            "document_id": "CA-CERT-" + "c" * 32,
+        }
+
+        with patch.object(repository, "claim_ca_certificate_single_email", return_value=claim_data), \
+             patch.object(repository, "finish_ca_certificate_single_email",
+                          return_value={"saved": True, "supabase_saved": True, "local_saved": False, "status": "supabase_only", "error": None}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF synthetic", "29-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp):
+            smtp.__enter__.return_value = smtp
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertTrue(data["history_saved"])
+        self.assertEqual(data["history_status"], "supabase_only")
+        self.assertNotIn("warning", data)
+
+    def test_sqlite_connection_closed_safely_on_execution_exception(self):
+        sb_mock = MagicMock()
+        sb_mock.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+            data=[{"id": 105, "email_status": "sent"}]
+        )
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = sqlite3.OperationalError("disk I/O error during insert")
+        with patch.object(repository, "get_supabase_client", return_value=sb_mock), \
+             patch("sqlite3.connect", return_value=mock_conn):
+            result = repository.finish_ca_certificate_single_email(
+                105,
+                "claim-token-xyz",
+                {
+                    "participant_name": "Close Test",
+                    "participant_email": "close_test@example.invalid",
+                    "program_date": "29-09-2026",
+                    "document_id": "CA-CERT-close-test",
+                    "pdf_filename": "Close_Test.pdf",
+                    "email_status": "sent",
+                    "send_count": 1,
+                },
+            )
+        self.assertTrue(result["saved"])
+        self.assertTrue(result["supabase_saved"])
+        self.assertFalse(result["local_saved"])
+        mock_conn.close.assert_called_once()
+
+    def test_genuine_supabase_failure_produces_warning_and_reports_not_saved(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        claim_data = {"claimed": True, "record_id": 99, "send_count": 1}
+        smtp = MagicMock()
+        payload = {
+            "participant_name": "Genuine Failure",
+            "participant_email": "genuine_fail@example.invalid",
+            "program_date": "2026-09-29",
+            "document_id": "CA-CERT-" + "e" * 32,
+        }
+
+        with patch.object(repository, "claim_ca_certificate_single_email", return_value=claim_data), \
+             patch.object(repository, "finish_ca_certificate_single_email",
+                          side_effect=RuntimeError("Supabase network failure")), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF synthetic", "29-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp):
+            smtp.__enter__.return_value = smtp
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertFalse(data["history_saved"])
+        self.assertEqual(data["history_status"], "not_saved")
+        self.assertIn("warning", data)
+        self.assertEqual(
+            data["warning"],
+            "Email delivered, but the history record could not be saved. Do not resend this email; reconcile this delivery before retrying."
+        )
 
 
 if __name__ == "__main__":

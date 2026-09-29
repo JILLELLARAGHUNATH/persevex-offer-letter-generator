@@ -300,43 +300,58 @@ def save_ca_certificate_record(data, existing_id=None):
             print("SUPABASE SAVE CA CERTIFICATE ERROR (local reconciliation copy retained):", repr(exc))
     elif supabase_configured:
         supabase_error = "Supabase client could not be initialized."
-    conn = sqlite3.connect(SQLITE_DB_PATH)
-    if existing_id:
-        columns = ", ".join(f"{key} = ?" for key in record)
-        cursor = conn.execute(
-            f"UPDATE campus_ambassador_certificate_history SET {columns} WHERE id = ?",
-            tuple(record.values()) + (int(existing_id),),
-        )
-        if cursor.rowcount == 0:
+    local_saved = False
+    conn = None
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        if existing_id:
+            columns = ", ".join(f"{key} = ?" for key in record)
+            cursor = conn.execute(
+                f"UPDATE campus_ambassador_certificate_history SET {columns} WHERE id = ?",
+                tuple(record.values()) + (int(existing_id),),
+            )
+            if cursor.rowcount == 0:
+                conn.execute(
+                    f"INSERT OR REPLACE INTO campus_ambassador_certificate_history ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
+                    tuple(record.values()),
+                )
+        else:
+            columns = ", ".join(record)
+            placeholders = ", ".join("?" for _ in record)
+            update_columns = ", ".join(
+                f"{key} = excluded.{key}" for key in record if key != "document_id"
+            )
             conn.execute(
-                f"INSERT OR REPLACE INTO campus_ambassador_certificate_history ({', '.join(record)}) VALUES ({', '.join('?' for _ in record)})",
+                f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
+                f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
                 tuple(record.values()),
             )
-    else:
-        columns = ", ".join(record)
-        placeholders = ", ".join("?" for _ in record)
-        update_columns = ", ".join(
-            f"{key} = excluded.{key}" for key in record if key != "document_id"
-        )
-        conn.execute(
-            f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
-            f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
-            tuple(record.values()),
-        )
-    conn.commit()
-    conn.close()
+        conn.commit()
+        local_saved = True
+    except Exception as exc:
+        print("LOCAL DB SAVE CA CERTIFICATE SYNC WARNING:", repr(exc))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     if not supabase_configured:
-        persistence_status = "local_only"
-    elif supabase_saved:
+        persistence_status = "local_only" if local_saved else "not_saved"
+    elif supabase_saved and local_saved:
         persistence_status = "supabase_and_local"
+    elif supabase_saved:
+        persistence_status = "supabase_only"
     else:
-        persistence_status = "local_only"
+        persistence_status = "local_only" if local_saved else "not_saved"
+
     return {
-        "saved": True,
+        "saved": bool(supabase_saved or local_saved),
         "supabase_saved": supabase_saved,
-        "local_saved": True,
+        "local_saved": local_saved,
         "status": persistence_status,
-        "error": supabase_error,
+        "error": supabase_error if not (supabase_saved or local_saved) else None,
     }
 
 
@@ -392,24 +407,36 @@ def finish_ca_certificate_single_email(record_id, claim_token, data):
         "created_at": now,
         "template_version": "v1",
     }
-    conn = sqlite3.connect(SQLITE_DB_PATH)
-    columns = ", ".join(local_values)
-    placeholders = ", ".join("?" for _ in local_values)
-    update_columns = ", ".join(
-        f"{key} = excluded.{key}" for key in local_values if key != "document_id"
-    )
-    conn.execute(
-        f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
-        f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
-        tuple(local_values.values()),
-    )
-    conn.commit()
-    conn.close()
+    local_saved = False
+    conn = None
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        columns = ", ".join(local_values)
+        placeholders = ", ".join("?" for _ in local_values)
+        update_columns = ", ".join(
+            f"{key} = excluded.{key}" for key in local_values if key != "document_id"
+        )
+        conn.execute(
+            f"INSERT INTO campus_ambassador_certificate_history ({columns}) VALUES ({placeholders}) "
+            f"ON CONFLICT(document_id) DO UPDATE SET {update_columns}",
+            tuple(local_values.values()),
+        )
+        conn.commit()
+        local_saved = True
+    except Exception as local_exc:
+        print("LOCAL DB FINISH CA CERTIFICATE SYNC WARNING:", repr(local_exc))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     return {
         "saved": True,
         "supabase_saved": True,
-        "local_saved": True,
-        "status": "supabase_and_local",
+        "local_saved": bool(local_saved),
+        "status": "supabase_and_local" if local_saved else "supabase_only",
         "error": None,
     }
 
