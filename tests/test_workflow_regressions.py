@@ -566,6 +566,262 @@ class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
             "Email delivered, but the history record could not be saved. Do not resend this email; reconcile this delivery before retrying."
         )
 
+    def test_ca_certificate_duplicate_email_returns_409_confirmation(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
 
-if __name__ == "__main__":
+        existing_record = {
+            "id": 88,
+            "participant_name": "Prior Sent",
+            "participant_email": "prior_sent@example.invalid",
+            "program_date": "29-09-2026",
+            "document_id": "CA-CERT-88888888888888888888888888888888",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        payload = {
+            "participant_name": "Prior Sent",
+            "participant_email": "prior_sent@example.invalid",
+            "program_date": "2026-09-29",
+            "document_id": "CA-CERT-" + "9" * 32,
+        }
+
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=existing_record):
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertTrue(data["duplicate"])
+        self.assertTrue(data["previously_sent"])
+        self.assertTrue(data["can_resend"])
+        self.assertEqual(data["send_count"], 1)
+        self.assertIn("already been sent", data["message"])
+
+    def test_ca_certificate_resend_preserves_document_id_and_increments_count(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        existing_record = {
+            "id": 88,
+            "participant_name": "Prior Sent",
+            "participant_email": "prior_sent@example.invalid",
+            "program_date": "29-09-2026",
+            "document_id": "CA-CERT-88888888888888888888888888888888",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        claim_data = {
+            "claimed": True,
+            "record_id": 88,
+            "document_id": "CA-CERT-88888888888888888888888888888888",
+            "email_status": "sending",
+            "send_count": 2,
+        }
+        finish_result = {
+            "saved": True,
+            "supabase_saved": True,
+            "local_saved": True,
+            "status": "synchronized",
+        }
+        payload = {
+            "participant_name": "Prior Sent",
+            "participant_email": "prior_sent@example.invalid",
+            "program_date": "2026-09-29",
+            "document_id": "CA-CERT-new-unwanted-id-33333333333",
+            "send_again": True,
+        }
+        smtp = MagicMock()
+
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=existing_record), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=claim_data) as mock_claim, \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value=finish_result) as mock_finish, \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF synthetic", "29-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp):
+            smtp.__enter__.return_value = smtp
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["send_count"], 2)
+
+        # Confirm claim received the PRESERVED document_id and allow_resend=True
+        mock_claim.assert_called_once()
+        claim_call_args = mock_claim.call_args[0][0]
+        self.assertEqual(claim_call_args["document_id"], "CA-CERT-88888888888888888888888888888888")
+        self.assertTrue(mock_claim.call_args[1]["allow_resend"])
+
+        # Confirm finish received the exact record_id and updated send_count=2
+        mock_finish.assert_called_once()
+        self.assertEqual(mock_finish.call_args[0][0], 88)
+        self.assertEqual(mock_finish.call_args[0][2]["send_count"], 2)
+
+    def test_ca_certificate_uncertain_or_sending_status_disallows_resend(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        for uncertain_status in ("uncertain", "sending"):
+            existing_record = {
+                "id": 92,
+                "participant_name": "Uncertain Candidate",
+                "participant_email": "uncertain@example.invalid",
+                "program_date": "29-09-2026",
+                "document_id": "CA-CERT-92929292929292929292929292929292",
+                "email_status": uncertain_status,
+                "send_count": 1,
+            }
+            payload = {
+                "participant_name": "Uncertain Candidate",
+                "participant_email": "uncertain@example.invalid",
+                "program_date": "2026-09-29",
+                "send_again": True,
+            }
+
+            with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=existing_record):
+                response = client.post("/api/ca-certificate/send-email", json=payload)
+
+            self.assertEqual(response.status_code, 409)
+            data = response.get_json()
+            self.assertFalse(data["success"])
+            self.assertTrue(data["duplicate"])
+            self.assertFalse(data["can_resend"])
+            self.assertTrue(data["reconciliation_required"])
+            self.assertIn("reconcile", data["message"].lower())
+
+    def test_ca_certificate_stats_endpoint(self):
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        mock_stats = {"total_sent": 14, "total_failed": 2}
+        with patch.object(repository, "get_unified_history", return_value=mock_stats):
+            response = client.get("/api/ca-certificate/stats")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["success_count"], 14)
+        self.assertEqual(data["failed_count"], 2)
+
+    def test_ca_certificate_smtp_421_returns_503_with_user_friendly_message(self):
+        """SMTP 421 (IP rejected) must return 503 with a clear message, not the raw exception."""
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        payload = {
+            "participant_name": "SMTP Block Test",
+            "participant_email": "smtpblock@example.invalid",
+            "program_date": "2026-09-29",
+        }
+        claimed = {
+            "claimed": True,
+            "record_id": 99,
+            "document_id": "CA-CERT-" + "9" * 32,
+            "email_status": "sending",
+            "send_count": 1,
+        }
+
+        class FakeSMTP421Error(Exception):
+            smtp_code = 421
+
+        with (
+            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
+            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
+            patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}),
+            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
+            patch("app.smtplib.SMTP_SSL", side_effect=FakeSMTP421Error("421 SMTPAUTH: IP rejected")),
+        ):
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 503)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("421", data["error"])
+        self.assertNotIn("Traceback", data["error"])
+        self.assertNotIn("smtplib", data["error"])
+        self.assertTrue(data.get("smtp_blocked"))
+
+    def test_ca_certificate_smtp_failure_rolls_back_send_count(self):
+        """A failed SMTP attempt must NOT increment send_count in the history record."""
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        payload = {
+            "participant_name": "Rollback Test",
+            "participant_email": "rollback@example.invalid",
+            "program_date": "2026-09-29",
+        }
+        claimed = {
+            "claimed": True,
+            "record_id": 101,
+            "document_id": "CA-CERT-" + "a" * 32,
+            "email_status": "sending",
+            "send_count": 2,  # This was a resend; the RPC already set it to 2
+        }
+
+        finish_mock = MagicMock(return_value={"saved": True, "status": "supabase_only"})
+
+        with (
+            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
+            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
+            patch.object(repository, "finish_ca_certificate_single_email", finish_mock),
+            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
+            patch("app.smtplib.SMTP_SSL", side_effect=ConnectionRefusedError("Connection refused")),
+        ):
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertNotEqual(response.status_code, 200)
+        finish_mock.assert_called_once()
+        # send_count in the history call should be rolled back to 1 (2 - 1)
+        saved_send_count = finish_mock.call_args[0][2]["send_count"]
+        self.assertEqual(saved_send_count, 1,
+                         f"Failed delivery should roll back send_count to 1, got {saved_send_count}")
+        self.assertEqual(finish_mock.call_args[0][2]["email_status"], "failed")
+
+    def test_ca_certificate_smtp_auth_failure_returns_503(self):
+        """SMTP authentication failure must return 503 with a user-friendly message."""
+        client = application.app.test_client()
+        with client.session_transaction() as session:
+            session["authenticated"] = True
+
+        payload = {
+            "participant_name": "Auth Fail Test",
+            "participant_email": "authfail@example.invalid",
+            "program_date": "2026-09-29",
+        }
+        claimed = {
+            "claimed": True,
+            "record_id": 102,
+            "document_id": "CA-CERT-" + "b" * 32,
+            "email_status": "sending",
+            "send_count": 1,
+        }
+        import smtplib as _smtplib
+        auth_error = _smtplib.SMTPAuthenticationError(535, b"Authentication failed")
+
+        with (
+            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
+            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
+            patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}),
+            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
+            patch("app.smtplib.SMTP_SSL", side_effect=auth_error),
+        ):
+            response = client.post("/api/ca-certificate/send-email", json=payload)
+
+        self.assertEqual(response.status_code, 503)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("authentication", data["error"].lower())
+
+
+if __name__ == '__main__':
     unittest.main()
+

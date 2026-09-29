@@ -4962,6 +4962,20 @@ def ca_certificate_bulk_page():
     )
 
 
+@app.get("/api/ca-certificate/stats")
+def ca_certificate_stats():
+    try:
+        stats = repository.get_unified_history(record_type="ca_certificate", page=1, per_page=1)
+        return jsonify({
+            "success": True,
+            "success_count": stats.get("total_sent", 0),
+            "failed_count": stats.get("total_failed", 0),
+        })
+    except Exception as exc:
+        print("CA CERTIFICATE STATS API ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 @app.post("/api/ca-certificate/generate")
 def ca_certificate_generate():
     data = request.get_json(force=True) or {}
@@ -5017,12 +5031,48 @@ def ca_certificate_send_email():
     if not name or not email or not date_value:
         return jsonify({"success": False, "error": "A generated certificate and complete participant details are required."}), 400
     filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
-    resend = data.get("send_again") is True
+    resend = data.get("send_again") is True or data.get("force_resend") is True
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         return jsonify({"success": False, "error": "Enter a valid email address."}), 400
-    document_id = str(data.get("document_id") or "")
-    if not re.fullmatch(r"CA-CERT-[0-9a-f]{32}", document_id):
-        document_id = f"CA-CERT-{uuid.uuid4().hex}"
+
+    # --------------------------------------------------------
+    # AUTHORITATIVE SERVER-SIDE CHECK AGAINST SUPABASE
+    # --------------------------------------------------------
+    existing_record = repository.get_latest_ca_certificate_by_email(email)
+
+    if existing_record:
+        existing_status = str(existing_record.get("email_status") or "").strip().lower()
+        if existing_status in ("sending", "uncertain"):
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "can_resend": False,
+                "reconciliation_required": True,
+                "email_status": existing_status,
+                "message": "A CA Certificate delivery is already in progress or uncertain for this email address. Please reconcile the delivery status before retrying.",
+                "previous_record": existing_record,
+            }), 409
+
+        if existing_status == "sent" and not resend:
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "previously_sent": True,
+                "can_resend": True,
+                "email_status": "sent",
+                "send_count": existing_record.get("send_count") or 1,
+                "message": "A CA Certificate has already been sent to this email address. Would you like to send it again?",
+                "previous_record": existing_record,
+            }), 409
+
+    # Reuse existing document_id when resending or retrying existing record so the record is updated in-place!
+    if existing_record and existing_record.get("document_id"):
+        document_id = str(existing_record["document_id"])
+    else:
+        document_id = str(data.get("document_id") or "")
+        if not re.fullmatch(r"CA-CERT-[0-9a-f]{32}", document_id):
+            document_id = f"CA-CERT-{uuid.uuid4().hex}"
+
     claim_token = str(uuid.uuid4())
     try:
         claim = repository.claim_ca_certificate_single_email(
@@ -5041,13 +5091,35 @@ def ca_certificate_send_email():
     except Exception as exc:
         print("CA CERTIFICATE SINGLE CLAIM ERROR:", repr(exc))
         return jsonify({"success": False, "error": "Unable to claim certificate delivery safely."}), 503
+
     if not claim.get("claimed"):
+        claim_status = str(claim.get("email_status") or "").strip().lower()
+        if claim_status == "sent" and not resend:
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "previously_sent": True,
+                "can_resend": True,
+                "email_status": "sent",
+                "message": "A CA Certificate has already been sent to this email address. Would you like to send it again?",
+            }), 409
+        elif claim_status in ("sending", "uncertain"):
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "can_resend": False,
+                "reconciliation_required": True,
+                "email_status": claim_status,
+                "message": "A CA Certificate delivery is already in progress or uncertain for this email address. Please reconcile the delivery status before retrying.",
+            }), 409
         return jsonify({
             "success": False,
             "duplicate": True,
+            "can_resend": False,
             "email_status": claim.get("email_status"),
             "message": "A certificate delivery is already recorded or in progress for this email address.",
         }), 409
+
     existing_id = claim["record_id"]
     send_count = int(claim.get("send_count") or 1)
     send_attempted = False
@@ -5068,6 +5140,43 @@ def ca_certificate_send_email():
             smtp.send_message(message)
     except Exception as exc:
         email_status = "uncertain" if send_attempted else "failed"
+        exc_str = str(exc)
+        exc_code = getattr(exc, "smtp_code", None) or getattr(exc, "code", None)
+
+        # Classify the SMTP failure into a user-friendly message without exposing internals.
+        if exc_code == 421 or "421" in exc_str:
+            user_error = (
+                "The email provider temporarily blocked delivery (421 \u2013 too many failed logins). "
+                "Please wait a few minutes before trying again. No email was sent."
+            )
+            smtp_blocked = True
+            http_status = 503
+        elif isinstance(exc, smtplib.SMTPAuthenticationError) or "535" in exc_str or "authentication" in exc_str.lower():
+            user_error = "Email authentication failed. Please check the sender credentials and try again."
+            smtp_blocked = False
+            http_status = 503
+        elif email_status == "uncertain":
+            user_error = (
+                "The email was transmitted but confirmation was not received. "
+                "Please check the recipient\u2019s inbox before resending."
+            )
+            smtp_blocked = False
+            http_status = 202
+        elif isinstance(exc, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)):
+            user_error = "Could not connect to the email server. Please check your network connection and try again."
+            smtp_blocked = False
+            http_status = 503
+        elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+            user_error = "The recipient email address was rejected by the mail server."
+            smtp_blocked = False
+            http_status = 422
+        else:
+            user_error = "Email delivery failed. Please try again in a moment."
+            smtp_blocked = False
+            http_status = 500
+
+        # Roll back the incremented send_count — only confirmed deliveries should count.
+        failed_send_count = max(1, send_count - 1)
         try:
             persistence = repository.finish_ca_certificate_single_email(
                 existing_id,
@@ -5077,7 +5186,9 @@ def ca_certificate_send_email():
                     "program_date": ca_certificate_service.format_program_date(date_value),
                     "document_id": document_id,
                     "pdf_filename": filename,
-                    "email_status": email_status, "send_count": send_count, "error_message": str(exc),
+                    "email_status": email_status,
+                    "send_count": failed_send_count,
+                    "error_message": exc_str[:500],
                 },
             )
         except Exception as history_exc:
@@ -5085,11 +5196,12 @@ def ca_certificate_send_email():
             persistence = {"saved": False, "status": "not_saved"}
         return jsonify({
             "success": False,
-            "error": str(exc),
+            "error": user_error,
             "email_status": email_status,
+            "smtp_blocked": smtp_blocked,
             "history_saved": persistence["saved"],
             "history_status": persistence["status"],
-        }), 202 if email_status == "uncertain" else 500
+        }), http_status
     try:
         persistence = repository.finish_ca_certificate_single_email(
             existing_id,

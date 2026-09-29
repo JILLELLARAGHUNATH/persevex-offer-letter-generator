@@ -224,6 +224,37 @@ def get_previous_sent_ca_certificate(email):
         return None
 
 
+def get_latest_ca_certificate_by_email(email):
+    """
+    Authoritative query against public.campus_ambassador_certificate_history in Supabase.
+    Returns the most recent history record for this recipient across any status, or None.
+    """
+    email = str(email or "").strip().lower()
+    if not email:
+        return None
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = (sb.table("campus_ambassador_certificate_history").select("*")
+                      .ilike("participant_email", email)
+                      .order("created_at", desc=True).limit(1).execute())
+            return dict(result.data[0]) if result.data else None
+        except Exception as exc:
+            print("SUPABASE FIND LATEST CA CERTIFICATE ERROR (using fallback):", repr(exc))
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM campus_ambassador_certificate_history WHERE LOWER(TRIM(participant_email)) = ? ORDER BY id DESC LIMIT 1",
+            (email,),
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as exc:
+        print("LOCAL DB FIND LATEST CA CERTIFICATE ERROR:", repr(exc))
+        return None
+
+
 def get_previous_sent_ca_certificates(emails):
     normalized = sorted({str(email or "").strip().lower() for email in emails if str(email or "").strip()})
     if not normalized:

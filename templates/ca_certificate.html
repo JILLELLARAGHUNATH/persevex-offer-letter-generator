@@ -58,12 +58,483 @@
         </section>
     </main>
 </div>
+
+<!-- =========================================================
+     CAMPUS AMBASSADOR CERTIFICATE RESEND CONFIRMATION MODAL
+     ========================================================= -->
+<div
+    id="caCertResendModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleCACertResendBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="caCertResendModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCACertResendModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="caCertResendModalTitle" style="font-size: 19px; font-weight: 800; color: #0f172a; margin: 0 0 10px;">
+            Send CA Certificate Again?
+        </h3>
+
+        <p style="color: #475569; font-size: 14px; line-height: 1.5; margin: 0 0 12px;">
+            A CA Certificate has already been sent to this email address. Would you like to send it again?
+        </p>
+
+        <div
+            id="caCertDuplicateEmail"
+            class="modal-target-highlight duplicate-email"
+            style="background: #f8fafc; border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px; font-size: 14px; font-weight: 700; color: var(--brand-primary); word-break: break-all; margin: 0 auto 14px; max-width: 90%;"
+        ></div>
+
+        <div class="resend-modal-actions" style="display: flex; justify-content: center; align-items: center; gap: 12px;">
+            <button
+                type="button"
+                id="cancelCACertResendBtn"
+                class="modal-cancel-btn"
+                onclick="closeCACertResendModal()"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="confirmCACertResendBtn"
+                class="modal-confirm-btn"
+                style="background: var(--brand-primary); color: #ffffff; border: none; padding: 10px 22px; border-radius: var(--radius-md); font-family: inherit; font-weight: 700; font-size: 13.5px; cursor: pointer; box-shadow: var(--shadow-btn-primary); transition: all var(--transition-fast); display: inline-flex; align-items: center; justify-content: center; gap: 6px;"
+                onclick="handleCACertResendConfirm()"
+            >
+                <span>Send Again</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+<style>
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #1e293b;
+    color: #f8fafc;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    font-size: 14px;
+    animation: slideIn 0.3s ease;
+    border-left: 4px solid #3b82f6;
+}
+.toast.success { border-left-color: #10b981; }
+.toast.error { border-left-color: #ef4444; }
+.toast.info { border-left-color: #3b82f6; }
+.toast-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.toast.success .toast-icon { color: #10b981; }
+.toast.error .toast-icon { color: #ef4444; }
+.toast.info .toast-icon { color: #3b82f6; }
+.toast-text { flex: 1; font-weight: 500; }
+.toast-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.toast-close:hover { color: #fff; }
+.fade-out {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.4s ease;
+}
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.count-pulse {
+    animation: countPulse 0.4s ease-out;
+}
+@keyframes countPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); color: var(--brand-primary); }
+    100% { transform: scale(1); }
+}
+</style>
+
 <script>
-const form=document.getElementById('caCertForm'), preview=document.getElementById('pdfPreview'), empty=document.getElementById('emptyPreview'), download=document.getElementById('downloadBtn'), send=document.getElementById('sendBtn'), message=document.getElementById('message'), generate=document.getElementById('generateBtn'); let generated=null;
-function invalidate(){generated=null;preview.style.display='none';empty.style.display='flex';download.style.pointerEvents='none';download.style.opacity='.5';download.removeAttribute('href');download.setAttribute('aria-disabled','true');send.disabled=true}
-['participantName','participantEmail','programDate'].forEach(id=>document.getElementById(id).addEventListener('input',invalidate));
-form.addEventListener('submit',async e=>{e.preventDefault();if(generate.disabled)return;invalidate();generate.disabled=true;generate.classList.add('is-generating');message.textContent='Generating CA Certificate...';const payload={participant_name:participantName.value.trim(),participant_email:participantEmail.value.trim(),program_date:programDate.value};try{const r=await fetch('/api/ca-certificate/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json();if(!r.ok||!d.success){message.textContent=d.error||'Generation failed.';return}const pdf=await fetch('/api/ca-certificate/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!pdf.ok)throw new Error('Certificate PDF generation failed.');const blob=await pdf.blob();const blobUrl=URL.createObjectURL(blob);generated={...payload,document_id:d.document_id};generated.filename=d.filename;preview.src=blobUrl;preview.style.display='block';empty.style.display='none';download.href=blobUrl;download.download=d.filename;download.style.pointerEvents='auto';download.style.opacity='1';download.removeAttribute('aria-disabled');send.disabled=false;message.textContent='Certificate generated.'}catch(err){message.textContent=err.message||'Generation failed. Please try again.'}finally{generate.disabled=false;generate.classList.remove('is-generating')}});
-send.addEventListener('click',async()=>{if(!generated||send.disabled)return;if(!participantEmail.value.trim()){message.textContent='Enter an email address to send the certificate.';return}send.disabled=true;send.classList.add('is-sending');try{const r=await fetch('/api/ca-certificate/send-email',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...generated,participant_email:participantEmail.value.trim()})});const d=await r.json();if(r.status===409){message.textContent=d.message;send.disabled=true}else if(r.status===202){message.textContent='Delivery outcome is uncertain. Do not retry; reconcile the delivery before sending again.';send.disabled=true}else if(d.success){localStorage.setItem('persevex_history_updated',Date.now().toString());message.textContent=d.warning||d.message;send.disabled=true}else{message.textContent=d.error||'Send failed.';send.disabled=false}}catch(err){message.textContent='Delivery request failed. Check delivery history before retrying.';send.disabled=true}finally{send.classList.remove('is-sending')}});
+const form = document.getElementById('caCertForm');
+const preview = document.getElementById('pdfPreview');
+const empty = document.getElementById('emptyPreview');
+const download = document.getElementById('downloadBtn');
+const send = document.getElementById('sendBtn');
+const message = document.getElementById('message');
+const generate = document.getElementById('generateBtn');
+const toastContainer = document.getElementById('toastContainer');
+const participantNameInput = document.getElementById('participantName');
+const participantEmailInput = document.getElementById('participantEmail');
+const programDateInput = document.getElementById('programDate');
+const previewBadge = document.getElementById('previewStatusBadge');
+
+const caCertResendModal = document.getElementById('caCertResendModal');
+const caCertDuplicateEmail = document.getElementById('caCertDuplicateEmail');
+const confirmCACertResendBtn = document.getElementById('confirmCACertResendBtn');
+const cancelCACertResendBtn = document.getElementById('cancelCACertResendBtn');
+
+let generated = null;
+
+function showToast(text, type = "success") {
+    if (!toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            ${type === "success"
+                ? '<polyline points="20 6 9 17 4 12"></polyline>'
+                : '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>'}
+        </svg>
+        <div class="toast-text">${text}</div>
+        <button type="button" class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+    `;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add("fade-out");
+        setTimeout(() => toast.remove(), 400);
+    }, 5000);
+}
+
+function setMessage(text, type = "info") {
+    if (!text) {
+        message.innerHTML = "";
+        message.className = "";
+        return;
+    }
+    message.className = `message-box ${type}`;
+    message.textContent = text;
+}
+
+async function refreshHeaderStats() {
+    try {
+        const res = await fetch("/api/ca-certificate/stats");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+                const successCountEl = document.getElementById("successCount");
+                const failedCountEl = document.getElementById("failedCount");
+                if (successCountEl && typeof data.success_count === "number") {
+                    successCountEl.textContent = data.success_count;
+                    successCountEl.classList.remove("count-pulse");
+                    void successCountEl.offsetWidth;
+                    successCountEl.classList.add("count-pulse");
+                }
+                if (failedCountEl && typeof data.failed_count === "number") {
+                    failedCountEl.textContent = data.failed_count;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to refresh header stats:", e);
+    }
+}
+
+function invalidate() {
+    generated = null;
+    preview.style.display = 'none';
+    empty.style.display = 'flex';
+    download.style.pointerEvents = 'none';
+    download.style.opacity = '.5';
+    download.removeAttribute('href');
+    download.setAttribute('aria-disabled', 'true');
+    send.disabled = true;
+    if (previewBadge) {
+        previewBadge.textContent = 'Awaiting Generation';
+        previewBadge.className = 'section-tag';
+    }
+}
+
+['participantName', 'participantEmail', 'programDate'].forEach(id => {
+    document.getElementById(id).addEventListener('input', invalidate);
+});
+
+// MODAL CONTROLS
+window.openCACertResendModal = function(email) {
+    if (caCertDuplicateEmail) caCertDuplicateEmail.textContent = email;
+    if (caCertResendModal) {
+        caCertResendModal.classList.remove("modal-closing");
+        caCertResendModal.style.display = "flex";
+        document.body.style.overflow = "hidden";
+        if (confirmCACertResendBtn) {
+            confirmCACertResendBtn.disabled = false;
+            confirmCACertResendBtn.innerHTML = "<span>Send Again</span>";
+            confirmCACertResendBtn.focus();
+        }
+        if (cancelCACertResendBtn) {
+            cancelCACertResendBtn.disabled = false;
+        }
+    }
+};
+
+window.closeCACertResendModal = function() {
+    if (caCertResendModal) {
+        caCertResendModal.classList.add("modal-closing");
+        setTimeout(function() {
+            caCertResendModal.style.display = "none";
+            caCertResendModal.classList.remove("modal-closing");
+            document.body.style.overflow = "";
+        }, 200);
+    }
+};
+
+window.handleCACertResendBackdropClick = function(event) {
+    if (event.target === caCertResendModal) {
+        window.closeCACertResendModal();
+    }
+};
+
+// Guard flag – prevents double-click from triggering two concurrent sends
+let caCertResendInFlight = false;
+
+window.handleCACertResendConfirm = async function() {
+    // Double-click guard: if a send is already running, ignore subsequent clicks
+    if (caCertResendInFlight) return;
+    caCertResendInFlight = true;
+
+    if (confirmCACertResendBtn) {
+        confirmCACertResendBtn.disabled = true;
+        confirmCACertResendBtn.innerHTML = `
+            <span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span>
+            <span>Sending...</span>
+        `;
+    }
+    if (cancelCACertResendBtn) {
+        cancelCACertResendBtn.disabled = true;
+    }
+
+    try {
+        await sendCACertEmail(true);
+        // Close modal IMMEDIATELY on success; stats refresh happens async
+        window.closeCACertResendModal();
+    } catch (err) {
+        console.error("CA Certificate resend confirmation error:", err);
+        // Re-enable buttons so the user can retry
+        if (confirmCACertResendBtn) {
+            confirmCACertResendBtn.disabled = false;
+            confirmCACertResendBtn.innerHTML = "<span>Send Again</span>";
+        }
+        if (cancelCACertResendBtn) {
+            cancelCACertResendBtn.disabled = false;
+        }
+    } finally {
+        caCertResendInFlight = false;
+    }
+};
+
+// ESC Key Listener
+document.addEventListener("keydown", function(event) {
+    if (event.key === "Escape" && caCertResendModal && caCertResendModal.style.display !== "none") {
+        window.closeCACertResendModal();
+    }
+});
+
+// FORM SUBMISSION (GENERATE)
+form.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (generate.disabled) return;
+    invalidate();
+    generate.disabled = true;
+    generate.classList.add('is-generating');
+    setMessage('Generating CA Certificate...', 'info');
+
+    const payload = {
+        participant_name: participantNameInput.value.trim(),
+        participant_email: participantEmailInput.value.trim(),
+        program_date: programDateInput.value
+    };
+
+    try {
+        const r = await fetch('/api/ca-certificate/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const d = await r.json();
+        if (!r.ok || !d.success) {
+            setMessage(d.error || 'Generation failed.', 'error');
+            showToast(d.error || 'Generation failed.', 'error');
+            return;
+        }
+        const pdf = await fetch('/api/ca-certificate/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!pdf.ok) throw new Error('Certificate PDF generation failed.');
+        const blob = await pdf.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        generated = { ...payload, document_id: d.document_id, filename: d.filename };
+        preview.src = blobUrl;
+        preview.style.display = 'block';
+        empty.style.display = 'none';
+        download.href = blobUrl;
+        download.download = d.filename;
+        download.style.pointerEvents = 'auto';
+        download.style.opacity = '1';
+        download.removeAttribute('aria-disabled');
+        send.disabled = false;
+        if (previewBadge) {
+            previewBadge.textContent = 'Generated';
+            previewBadge.className = 'section-tag ready';
+        }
+        setMessage('Certificate generated successfully.', 'success');
+        showToast('Certificate generated successfully!', 'success');
+    } catch (err) {
+        setMessage(err.message || 'Generation failed. Please try again.', 'error');
+        showToast(err.message || 'Generation failed. Please try again.', 'error');
+    } finally {
+        generate.disabled = false;
+        generate.classList.remove('is-generating');
+    }
+});
+
+// SEND EMAIL ACTION
+async function sendCACertEmail(sendAgain = false) {
+    if (!generated) {
+        setMessage('Please generate the certificate first.', 'error');
+        return;
+    }
+    const emailVal = participantEmailInput.value.trim();
+    if (!emailVal) {
+        setMessage('Enter an email address to send the certificate.', 'error');
+        showToast('Enter an email address to send the certificate.', 'error');
+        return;
+    }
+
+    send.disabled = true;
+    send.classList.add('is-sending');
+    send.innerHTML = `
+        <span class="spinner" style="display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px;"></span>
+        <span>Sending Email...</span>
+    `;
+
+    try {
+        const r = await fetch('/api/ca-certificate/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...generated,
+                participant_email: emailVal,
+                send_again: sendAgain
+            })
+        });
+
+        const d = await r.json();
+
+        // DUPLICATE / PREVIOUSLY SENT (RESEND) CHECK
+        if (r.status === 409 && (d.duplicate || d.previously_sent)) {
+            send.disabled = false;
+            send.classList.remove('is-sending');
+            send.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Candidate</span>
+            `;
+
+            if (d.can_resend === false || d.reconciliation_required) {
+                setMessage(d.message, 'error');
+                showToast(d.message, 'error');
+                return;
+            }
+
+            window.openCACertResendModal(emailVal);
+            return;
+        }
+
+        // 503 – SMTP blocked (421) or auth failure: show user-friendly message & re-enable button
+        if (r.status === 503 || r.status === 422) {
+            const errMsg = d.error || 'Email delivery is currently unavailable. Please try again later.';
+            setMessage(errMsg, 'error');
+            showToast(errMsg, 'error');
+            send.disabled = false;
+            throw new Error(errMsg);
+        }
+
+        if (r.status === 202) {
+            const warn = d.error || d.warning || d.message || 'Delivery outcome is uncertain. Do not retry; reconcile the delivery before sending again.';
+            setMessage(warn, 'warning');
+            showToast(warn, 'info');
+            // Leave Send button enabled so the user can reconcile manually
+            send.disabled = false;
+            throw new Error(warn);
+        }
+
+        if (!r.ok || !d.success) {
+            throw new Error(d.error || 'Failed to send CA Certificate.');
+        }
+
+        localStorage.setItem('persevex_history_updated', Date.now().toString());
+        const successMsg = d.warning || `CA Certificate successfully sent to ${emailVal}!`;
+        showToast(successMsg, d.warning ? 'info' : 'success');
+        setMessage(d.warning || d.message, d.warning ? 'warning' : 'success');
+        send.disabled = true;
+        send.innerHTML = `
+            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>Sent to Candidate</span>
+        `;
+
+        // Refresh stats asynchronously – don't block the caller (modal closes immediately)
+        refreshHeaderStats();
+
+    } catch (err) {
+        showToast(err.message || 'Delivery request failed.', 'error');
+        setMessage(err.message || 'Delivery request failed.', 'error');
+        send.disabled = false;
+        throw err;
+    } finally {
+        send.classList.remove('is-sending');
+        if (!send.disabled) {
+            send.innerHTML = `
+                <svg class="btn-icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span>Send to Candidate</span>
+            `;
+        }
+    }
+}
+
+send.addEventListener('click', () => sendCACertEmail(false));
+refreshHeaderStats();
+window.addEventListener('storage', (e) => {
+    if (e.key === 'persevex_history_updated') {
+        refreshHeaderStats();
+    }
+});
 </script>
 </body>
 </html>
