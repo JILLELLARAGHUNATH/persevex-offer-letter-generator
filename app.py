@@ -42,6 +42,7 @@ from flask import (
     send_file,
 )
 
+import threading
 import pymupdf
 import certificate_service
 import database.repository as repository
@@ -49,6 +50,7 @@ import services.bulk_certificate_service as bulk_certificate_service
 from services.ca_bulk_service import parse_ca_file
 import services.bulk_offer_letter_service as bulk_offer_letter_service
 from services import ca_certificate_service
+from services.bulk_job_manager import bulk_job_manager
 
 
 # ============================================================
@@ -2537,6 +2539,129 @@ def email_status_counts():
         }), 500
 
 # ============================================================
+# DASHBOARD STATS API
+# ============================================================
+
+@app.get("/api/dashboard/stats")
+def dashboard_stats():
+    """
+    Returns per-workflow email statistics for the live dashboard header.
+    Aggregates sent/failed/total counts for offer_letter, ca_letter,
+    certificate, and ca_certificate workflows.
+    """
+    try:
+        stats = repository.get_all_workflow_stats()
+        return jsonify(stats)
+    except Exception as exc:
+        print("DASHBOARD STATS ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+# ============================================================
+# BULK JOB MANAGEMENT ENDPOINTS
+# ============================================================
+
+@app.get("/api/bulk/active-job")
+def bulk_active_job():
+    """
+    Returns the currently active (running or cancelling) bulk job, if any.
+    Optionally filter by workflow_type via ?workflow=offer_letter etc.
+    """
+    workflow_type = request.args.get("workflow") or None
+    try:
+        job = bulk_job_manager.get_active_job(workflow_type=workflow_type)
+        return jsonify({"success": True, "job": job})
+    except Exception as exc:
+        print("BULK ACTIVE JOB ERROR:", repr(exc))
+        return jsonify({"success": False, "job": None, "error": str(exc)}), 500
+
+
+@app.post("/api/bulk/cancel")
+def bulk_cancel_job():
+    """
+    Requests cancellation of a running bulk job by job_id.
+    The cancel flag is read by the client-side loop; it does not kill
+    in-flight requests but prevents the next item from being sent.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        job_id = (data.get("job_id") or "").strip()
+        if not job_id:
+            return jsonify({"success": False, "error": "job_id is required."}), 400
+        updated = bulk_job_manager.request_cancel(job_id)
+        if not updated:
+            return jsonify({"success": False, "error": "Job not found."}), 404
+        return jsonify({"success": True, "job": updated})
+    except Exception as exc:
+        print("BULK CANCEL JOB ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/bulk/start-job")
+def bulk_start_job():
+    """
+    Creates and registers a new BulkJobManager job before the client-side
+    dispatch loop begins.  Returns job_id so the loop can pass it to each
+    /send-item call for live-progress tracking.
+
+    Body (JSON):
+      workflow_type  – one of: offer_letter | ca_letter | certificate | ca_certificate
+      operation_type – one of: generation | sending
+      total          – total number of items in this batch
+      title          – (optional) human-readable label shown in the progress panel
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        workflow_type = (data.get("workflow_type") or "").strip()
+        operation_type = (data.get("operation_type") or "sending").strip()
+        total = int(data.get("total") or 0)
+        title = (data.get("title") or "").strip()
+
+        if workflow_type not in ("offer_letter", "ca_letter", "certificate", "ca_certificate"):
+            return jsonify({"success": False, "error": "Invalid workflow_type."}), 400
+        if operation_type not in ("generation", "sending"):
+            return jsonify({"success": False, "error": "Invalid operation_type."}), 400
+        if total <= 0:
+            return jsonify({"success": False, "error": "total must be a positive integer."}), 400
+
+        job = bulk_job_manager.create_job(
+            workflow_type=workflow_type,
+            operation_type=operation_type,
+            total=total,
+            title=title,
+        )
+        return jsonify({"success": True, "job_id": job["job_id"], "job": job})
+    except Exception as exc:
+        print("BULK START JOB ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/bulk/complete-job")
+def bulk_complete_job():
+    """
+    Marks a BulkJobManager job as completed (or cancelled/failed).
+    Called by the client loop after all items have been processed.
+
+    Body (JSON):
+      job_id  – the job to finalise
+      status  – (optional) override: 'completed' | 'cancelled' | 'failed'
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        job_id = (data.get("job_id") or "").strip()
+        status = (data.get("status") or "").strip() or None
+        if not job_id:
+            return jsonify({"success": False, "error": "job_id is required."}), 400
+        updated = bulk_job_manager.complete_job(job_id, status=status)
+        if not updated:
+            return jsonify({"success": False, "error": "Job not found."}), 404
+        return jsonify({"success": True, "job": updated})
+    except Exception as exc:
+        print("BULK COMPLETE JOB ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+# ============================================================
 # GENERATE API
 # ============================================================
 
@@ -3462,10 +3587,19 @@ def bulk_offer_letter_generate_item():
     """
     Generate a single Offer Letter PDF for bulk flow without dispatching email or creating history records.
     """
+    job_id = None
     try:
         data = request.get_json(force=True) or {}
+        job_id = (data.get("job_id") or "").strip() or None
+
+        # -- Live-progress: honour a pending cancel request --
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
+
         letter_type = data.get("letter_type") or "with_hours"
         if letter_type not in ("with_hours", "without_hours"):
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             return jsonify({"success": False, "error": "Invalid letter type."}), 400
 
         student_name = str(data.get("student_name") or data.get("candidate_name") or "").strip()
@@ -3478,6 +3612,8 @@ def bulk_offer_letter_generate_item():
         stipend = clean_stipend(data.get("stipend"))
 
         if not student_name or not student_email or not domain or not start_date or not end_date:
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             return jsonify({"success": False, "error": "Missing required fields."}), 400
 
         # Format dates to DD/MM/YYYY for template
@@ -3496,9 +3632,13 @@ def bulk_offer_letter_generate_item():
                 e_obj = datetime.strptime(end_date, "%d/%m/%Y")
                 formatted_end = end_date
         except ValueError:
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             return jsonify({"success": False, "error": "Invalid date format."}), 400
 
         if e_obj < s_obj:
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             return jsonify({"success": False, "error": "End date cannot be before start date."}), 400
 
         data_payload = {
@@ -3516,8 +3656,12 @@ def bulk_offer_letter_generate_item():
             try:
                 hours_per_week = int(data.get("hours_per_week") or 20)
             except (ValueError, TypeError):
+                if job_id:
+                    bulk_job_manager.update_progress(job_id, failed_inc=1)
                 return jsonify({"success": False, "error": "Hours per week must be a number."}), 400
             if hours_per_week <= 0:
+                if job_id:
+                    bulk_job_manager.update_progress(job_id, failed_inc=1)
                 return jsonify({"success": False, "error": "Hours per week must be greater than zero."}), 400
 
             total_hours = weeks * hours_per_week
@@ -3526,6 +3670,9 @@ def bulk_offer_letter_generate_item():
             data_payload["total_hours"] = str(total_hours)
 
         filename = generate_pdf(letter_type, data_payload)
+
+        if job_id:
+            bulk_job_manager.update_progress(job_id, processed_inc=1)
 
         return jsonify({
             "success": True,
@@ -3536,6 +3683,8 @@ def bulk_offer_letter_generate_item():
         })
 
     except Exception as exc:
+        if job_id:
+            bulk_job_manager.update_progress(job_id, failed_inc=1)
         print("BULK OFFER LETTER GENERATE ITEM ERROR:", repr(exc))
         return jsonify({"success": False, "error": str(exc)}), 500
 
@@ -3557,6 +3706,11 @@ def bulk_offer_letter_send_item():
         letter_type = data.get("letter_type") or data.get("offer_letter_type") or "with_hours"
         stipend = clean_stipend(data.get("stipend"))
         send_again = bool(data.get("send_again", False))
+        job_id = (data.get("job_id") or "").strip() or None
+
+        # -- Live-progress: honour a pending cancel request --
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
         if not recipient:
             return jsonify({"success": False, "error": "Student email is required."}), 400
@@ -3726,6 +3880,9 @@ Warm regards,<br>
                     repository.save_offer_letter_record(failed_data)
             except Exception:
                 pass
+            # -- Live-progress: record failure --
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
             return jsonify({"success": False, "error": err_msg, "email_status": "failed", "student_email": recipient}), 500
 
         # Successful Send
@@ -3776,6 +3933,10 @@ Warm regards,<br>
             new_history_data = _build_bulk_history_data(status="sent", sent_at=sent_time, send_count=1, error_message=None)
             repository.save_offer_letter_record(new_history_data)
 
+        # -- Live-progress: record successful send --
+        if job_id:
+            bulk_job_manager.update_progress(job_id, sent_inc=1, current_item_name=student_name)
+
         return jsonify({
             "success": True,
             "student_name": student_name,
@@ -3786,6 +3947,8 @@ Warm regards,<br>
 
     except Exception as exc:
         print("BULK OFFER LETTER SEND ITEM ERROR:", repr(exc))
+        if job_id:
+            bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
@@ -4223,6 +4386,11 @@ def campus_ambassador_bulk_send_item():
         raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
         send_again = bool(data.get("send_again", False))
         prev_count_param = data.get("previous_send_count")
+        job_id = (data.get("job_id") or "").strip() or None
+
+        # -- Live-progress: honour a pending cancel request --
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
         if not filename:
             # Fallback generate PDF if not provided
@@ -4341,6 +4509,9 @@ def campus_ambassador_bulk_send_item():
                 repository.save_campus_ambassador_record(failed_record)
             except Exception as save_err:
                 print("BULK CA FAILED HISTORY SAVE ERROR:", repr(save_err))
+            # -- Live-progress: record failure --
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
             return jsonify({
                 "success": False,
                 "student_name": student_name,
@@ -4363,6 +4534,10 @@ def campus_ambassador_bulk_send_item():
         except Exception as save_err:
             print("BULK CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
 
+        # -- Live-progress: record successful send --
+        if job_id:
+            bulk_job_manager.update_progress(job_id, sent_inc=1, current_item_name=student_name)
+
         return jsonify({
             "success": True,
             "student_name": student_name,
@@ -4375,6 +4550,8 @@ def campus_ambassador_bulk_send_item():
 
     except Exception as exc:
         print("BULK CA ITEM SEND ERROR:", repr(exc))
+        if job_id:
+            bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
         return jsonify({
             "success": False,
             "student_name": student_name,
@@ -4392,6 +4569,11 @@ def campus_ambassador_bulk_process_item():
         student_name = (data.get("student_name") or "").strip()
         student_email = (data.get("student_email") or "").strip().lower()
         raw_date = data.get("date") or data.get("issue_date") or data.get("start_date") or ""
+        job_id = (data.get("job_id") or "").strip() or None
+
+        # -- Live-progress: honour a pending cancel request --
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
         if not student_name:
             return jsonify({
@@ -4486,6 +4668,9 @@ def campus_ambassador_bulk_process_item():
                 repository.save_campus_ambassador_record(failed_record)
             except Exception as save_err:
                 print("BULK CA FAILED HISTORY SAVE ERROR:", repr(save_err))
+            # -- Live-progress: record failure --
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
             return jsonify({
                 "success": False,
                 "student_name": student_name,
@@ -4511,6 +4696,10 @@ def campus_ambassador_bulk_process_item():
         except Exception as save_err:
             print("BULK CA SUCCESS HISTORY SAVE ERROR:", repr(save_err))
 
+        # -- Live-progress: record successful send --
+        if job_id:
+            bulk_job_manager.update_progress(job_id, sent_inc=1, current_item_name=student_name)
+
         return jsonify({
             "success": True,
             "student_name": student_name,
@@ -4521,6 +4710,8 @@ def campus_ambassador_bulk_process_item():
 
     except Exception as exc:
         print("BULK CA ITEM PROCESSING ERROR:", repr(exc))
+        if job_id:
+            bulk_job_manager.update_progress(job_id, failed_inc=1, current_item_name=student_name)
         return jsonify({
             "success": False,
             "student_name": student_name,
@@ -5340,6 +5531,13 @@ def ca_certificate_bulk_job_status(job_id):
 @app.post("/api/ca-certificate/bulk/jobs/<job_id>/send")
 def ca_certificate_bulk_send_job(job_id):
     data = request.get_json(force=True) or {}
+    # BulkJobManager progress-tracking ID (separate from the repository job ID in the URL).
+    bjm_job_id = (data.get("job_id") or "").strip() or None
+
+    # -- Live-progress: honour a pending cancel request before touching any item --
+    if bjm_job_id and bulk_job_manager.is_cancelled(bjm_job_id):
+        return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
+
     try:
         items = repository.claim_ca_certificate_email_items(
             job_id, 1, retry_failed=data.get("retry") is True
@@ -5349,12 +5547,13 @@ def ca_certificate_bulk_send_job(job_id):
         failed_items = []
         history_warnings = []
         for item in items[:1]:
+            participant_name = item["participant_name"]
             document_id = item.get("document_id") or f"CA-CERT-{uuid.uuid4().hex}"
-            filename = f"{ca_certificate_service.safe_filename(item['participant_name'])}_CA_Certificate.pdf"
+            filename = f"{ca_certificate_service.safe_filename(participant_name)}_CA_Certificate.pdf"
             send_attempted = False
             try:
                 claim_record = repository.save_ca_certificate_record({
-                    "participant_name": item["participant_name"],
+                    "participant_name": participant_name,
                     "participant_email": item["participant_email"],
                     "program_date": item["program_date"],
                     "document_id": document_id,
@@ -5375,22 +5574,25 @@ def ca_certificate_bulk_send_job(job_id):
                 }, claim_token=item.get("claim_token"))
                 failed += 1
                 failed_items.append({
-                    "participant_name": item["participant_name"],
+                    "participant_name": participant_name,
                     "participant_email": item["participant_email"],
                     "program_date": item["program_date"],
                     "error": str(exc),
                 })
+                # -- Live-progress: claim failure --
+                if bjm_job_id:
+                    bulk_job_manager.update_progress(bjm_job_id, failed_inc=1, current_item_name=participant_name)
                 continue
             try:
                 pdf_bytes, formatted_date = ca_certificate_service.generate_pdf_bytes(
-                    item["participant_name"], item["program_date"]
+                    participant_name, item["program_date"]
                 )
                 message = EmailMessage()
-                message["Subject"] = "Campus Ambassador Certificate – Persevex"
+                message["Subject"] = "Campus Ambassador Certificate \u2013 Persevex"
                 message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
                 message["To"] = item["participant_email"]
                 message.set_content(
-                    f"Dear {item['participant_name']},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
+                    f"Dear {participant_name},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
                     "Congratulations on your participation.\n\nWarm regards,\nTeam Persevex"
                 )
                 message.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
@@ -5402,7 +5604,7 @@ def ca_certificate_bulk_send_job(job_id):
                 email_status = "uncertain" if send_attempted else "failed"
                 try:
                     persistence = repository.save_ca_certificate_record({
-                        "participant_name": item["participant_name"],
+                        "participant_name": participant_name,
                         "participant_email": item["participant_email"],
                         "program_date": item["program_date"],
                         "document_id": document_id,
@@ -5428,16 +5630,19 @@ def ca_certificate_bulk_send_job(job_id):
                 else:
                     failed += 1
                     failed_items.append({
-                        "participant_name": item["participant_name"],
+                        "participant_name": participant_name,
                         "participant_email": item["participant_email"],
                         "program_date": item["program_date"],
                         "error": str(exc),
                     })
+                # -- Live-progress: record send failure/uncertain --
+                if bjm_job_id:
+                    bulk_job_manager.update_progress(bjm_job_id, failed_inc=1, current_item_name=participant_name)
                 continue
 
             try:
                 persistence = repository.save_ca_certificate_record({
-                    "participant_name": item["participant_name"],
+                    "participant_name": participant_name,
                     "participant_email": item["participant_email"],
                     "program_date": formatted_date,
                     "document_id": document_id,
@@ -5460,6 +5665,9 @@ def ca_certificate_bulk_send_job(job_id):
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }, claim_token=item.get("claim_token"))
             sent += 1
+            # -- Live-progress: record confirmed successful send --
+            if bjm_job_id:
+                bulk_job_manager.update_progress(bjm_job_id, sent_inc=1, current_item_name=participant_name)
         counts = repository.reconcile_ca_certificate_job(job_id)
         eligible_statuses = ("failed",) if data.get("retry") is True else ("pending",)
         remaining_items = repository.get_ca_certificate_job_items(job_id, eligible_statuses)
@@ -5481,6 +5689,8 @@ def ca_certificate_bulk_send_job(job_id):
 @app.post("/api/ca-certificate/bulk/jobs/<job_id>/process")
 def ca_certificate_bulk_process_job(job_id):
     data = request.get_json(force=True) or {}
+    # BulkJobManager progress-tracking ID (separate from the repository job ID in the URL).
+    bjm_job_id = (data.get("job_id") or "").strip() or None
     try:
         job = repository.get_ca_certificate_job(job_id)
         if not job:
@@ -5493,7 +5703,6 @@ def ca_certificate_bulk_process_job(job_id):
         for item in batch:
             processed += 1
             name = item["participant_name"]
-            email = item["participant_email"]
             filename = f"{ca_certificate_service.safe_filename(name)}_CA_Certificate.pdf"
             try:
                 pdf_bytes, formatted_date = ca_certificate_service.generate_pdf_bytes(name, item["program_date"])
@@ -5505,6 +5714,9 @@ def ca_certificate_bulk_process_job(job_id):
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }, claim_token=item.get("claim_token"))
                 generated += 1
+                # -- Live-progress: record successful generation --
+                if bjm_job_id:
+                    bulk_job_manager.update_progress(bjm_job_id, sent_inc=0, failed_inc=0, processed_inc=1, current_item_name=name)
             except Exception as exc:
                 failed += 1
                 repository.update_ca_certificate_job_item(item["id"], {
@@ -5514,6 +5726,9 @@ def ca_certificate_bulk_process_job(job_id):
                     "error_message": str(exc),
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }, claim_token=item.get("claim_token"))
+                # -- Live-progress: record generation failure --
+                if bjm_job_id:
+                    bulk_job_manager.update_progress(bjm_job_id, failed_inc=1, current_item_name=name)
         counts = repository.reconcile_ca_certificate_job(job_id)
         return jsonify({"success": True, "job_id": job_id, "processed": processed, "generated": generated, "failed": failed, "counts": counts, "complete": len(batch) < min(max(int(data.get("batch_size", 10)), 1), 25)})
     except RuntimeError as exc:
@@ -5997,16 +6212,30 @@ def bulk_certificate_generate():
     try:
         data = request.get_json(force=True) or {}
         rows = data.get("rows") or []
+        job_id = (data.get("job_id") or "").strip() or None
+
         if not rows:
             return jsonify({"success": False, "error": "No valid rows provided for certificate generation."}), 400
+
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
         base_url = certificate_service.get_public_base_url(request)
         result = bulk_certificate_service.generate_bulk_certificates(
             valid_rows=rows,
             output_dir=GENERATED_DIR,
             base_url=base_url,
-            supabase_client=supabase
+            supabase_client=supabase,
+            job_id=job_id,
         )
+
+        if result.get("cancelled"):
+            return jsonify({
+                "success": False,
+                "cancelled": True,
+                "error": "Bulk generation cancelled.",
+                **result
+            }), 409
 
         return jsonify({
             "success": True,
@@ -6025,9 +6254,13 @@ def bulk_certificate_send_email():
         items = data.get("items") or []
         skip_duplicate_emails = data.get("skip_duplicate_emails") or []
         send_again_all = bool(data.get("send_again_all", False))
+        job_id = (data.get("job_id") or "").strip() or None
 
         if not items:
             return jsonify({"success": False, "error": "No certificates selected for email dispatch."}), 400
+
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
         result = bulk_certificate_service.send_bulk_certificate_emails(
             certificate_items=items,
@@ -6035,8 +6268,17 @@ def bulk_certificate_send_email():
             batch_size=5,
             delay_seconds=0.4,
             skip_duplicate_emails=skip_duplicate_emails,
-            send_again_all=send_again_all
+            send_again_all=send_again_all,
+            job_id=job_id,
         )
+
+        if result.get("cancelled"):
+            return jsonify({
+                "success": False,
+                "cancelled": True,
+                "error": "Bulk dispatch cancelled.",
+                **result
+            }), 409
 
         return jsonify({
             "success": True,

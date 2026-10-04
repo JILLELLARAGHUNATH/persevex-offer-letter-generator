@@ -2957,3 +2957,34 @@ def get_unified_history(
         "total_pages": total_pages,
         "available_months": available_months,
     }
+
+
+def get_all_workflow_stats():
+    """
+    Returns separate authoritative statistics for all four independent workflows
+    plus the overall email summary. Loads all records to calculate per-workflow
+    sent/failed breakdowns accurately.
+    """
+    history_data = get_unified_history(record_type="all", page=1, per_page=100000)
+    all_records = history_data.get("all_filtered_records") or []
+
+    def _stats(rec_type):
+        recs = [r for r in all_records if r.get("record_type") == rec_type]
+        return {
+            "sent":   sum(1 for r in recs if r.get("email_status") == "sent"),
+            "failed": sum(1 for r in recs if r.get("email_status") in {"failed", "uncertain"}),
+            "total":  len(recs),
+        }
+
+    return {
+        "success": True,
+        "overall": {
+            "sent":   history_data.get("total_sent", 0),
+            "failed": history_data.get("total_failed", 0),
+            "total":  history_data.get("total_records", 0),
+        },
+        "offer_letter":   _stats("offer_letter"),
+        "ca_letter":      _stats("ca_letter"),
+        "certificate":    _stats("certificate"),
+        "ca_certificate": _stats("ca_certificate"),
+    }

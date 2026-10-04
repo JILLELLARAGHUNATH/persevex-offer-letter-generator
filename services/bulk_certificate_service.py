@@ -14,6 +14,7 @@ from database.repository import (
     save_bulk_job_record,
 )
 import certificate_service
+from services.bulk_job_manager import bulk_job_manager
 
 # Column Header Synonyms
 HEADER_MAP = {
@@ -288,7 +289,7 @@ def get_sample_excel_template():
 
 
 
-def generate_bulk_certificates(valid_rows, output_dir, base_url="https://persevex.vercel.app", supabase_client=None):
+def generate_bulk_certificates(valid_rows, output_dir, base_url="https://persevex.vercel.app", supabase_client=None, job_id=None):
     """
     Generate certificate PDFs for all valid rows with resume safety (idempotent):
     - Identifies and skips records with existing active certificates in DB
@@ -302,6 +303,7 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
     failed_count = 0
     failed_items = []
     records_to_save = []
+    was_cancelled = False
 
     # 1. Batch lookup to detect existing certificates
     try:
@@ -311,6 +313,9 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
         existing_lookup = {}
 
     for item in valid_rows:
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            was_cancelled = True
+            break
         try:
             student_name = str(item.get("student_name") or "").strip()
             student_email = str(item.get("student_email") or "").strip()
@@ -417,8 +422,12 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
                     "status": "newly_generated",
                     "error": None
                 })
+            if job_id:
+                bulk_job_manager.update_progress(job_id, processed_inc=1)
         except Exception as exc:
             failed_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             err_msg = str(exc)
             failed_items.append({
                 "row_index": item.get("row_index"),
@@ -461,11 +470,12 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
         "failed_count": failed_count,
         "results": results,
         "failed_items": failed_items,
+        "cancelled": was_cancelled,
     }
 
 
 
-def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, delay_seconds=0.4, skip_duplicate_emails=None, send_again_all=False):
+def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, delay_seconds=0.4, skip_duplicate_emails=None, send_again_all=False, job_id=None):
     """
     Send emails in safe, controlled batches with live progress tracking and failure visibility.
     Supports skipping historical duplicates and guarantees that the same email is never sent twice in one batch.
@@ -476,6 +486,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
     skipped_count = 0
     failed_items = []
     results = []
+    was_cancelled = False
 
     skip_set = set()
     if skip_duplicate_emails and not send_again_all:
@@ -486,6 +497,10 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
     seen_batch_emails = set()
 
     for i, item in enumerate(certificate_items):
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            was_cancelled = True
+            break
+
         cert_id = item.get("certificate_id")
         student_email = str(item.get("student_email") or "").strip()
         student_name = str(item.get("student_name") or "Student").strip()
@@ -496,6 +511,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         # In-batch duplicate guard: Never send the same email twice in one bulk operation
         if norm_email in seen_batch_emails:
             skipped_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, processed_inc=1)
             results.append({
                 "certificate_id": cert_id,
                 "student_email": student_email,
@@ -510,6 +527,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         # Historical duplicate skip guard (when "Send Only to New" is chosen)
         if norm_email in skip_set:
             skipped_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, processed_inc=1)
             results.append({
                 "certificate_id": cert_id,
                 "student_email": student_email,
@@ -554,6 +573,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             certificate_service.send_certificate_email(email_data, pdf_path, filename)
 
             successful_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, sent_inc=1)
             now_iso = datetime.now().isoformat()
 
             # Update DB record: in-place resend update if previous sent record exists, else insert
@@ -589,6 +610,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             })
         except Exception as exc:
             failed_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, failed_inc=1)
             now_iso = datetime.now().isoformat()
             err_msg = str(exc)
 
@@ -643,13 +666,14 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             time.sleep(delay_seconds)
 
     # Save job record
+    job_status = "cancelled" if was_cancelled else "completed"
     save_bulk_job_record({
         "job_type": "certificate_bulk_email",
         "total_records": total,
         "successful_count": successful_count,
         "failed_count": failed_count,
-        "status": "completed",
-        "details": f"Sent {successful_count}/{total} certificate emails successfully."
+        "status": job_status,
+        "details": f"Sent {successful_count}/{total} certificate emails successfully." if not was_cancelled else f"Cancelled after sending {successful_count}/{total} certificate emails."
     })
 
     return {
@@ -659,4 +683,5 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         "skipped_count": skipped_count,
         "results": results,
         "failed_items": failed_items,
+        "cancelled": was_cancelled,
     }

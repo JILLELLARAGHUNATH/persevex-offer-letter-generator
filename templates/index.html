@@ -693,8 +693,9 @@
                             <h4 id="bulkOfferProgressTitle" class="bulk-progress-title">Generating Offer Letters...</h4>
                             <span id="bulkOfferProgressPercent" class="bulk-progress-badge">0.0%</span>
                         </div>
-                        <div class="bulk-progress-counter">
-                            <span id="bulkOfferProgressCompleted">0</span> / <span id="bulkOfferProgressTotal">0</span>
+                        <div class="bulk-progress-counter" style="display: flex; align-items: center; gap: 8px;">
+                            <span><span id="bulkOfferProgressCompleted">0</span> / <span id="bulkOfferProgressTotal">0</span></span>
+                            <button type="button" id="bulkOfferCancelDispatchBtn" class="btn-cancel-action" style="display: none; padding: 3px 8px; font-size: 11.5px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer; font-weight: 500;">Cancel</button>
                         </div>
                     </div>
 
@@ -2498,6 +2499,25 @@ async function executeBulkOfferGeneration() {
     let successCount = 0;
     let failedCount = 0;
 
+    // Register this batch with the server-side BulkJobManager for live-progress tracking
+    let _genJobId = null;
+    try {
+        const jobResp = await fetch("/api/bulk/start-job", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                workflow_type: "offer_letter",
+                operation_type: "generation",
+                total: total,
+                title: "Generating Offer Letter PDFs"
+            })
+        });
+        if (jobResp.ok) {
+            const jobData = await jobResp.json();
+            _genJobId = jobData.job_id || null;
+        }
+    } catch (_) { /* non-fatal – continue without server tracking */ }
+
     for (let i = 0; i < total; i++) {
         const row = validRows[i];
         const currentIdx = i + 1;
@@ -2524,7 +2544,8 @@ async function executeBulkOfferGeneration() {
                 letter_type: row.letter_type,
                 weeks: row.weeks,
                 hours_per_week: row.hours_per_week,
-                total_hours: row.total_hours
+                total_hours: row.total_hours,
+                job_id: _genJobId
             };
 
             const response = await fetch("/api/offer-letter/bulk/generate-item", {
@@ -2534,6 +2555,10 @@ async function executeBulkOfferGeneration() {
             });
 
             const result = await response.json();
+            if (response.status === 409 && result.cancelled) {
+                showToast("Bulk generation cancelled.", "info");
+                break;
+            }
             if (!response.ok) {
                 throw new Error(result.error || "Generation error.");
             }
@@ -2560,6 +2585,17 @@ async function executeBulkOfferGeneration() {
     if (generateBtn) generateBtn.disabled = false;
     if (generateBtnText) generateBtnText.textContent = "Generate All Valid Letters";
     bulkOfferIsGenerating = false;
+
+    // Mark job complete on the server
+    if (_genJobId) {
+        try {
+            await fetch("/api/bulk/complete-job", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ job_id: _genJobId })
+            });
+        } catch (_) { /* non-fatal */ }
+    }
 
     if (failedCount > 0) {
         populateOfferGenFailedTable();
@@ -2714,13 +2750,55 @@ async function executeBulkOfferDispatch(rowsToDispatch, existingEmailsSet) {
     if (progressBreakdown) progressBreakdown.style.display = "inline";
     if (progressTitle) progressTitle.textContent = "Sending Offer Letter Emails...";
 
-    const total = rowsToDispatch.length;
+    let total = rowsToDispatch.length;
     let successCount = 0;
     let newCount = 0;
     let resentCount = 0;
     let failedCount = 0;
+    let _sendJobId = null;
+    let _cancelRequested = false;
+
+    const cancelBtn = document.getElementById("bulkOfferCancelDispatchBtn");
+    if (cancelBtn) {
+        cancelBtn.style.display = "inline-block";
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Cancel Dispatch";
+        cancelBtn.onclick = async function() {
+            if (_cancelRequested || !_sendJobId) return;
+            _cancelRequested = true;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = "Cancelling...";
+            try {
+                await fetch("/api/bulk/cancel", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ job_id: _sendJobId })
+                });
+            } catch (_) {}
+        };
+    }
+
+    // Register this batch with the server-side BulkJobManager
+    try {
+        const jobResp = await fetch("/api/bulk/start-job", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                workflow_type: "offer_letter",
+                operation_type: "sending",
+                total: total,
+                title: "Sending Offer Letter Emails"
+            })
+        });
+        if (jobResp.ok) {
+            const jobData = await jobResp.json();
+            _sendJobId = jobData.job_id || null;
+        }
+    } catch (_) { /* non-fatal */ }
 
     for (let i = 0; i < total; i++) {
+        if (_cancelRequested) break;
+
         const row = rowsToDispatch[i];
         const currentIdx = i + 1;
         const pct = Math.round((currentIdx / total) * 100);
@@ -2751,7 +2829,8 @@ async function executeBulkOfferDispatch(rowsToDispatch, existingEmailsSet) {
                 weeks: row.weeks,
                 hours_per_week: row.hours_per_week,
                 total_hours: row.total_hours,
-                send_again: isSendAgain
+                send_again: isSendAgain,
+                job_id: _sendJobId
             };
 
             const response = await fetch("/api/offer-letter/bulk/send-item", {
@@ -2761,6 +2840,12 @@ async function executeBulkOfferDispatch(rowsToDispatch, existingEmailsSet) {
             });
 
             const result = await response.json();
+            // Handle server-side cancel signal
+            if (response.status === 409 && result.cancelled) {
+                _cancelRequested = true;
+                showToast("Bulk dispatch cancelled.", "info");
+                break;
+            }
             if (!response.ok) {
                 throw new Error(result.error || "Email dispatch failed.");
             }
@@ -2789,17 +2874,42 @@ async function executeBulkOfferDispatch(rowsToDispatch, existingEmailsSet) {
         updateRowDOMValidation(row);
     }
 
+    if (cancelBtn) {
+        cancelBtn.style.display = "none";
+        cancelBtn.disabled = true;
+        cancelBtn.onclick = null;
+    }
+
     if (progressSuccess) progressSuccess.textContent = String(successCount);
     if (progressNew) progressNew.textContent = String(newCount);
     if (progressExisting) progressExisting.textContent = String(resentCount);
     if (progressFailed) progressFailed.textContent = String(failedCount);
-    if (progressRemaining) progressRemaining.textContent = "0";
+    if (progressRemaining) progressRemaining.textContent = String(Math.max(0, total - (successCount + failedCount)));
 
     if (sendBtn) sendBtn.disabled = false;
     if (sendBtnText) sendBtnText.textContent = "Send Offer Letters to Selected";
     bulkOfferIsSending = false;
 
-    if (failedCount > 0) {
+    // Mark the server-side job as complete
+    if (_sendJobId) {
+        try {
+            const finalStatus = _cancelRequested ? "cancelled" : undefined;
+            await fetch("/api/bulk/complete-job", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ job_id: _sendJobId, status: finalStatus })
+            });
+        } catch (_) { /* non-fatal */ }
+    }
+
+    // Refresh dashboard stats after batch completes
+    localStorage.setItem("persevex_stats_updated", Date.now().toString());
+    updateEmailStatusCounts();
+
+    if (_cancelRequested) {
+        if (progressTitle) progressTitle.textContent = "Dispatch Cancelled";
+        showToast(`Bulk dispatch cancelled. ${successCount} sent, ${failedCount} failed, ${Math.max(0, total - successCount - failedCount)} unprocessed.`, "info");
+    } else if (failedCount > 0) {
         populateOfferEmailFailedTable();
         showToast(`Email dispatch completed: ${successCount} sent (${newCount} new, ${resentCount} resent), ${failedCount} failed.`, "error");
     } else {

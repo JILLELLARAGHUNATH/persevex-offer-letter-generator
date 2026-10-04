@@ -6686,6 +6686,12 @@ button:active:not(:disabled) {
     border-color: #fecaca;
 }
 
+.eval-status-badge.eval-badge-partial {
+    background: #fffbeb;
+    color: #92400e;
+    border-color: #fde68a;
+}
+
 .eval-metrics-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);

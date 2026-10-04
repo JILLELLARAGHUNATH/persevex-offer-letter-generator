@@ -467,8 +467,9 @@
                                 <h4 id="bulkProgressTitle" class="bulk-progress-title">Generating Certificates...</h4>
                                 <span id="bulkProgressPercent" class="bulk-progress-badge">0.0%</span>
                             </div>
-                            <div class="bulk-progress-counter">
-                                <span id="bulkProgressCompleted">0</span> / <span id="bulkProgressTotal">0</span>
+                            <div class="bulk-progress-counter" style="display: flex; align-items: center; gap: 8px;">
+                                <span><span id="bulkProgressCompleted">0</span> / <span id="bulkProgressTotal">0</span></span>
+                                <button type="button" id="bulkCancelEmailBtn" class="btn-cancel-action" style="display: none; padding: 3px 8px; font-size: 11.5px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; cursor: pointer; font-weight: 500;">Cancel Send</button>
                             </div>
                         </div>
 
@@ -1520,6 +1521,25 @@ async function executeBulkGeneration(targetRows = null) {
     progressRemaining.textContent = total;
     progressCurrent.textContent = rowsToGenerate[0]?.student_name || '-';
 
+    // Register this generation batch with BulkJobManager for live-progress tracking
+    let _genJobId = null;
+    try {
+        const _jr = await fetch('/api/bulk/start-job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                workflow_type: 'certificate',
+                operation_type: 'generation',
+                total: total,
+                title: isRetry ? 'Retrying Certificate Generations' : 'Generating Certificates'
+            })
+        });
+        if (_jr.ok) {
+            const _jd = await _jr.json();
+            _genJobId = _jd.job_id || null;
+        }
+    } catch (_) { /* non-critical — never block the workflow */ }
+
     // Chunk size: 15 certificates per request for high speed and resume reliability
     const CHUNK_SIZE = 15;
     const chunks = [];
@@ -1536,9 +1556,13 @@ async function executeBulkGeneration(targetRows = null) {
             const response = await fetch('/api/certificate/bulk/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rows: chunk })
+                body: JSON.stringify({ rows: chunk, job_id: _genJobId })
             });
             const result = await response.json();
+            if (response.status === 409 && result.cancelled) {
+                showToast("Certificate generation cancelled.", "info");
+                break;
+            }
 
             if (result.success && Array.isArray(result.results)) {
                 if (typeof result.newly_generated_count === 'number') {
@@ -1614,6 +1638,17 @@ async function executeBulkGeneration(targetRows = null) {
 
     currentFailedGenerationItems = batchFailedItems;
     renderGenerationFailedTable(currentFailedGenerationItems);
+
+    // Mark generation job as complete in BulkJobManager (fire-and-forget)
+    if (_genJobId) {
+        try {
+            await fetch('/api/bulk/complete-job', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_id: _genJobId })
+            });
+        } catch (_) { /* non-critical */ }
+    }
 
     const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
     progressBar.style.width = '100%';
@@ -1757,6 +1792,47 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
     progressRemaining.textContent = total;
     progressCurrent.textContent = itemsToSend[0]?.student_email || '-';
 
+    // Register this send batch with BulkJobManager for live-progress tracking
+    let _sendJobId = null;
+    let _cancelRequested = false;
+
+    const cancelBtn = document.getElementById("bulkCancelEmailBtn");
+    if (cancelBtn) {
+        cancelBtn.style.display = "inline-block";
+        cancelBtn.disabled = false;
+        cancelBtn.textContent = "Cancel Send";
+        cancelBtn.onclick = async function() {
+            if (_cancelRequested || !_sendJobId) return;
+            _cancelRequested = true;
+            cancelBtn.disabled = true;
+            cancelBtn.textContent = "Cancelling...";
+            try {
+                await fetch('/api/bulk/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ job_id: _sendJobId })
+                });
+            } catch (_) {}
+        };
+    }
+
+    try {
+        const _sjr = await fetch('/api/bulk/start-job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                workflow_type: 'certificate',
+                operation_type: 'sending',
+                total: total,
+                title: isRetry ? 'Retrying Certificate Emails' : 'Sending Certificate Emails'
+            })
+        });
+        if (_sjr.ok) {
+            const _sjd = await _sjr.json();
+            _sendJobId = _sjd.job_id || null;
+        }
+    } catch (_) { /* non-critical — never block the workflow */ }
+
     const EMAIL_CHUNK_SIZE = 5;
     const chunks = [];
     for (let i = 0; i < total; i += EMAIL_CHUNK_SIZE) {
@@ -1764,6 +1840,8 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
     }
 
     for (let c = 0; c < chunks.length; c++) {
+        if (_cancelRequested) break;
+
         const chunk = chunks[c];
         const firstEmail = chunk[0]?.student_email || 'Sending...';
         progressCurrent.textContent = firstEmail;
@@ -1774,17 +1852,33 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     items: chunk,
-                    skip_duplicate_emails: !!(options && options.skip_duplicate_emails),
-                    send_again_all: !!(options && options.send_again_all)
+                    skip_duplicate_emails: options && Array.isArray(options.skip_duplicate_emails) ? options.skip_duplicate_emails : [],
+                    send_again_all: !!(options && options.send_again_all),
+                    job_id: _sendJobId
                 })
             });
             const result = await response.json();
+
+            if (response.status === 409 && result.cancelled) {
+                _cancelRequested = true;
+                if (Array.isArray(result.results)) {
+                    for (const item of result.results) {
+                        if (item.status === 'sent') {
+                            sentCount++;
+                        } else if (item.status === 'failed') {
+                            failedCount++;
+                        }
+                    }
+                }
+                showToast("Certificate bulk email dispatch cancelled.", "info");
+                break;
+            }
 
             if (result.success && Array.isArray(result.results)) {
                 for (const item of result.results) {
                     if (item.status === 'sent') {
                         sentCount++;
-                    } else if (item.status === 'skipped_duplicate') {
+                    } else if (item.status === 'skipped_batch_duplicate' || item.status === 'skipped_historical_duplicate' || item.status === 'skipped_duplicate') {
                         // Skipped duplicate is not considered a failure
                     } else {
                         failedCount++;
@@ -1831,20 +1925,47 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
         progressRemaining.textContent = remaining;
     }
 
+    if (cancelBtn) {
+        cancelBtn.style.display = "none";
+        cancelBtn.disabled = true;
+        cancelBtn.onclick = null;
+    }
+
     currentFailedEmailItems = batchFailedEmailItems;
     renderEmailFailedTable(currentFailedEmailItems);
 
-    progressBar.style.width = '100%';
-    progressPercent.textContent = '100%';
-    progressTitle.textContent = 'Email Dispatch Completed';
-    progressCurrent.textContent = `Finished (${sentCount} sent, ${failedCount} failed)`;
-    if (sendText) sendText.textContent = `Completed (${sentCount} Sent)`;
+    // Mark send job as complete in BulkJobManager (fire-and-forget)
+    if (_sendJobId) {
+        try {
+            const finalStatus = _cancelRequested ? 'cancelled' : undefined;
+            await fetch('/api/bulk/complete-job', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ job_id: _sendJobId, status: finalStatus })
+            });
+        } catch (_) { /* non-critical */ }
+    }
+
+    if (_cancelRequested) {
+        progressTitle.textContent = 'Email Dispatch Cancelled';
+        progressCurrent.textContent = `Cancelled (${sentCount} sent, ${failedCount} failed, ${Math.max(0, total - sentCount - failedCount)} unprocessed)`;
+        if (sendText) sendText.textContent = `Cancelled (${sentCount} Sent)`;
+        showToast(`Certificate dispatch cancelled. ${sentCount} sent, ${failedCount} failed, ${Math.max(0, total - sentCount - failedCount)} unprocessed.`, "info");
+    } else {
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressTitle.textContent = 'Email Dispatch Completed';
+        progressCurrent.textContent = `Finished (${sentCount} sent, ${failedCount} failed)`;
+        if (sendText) sendText.textContent = `Completed (${sentCount} Sent)`;
+        showToast(`Bulk email finished: ${sentCount} sent, ${failedCount} failed.`, sentCount > 0 ? 'success' : 'error');
+    }
+
     if (sendBtn) {
         sendBtn.style.background = sentCount > 0 ? '#059669' : '#ef4444';
         sendBtn.disabled = false;
         sendBtn.style.opacity = '1';
     }
-    showToast(`Bulk email finished: ${sentCount} sent, ${failedCount} failed.`, sentCount > 0 ? 'success' : 'error');
+    localStorage.setItem('persevex_history_updated', Date.now().toString());
     localStorage.setItem('persevex_stats_updated', Date.now().toString());
     refreshStats();
 }

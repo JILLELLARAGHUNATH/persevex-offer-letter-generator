@@ -20,6 +20,8 @@ import app as application
 import environment_config
 from database import repository
 from services.ca_bulk_service import parse_ca_file
+import services.bulk_certificate_service as bulk_certificate_service
+import smtplib
 
 unittest.addModuleCleanup(_test_storage.cleanup)
 
@@ -822,6 +824,970 @@ class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
         self.assertIn("authentication", data["error"].lower())
 
 
+class CACertificateBulkJobManagerIntegrationTests(unittest.TestCase):
+    """
+    Tests for the BulkJobManager integration added to the CA Certificate
+    bulk /process and /send endpoints.
+
+    All SMTP calls are mocked — no real emails are sent.
+    All Supabase calls are mocked — development DB only, no production access.
+    """
+
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def _make_item(self, name="Test Participant", email="participant@example.invalid",
+                   doc_id=None, attempt_count=0, send_count=0):
+        return {
+            "id": "item-bjm-1",
+            "source_row": 1,
+            "participant_name": name,
+            "participant_email": email,
+            "program_date": "26-09-2026",
+            "document_id": doc_id or f"CA-CERT-{'a' * 32}",
+            "claim_token": "test-claim-token",
+            "attempt_count": attempt_count,
+            "send_count": send_count,
+        }
+
+    # ------------------------------------------------------------------
+    # /process — generation phase
+    # ------------------------------------------------------------------
+
+    def test_process_updates_bjm_progress_on_success(self):
+        """_genJobId forwarded to /process must trigger update_progress."""
+        client = self._authenticated_client()
+        item = {
+            "id": "proc-item-1",
+            "participant_name": "Gen Success",
+            "participant_email": "gen@example.invalid",
+            "program_date": "26-09-2026",
+            "claim_token": "tok",
+            "attempt_count": 0,
+        }
+        progress_calls = []
+        with patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-1"}), \
+             patch.object(repository, "claim_ca_certificate_job_items", return_value=[item]), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "completed"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-1/process",
+                json={"batch_size": 10, "job_id": "bjm-gen-job-1"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["generated"], 1)
+        # update_progress must have been called with the bjm job id
+        self.assertTrue(any(jid == "bjm-gen-job-1" for jid, _ in progress_calls),
+                        "update_progress was not called with the BulkJobManager job id")
+
+    def test_process_updates_bjm_progress_on_failure(self):
+        """Failed PDF generation must still call update_progress(failed_inc=1)."""
+        client = self._authenticated_client()
+        item = {
+            "id": "proc-item-2",
+            "participant_name": "Gen Fail",
+            "participant_email": "genfail@example.invalid",
+            "program_date": "26-09-2026",
+            "claim_token": "tok2",
+            "attempt_count": 0,
+        }
+        progress_calls = []
+        with patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-2"}), \
+             patch.object(repository, "claim_ca_certificate_job_items", return_value=[item]), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "completed_with_errors"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          side_effect=RuntimeError("Synthetic PDF failure")), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-2/process",
+                json={"batch_size": 10, "job_id": "bjm-gen-job-2"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["failed"], 1)
+        failed_calls = [(jid, kw) for jid, kw in progress_calls if kw.get("failed_inc", 0) > 0]
+        self.assertTrue(any(jid == "bjm-gen-job-2" for jid, _ in failed_calls),
+                        "update_progress(failed_inc=1) was not called for generation failure")
+
+    def test_process_without_bjm_job_id_still_works(self):
+        """Omitting job_id in /process body must not break existing behaviour."""
+        client = self._authenticated_client()
+        item = {
+            "id": "proc-item-3",
+            "participant_name": "No BJM",
+            "participant_email": "nobjm@example.invalid",
+            "program_date": "26-09-2026",
+            "claim_token": "tok3",
+            "attempt_count": 0,
+        }
+        with patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-3"}), \
+             patch.object(repository, "claim_ca_certificate_job_items", return_value=[item]), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "completed"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-3/process",
+                json={"batch_size": 10},  # no job_id key
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+
+    # ------------------------------------------------------------------
+    # /send — sending phase: progress tracking
+    # ------------------------------------------------------------------
+
+    def test_send_updates_bjm_progress_on_confirmed_send(self):
+        """Successful send must call update_progress(sent_inc=1)."""
+        client = self._authenticated_client()
+        item = self._make_item()
+        progress_calls = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-send-1"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL") as smtp_factory, \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            smtp_factory.return_value.__enter__.return_value.send_message.return_value = None
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-send-1/send",
+                json={"batch_size": 1, "job_id": "bjm-send-job-1"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["sent"], 1)
+        sent_calls = [(jid, kw) for jid, kw in progress_calls if kw.get("sent_inc", 0) > 0]
+        self.assertTrue(any(jid == "bjm-send-job-1" for jid, _ in sent_calls),
+                        "update_progress(sent_inc=1) was not called after confirmed send")
+
+    def test_send_updates_bjm_progress_on_known_failure(self):
+        """Known SMTP failure (connection error) must call update_progress(failed_inc=1)."""
+        client = self._authenticated_client()
+        item = self._make_item(name="Send Fail", email="sendfail@example.invalid")
+        progress_calls = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-send-2"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL",
+                          side_effect=ConnectionError("synthetic connect failure")), \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-send-2/send",
+                json={"batch_size": 1, "job_id": "bjm-send-job-2"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["failed"], 1)
+        failed_calls = [(jid, kw) for jid, kw in progress_calls if kw.get("failed_inc", 0) > 0]
+        self.assertTrue(any(jid == "bjm-send-job-2" for jid, _ in failed_calls),
+                        "update_progress(failed_inc=1) was not called for send failure")
+
+    def test_send_updates_bjm_progress_on_uncertain(self):
+        """Uncertain outcome (send_attempted=True then exception) must call update_progress(failed_inc=1)."""
+        client = self._authenticated_client()
+        item = self._make_item(name="Uncertain", email="uncertain@example.invalid")
+        progress_calls = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "repo-job-send-3"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL") as smtp_factory, \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            smtp_factory.return_value.__enter__.return_value.send_message.side_effect = TimeoutError("timeout after send")
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-send-3/send",
+                json={"batch_size": 1, "job_id": "bjm-send-job-3"},
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["uncertain"], 1)
+        # uncertain is still counted as a progress failure for BJM display
+        failed_calls = [(jid, kw) for jid, kw in progress_calls if kw.get("failed_inc", 0) > 0]
+        self.assertTrue(any(jid == "bjm-send-job-3" for jid, _ in failed_calls),
+                        "update_progress(failed_inc=1) was not called for uncertain send")
+
+    # ------------------------------------------------------------------
+    # /send — cancellation
+    # ------------------------------------------------------------------
+
+    def test_send_cancelled_before_item_returns_409(self):
+        """When BulkJobManager marks a job as cancelled, /send must return 409 with cancelled:true."""
+        client = self._authenticated_client()
+        with patch.object(application.bulk_job_manager, "is_cancelled", return_value=True):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/repo-job-cancel-1/send",
+                json={"batch_size": 1, "job_id": "bjm-cancel-job-1"},
+            )
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertTrue(data.get("cancelled"), "Response must include cancelled:true")
+
+    def test_send_no_bjm_job_id_skips_cancel_check(self):
+        """Omitting job_id in /send must not raise — is_cancelled must not be called."""
+        client = self._authenticated_client()
+        item = self._make_item()
+        is_cancelled_calls = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "rj"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL") as smtp_factory, \
+             patch.object(application.bulk_job_manager, "is_cancelled",
+                          side_effect=lambda jid: is_cancelled_calls.append(jid) or False):
+            smtp_factory.return_value.__enter__.return_value.send_message.return_value = None
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/rj/send",
+                json={"batch_size": 1},  # no job_id
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(is_cancelled_calls, [],
+                         "is_cancelled must not be called when no bjm job_id is provided")
+
+    # ------------------------------------------------------------------
+    # Safety mechanisms — must remain intact after changes
+    # ------------------------------------------------------------------
+
+    def test_uncertain_detection_preserved(self):
+        """send_attempted=True + exception must still produce email_status='uncertain' in history."""
+        client = self._authenticated_client()
+        item = self._make_item(name="Uncertain Safety", email="uncertain2@example.invalid")
+        saved = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          side_effect=lambda r: saved.append(dict(r)) or {"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "rj-unc"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL") as smtp_factory, \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False), \
+             patch.object(application.bulk_job_manager, "update_progress", return_value=None):
+            smtp_factory.return_value.__enter__.return_value.send_message.side_effect = TimeoutError("timeout")
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/rj-unc/send",
+                json={"batch_size": 1, "job_id": "bjm-unc"},
+            )
+        statuses = [r["email_status"] for r in saved]
+        self.assertIn("uncertain", statuses, "uncertain email_status must still be written to history")
+
+    def test_send_count_incremented_on_success(self):
+        """send_count in the history record must be original + 1 on successful send."""
+        client = self._authenticated_client()
+        item = self._make_item(send_count=2)  # already sent twice before
+        saved = []
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=[item]), \
+             patch.object(repository, "save_ca_certificate_record",
+                          side_effect=lambda r: saved.append(dict(r)) or {"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(repository, "get_ca_certificate_job", return_value={"id": "rj-sc"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes",
+                          return_value=(b"%PDF mock", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "test@example.invalid"), \
+             patch.object(application.smtplib, "SMTP_SSL") as smtp_factory, \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False), \
+             patch.object(application.bulk_job_manager, "update_progress", return_value=None):
+            smtp_factory.return_value.__enter__.return_value.send_message.return_value = None
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/rj-sc/send",
+                json={"batch_size": 1, "job_id": "bjm-sc"},
+            )
+        self.assertEqual(response.status_code, 200)
+        sent_record = next((r for r in saved if r.get("email_status") == "sent"), None)
+        self.assertIsNotNone(sent_record, "A 'sent' record must be saved on success")
+        self.assertEqual(sent_record["send_count"], 3,
+                         "send_count must be original (2) + 1 = 3")
+
+    def test_retry_flag_forwarded_to_repository(self):
+        """retry=True from the frontend must reach claim_ca_certificate_email_items as retry_failed=True."""
+        client = self._authenticated_client()
+        claim_calls = []
+        with patch.object(repository, "claim_ca_certificate_email_items",
+                          side_effect=lambda job_id, n, retry_failed=False:
+                              claim_calls.append(retry_failed) or []), \
+             patch.object(repository, "reconcile_ca_certificate_job",
+                          return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(application.bulk_job_manager, "is_cancelled", return_value=False):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/rj-retry/send",
+                json={"batch_size": 1, "retry": True, "job_id": "bjm-retry"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(claim_calls and claim_calls[0] is True,
+                        "retry_failed must be True when retry=True is sent")
+
+    # ------------------------------------------------------------------
+    # No cancelled History records
+    # ------------------------------------------------------------------
+
+    def test_cancel_does_not_produce_history_records_for_unprocessed(self):
+        """
+        When is_cancelled() returns True before any item is touched,
+        no history record must be written and sent/failed must both be 0.
+        """
+        client = self._authenticated_client()
+        saved = []
+        with patch.object(application.bulk_job_manager, "is_cancelled", return_value=True), \
+             patch.object(repository, "save_ca_certificate_record",
+                          side_effect=lambda r: saved.append(dict(r)) or {"supabase_saved": True}):
+            response = client.post(
+                "/api/ca-certificate/bulk/jobs/rj-no-hist/send",
+                json={"batch_size": 1, "job_id": "bjm-no-hist"},
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(saved, [],
+                         "No history record must be written for cancelled-before-item requests")
+
+
+class CALetterBulkPartialEvaluationTests(unittest.TestCase):
+    """
+    Regression tests for the CA Letter Bulk partial-evaluation feature.
+
+    Business rule: invalid rows must NOT block generation of valid rows.
+    Generation is enabled when ≥1 valid unique record exists, regardless of
+    invalid rows.  Invalid rows are ALWAYS excluded from the candidates list
+    returned by parse_ca_file; the frontend never sends them to the backend.
+    """
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _build_csv(self, rows):
+        """Build a minimal CSV bytes object from a list of (name, email) tuples."""
+        lines = ["Candidate Name,Email"]
+        for name, email in rows:
+            lines.append(f"{name},{email}")
+        return "\n".join(lines).encode()
+
+    # ------------------------------------------------------------------
+    # TEST 1: 500-row mix — valid, duplicate, and 1 invalid
+    # ------------------------------------------------------------------
+
+    def test_valid_plus_one_invalid_allows_generation(self):
+        """
+        Scenario: 500 rows, with valid records, 2 duplicates, and 1 invalid row.
+        Expected:
+        - evaluation produces valid_count > 0
+        - invalid_count == 1
+        - candidates list contains only valid unique records (no invalid, no extra duplicates)
+        - invalid row (taniya@...) is NOT in candidates
+        """
+        rows = []
+        # 497 valid unique rows
+        for i in range(497):
+            rows.append((f"Candidate {i}", f"candidate{i}@example.invalid"))
+        # 2 duplicate rows (same email as rows 0 and 1)
+        rows.append(("Dup A", "candidate0@example.invalid"))
+        rows.append(("Dup B", "candidate1@example.invalid"))
+        # 1 invalid row (bad email)
+        rows.append(("Taniya", "taniya"))
+
+        result = parse_ca_file(self._build_csv(rows), "test500.csv")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["total_rows"], 500)
+        self.assertEqual(result["invalid_count"], 1,
+                         "Exactly 1 row has an invalid email")
+        self.assertEqual(result["duplicate_count"], 2,
+                         "2 rows are duplicates of earlier rows")
+        self.assertEqual(result["valid_count"], 497,
+                         "497 unique valid recipients")
+        # Candidates list must contain only valid unique records
+        self.assertEqual(len(result["candidates"]), 497)
+        candidate_emails = {c["email"] for c in result["candidates"]}
+        self.assertNotIn("taniya",
+                         candidate_emails,
+                         "Invalid email must never appear in candidates")
+        # Duplicate occurrences must also be absent
+        for c in result["candidates"]:
+            self.assertNotEqual(c["name"], "Dup A")
+            self.assertNotEqual(c["name"], "Dup B")
+
+    def test_valid_plus_invalid_generation_endpoint_never_receives_invalid(self):
+        """
+        When the frontend calls /api/campus-ambassador/bulk-generate-item it sends
+        only items from validCandidatesList. Verify:
+        1. A valid item is accepted by the endpoint (200).
+        2. A request with a missing/empty name is rejected (400).
+        3. A request with a missing/empty email is rejected (400).
+
+        This proves that even if an invalid row somehow reached the endpoint, the
+        server-side guards would block it.
+        """
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+
+        # Mock the PDF generation function so no real filesystem writes occur.
+        with patch.object(application, "generate_ca_pdf", return_value="Alice_CA.pdf"), \
+             patch.object(application, "format_ca_date", return_value="01 January 2025"):
+
+            # Valid item → must be accepted
+            valid_resp = client.post(
+                "/api/campus-ambassador/bulk-generate-item",
+                json={"student_name": "Alice", "student_email": "alice@example.invalid",
+                      "date": "2025-01-01"},
+            )
+            self.assertIn(valid_resp.status_code, (200, 201),
+                          "Valid record must be accepted by the generate endpoint")
+
+            # Missing name → must be rejected (invalid row guard)
+            no_name_resp = client.post(
+                "/api/campus-ambassador/bulk-generate-item",
+                json={"student_name": "", "student_email": "alice@example.invalid",
+                      "date": "2025-01-01"},
+            )
+            self.assertEqual(no_name_resp.status_code, 400,
+                             "Empty name must be rejected at the server level")
+
+            # Missing email → must be rejected (invalid row guard)
+            no_email_resp = client.post(
+                "/api/campus-ambassador/bulk-generate-item",
+                json={"student_name": "Alice", "student_email": "",
+                      "date": "2025-01-01"},
+            )
+            self.assertEqual(no_email_resp.status_code, 400,
+                             "Empty email must be rejected at the server level")
+
+    # ------------------------------------------------------------------
+    # TEST 2: All rows invalid — generation must stay disabled
+    # ------------------------------------------------------------------
+
+    def test_all_rows_invalid_produces_zero_candidates(self):
+        """
+        Scenario: every row has an invalid email.
+        Expected:
+        - valid_count == 0
+        - candidates list is empty
+        - invalid_count == total rows
+        - no generation possible (frontend uses len(candidates) === 0 guard)
+        """
+        rows = [
+            ("Alice", "not-an-email"),
+            ("Bob", "@missinglocal.com"),
+            ("Carol", "no-at-sign"),
+            ("", "diana@example.invalid"),   # missing name
+        ]
+        result = parse_ca_file(self._build_csv(rows), "all_invalid.csv")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["valid_count"], 0,
+                         "No valid recipients — all rows are invalid")
+        self.assertEqual(result["invalid_count"], 4)
+        self.assertEqual(result["candidates"], [],
+                         "Candidates list must be empty when all rows are invalid")
+        # The frontend guard (validCandidatesList.length === 0) prevents generation.
+        # No further backend test needed; this is a frontend state machine guard.
+
+    # ------------------------------------------------------------------
+    # TEST 3: Mixed valid + invalid — only valid records in candidates
+    # ------------------------------------------------------------------
+
+    def test_mixed_valid_invalid_candidates_list_excludes_invalid(self):
+        """
+        Scenario: 5 rows — 3 valid, 2 invalid.
+        Expected:
+        - valid_count == 3, invalid_count == 2
+        - candidates list has exactly 3 entries, all with valid emails
+        """
+        rows = [
+            ("Alice", "alice@example.invalid"),       # valid
+            ("Bad1", "not-valid"),                    # invalid
+            ("Bob", "bob@example.invalid"),           # valid
+            ("Bad2", ""),                             # invalid (empty email)
+            ("Carol", "carol@example.invalid"),       # valid
+        ]
+        result = parse_ca_file(self._build_csv(rows), "mixed.csv")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["valid_count"], 3)
+        self.assertEqual(result["invalid_count"], 2)
+        self.assertEqual(len(result["candidates"]), 3)
+        emails = {c["email"] for c in result["candidates"]}
+        self.assertIn("alice@example.invalid", emails)
+        self.assertIn("bob@example.invalid", emails)
+        self.assertIn("carol@example.invalid", emails)
+        self.assertNotIn("not-valid", emails)
+        self.assertNotIn("", emails)
+
+    # ------------------------------------------------------------------
+    # TEST 4: Mixed valid + duplicate + invalid — counts are correct
+    # ------------------------------------------------------------------
+
+    def test_mixed_valid_duplicate_invalid_correct_counts(self):
+        """
+        Scenario: 8 rows:
+          - 3 unique valid
+          - 2 duplicates (repeat emails of valid rows)
+          - 3 invalid
+        Expected counts and candidates list integrity.
+        """
+        rows = [
+            ("Alice", "alice@example.invalid"),        # valid, unique #1
+            ("Bob", "bob@example.invalid"),            # valid, unique #2
+            ("Carol", "carol@example.invalid"),        # valid, unique #3
+            ("Alice Again", "alice@example.invalid"),  # duplicate of #1
+            ("Bob Again", "bob@example.invalid"),      # duplicate of #2
+            ("Bad1", "invalid-email"),                 # invalid
+            ("Bad2", "also-bad"),                      # invalid
+            ("", "carol@example.invalid"),             # invalid (empty name)
+        ]
+        result = parse_ca_file(self._build_csv(rows), "mixed4.csv")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["total_rows"], 8)
+        self.assertEqual(result["valid_count"], 3,
+                         "Only the 3 unique valid records count")
+        self.assertEqual(result["duplicate_count"], 2,
+                         "2 rows are later occurrences of already-seen emails")
+        self.assertEqual(result["invalid_count"], 3,
+                         "3 rows are invalid (bad email or missing name)")
+        self.assertEqual(len(result["candidates"]), 3)
+
+        candidate_emails = {c["email"] for c in result["candidates"]}
+        self.assertEqual(
+            candidate_emails,
+            {"alice@example.invalid", "bob@example.invalid", "carol@example.invalid"},
+        )
+        # Invalid row emails must never appear
+        self.assertNotIn("invalid-email", candidate_emails)
+        self.assertNotIn("also-bad", candidate_emails)
+
+    # ------------------------------------------------------------------
+    # TEST 5: History-aware resend behavior unchanged
+    # ------------------------------------------------------------------
+
+    def test_parse_upload_route_returns_candidates_and_invalid_rows_correctly(self):
+        """
+        Verify the /api/campus-ambassador/parse-upload endpoint continues to
+        return both valid candidates AND invalid_rows in the response payload,
+        so the frontend can display the invalid rows breakdown while enabling
+        generation for the valid ones.
+
+        This protects the server-side contract that the frontend relies on.
+        """
+        csv_bytes = self._build_csv([
+            ("Alice", "alice@example.invalid"),   # valid
+            ("Bad", "not-an-email"),               # invalid
+            ("Bob", "bob@example.invalid"),        # valid
+        ])
+
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+
+        response = client.post(
+            "/api/campus-ambassador/parse-upload",
+            data={"file": (BytesIO(csv_bytes), "test.csv")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        # valid_count reflects unique valid records only
+        self.assertEqual(data["valid_count"], 2)
+        self.assertEqual(data["invalid_count"], 1)
+        # candidates list must contain only valid records
+        self.assertEqual(len(data["candidates"]), 2)
+        candidate_emails = {c["email"] for c in data["candidates"]}
+        self.assertNotIn("not-an-email", candidate_emails)
+        # invalid_rows must be populated for the frontend to render the breakdown
+        self.assertEqual(len(data.get("invalid_rows", [])), 1)
+        self.assertIn("not-an-email", data["invalid_rows"][0]["email"])
+
+
+# ============================================================
+# INTERNSHIP OFFER LETTER BULK JOB MANAGER INTEGRATION TESTS
+# ============================================================
+
+class OfferLetterBulkJobManagerIntegrationTests(unittest.TestCase):
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_offer_letter_bulk_generate_propagates_job_id_and_updates_progress(self):
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Offer Student",
+            "student_email": "offer@example.invalid",
+            "domain": "Web Development",
+            "duration": "2 months",
+            "start_date": "01/10/2026",
+            "end_date": "30/11/2026",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "weeks": 8,
+            "hours_per_week": 15,
+            "total_hours": 120,
+            "job_id": "ol-bjm-job-1",
+        }
+        progress_calls = []
+        with patch.object(application, "generate_pdf", return_value="dummy_offer.pdf"), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post("/api/offer-letter/bulk/generate-item", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["filename"], "dummy_offer.pdf")
+        self.assertTrue(any(jid == "ol-bjm-job-1" and kw.get("processed_inc") == 1 for jid, kw in progress_calls))
+
+    def test_offer_letter_bulk_generate_updates_progress_on_failure(self):
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Failing Student",
+            "student_email": "fail@example.invalid",
+            "domain": "Web Development",
+            "duration": "2 months",
+            "start_date": "01/10/2026",
+            "end_date": "30/11/2026",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "job_id": "ol-bjm-job-2",
+        }
+        progress_calls = []
+        with patch.object(application, "generate_pdf", side_effect=Exception("PDF generation crashed")), \
+             patch.object(application.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post("/api/offer-letter/bulk/generate-item", json=payload)
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(any(jid == "ol-bjm-job-2" and kw.get("failed_inc") == 1 for jid, kw in progress_calls))
+
+    def test_offer_letter_bulk_generate_cancelled_returns_409(self):
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Cancelled Student",
+            "student_email": "cancelled@example.invalid",
+            "domain": "Web Development",
+            "duration": "2 months",
+            "start_date": "01/10/2026",
+            "end_date": "30/11/2026",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "job_id": "ol-bjm-cancelled",
+        }
+        with patch.object(application.bulk_job_manager, "is_cancelled", return_value=True):
+            response = client.post("/api/offer-letter/bulk/generate-item", json=payload)
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertTrue(data.get("cancelled"))
+
+    def test_offer_letter_send_cancel_endpoint_prevents_dispatch_and_no_history(self):
+        # When bulkOfferCancelDispatchBtn calls /api/bulk/cancel, job is cancelled
+        client = self._authenticated_client()
+        job = application.bulk_job_manager.create_job(
+            workflow_type="offer_letter",
+            operation_type="sending",
+            total=10,
+            title="Sending Offer Letters"
+        )
+        job_id = job["job_id"]
+        # Cancel the job
+        cancel_resp = client.post("/api/bulk/cancel", json={"job_id": job_id})
+        self.assertEqual(cancel_resp.status_code, 200)
+        self.assertTrue(application.bulk_job_manager.is_cancelled(job_id))
+
+    def test_offer_letter_resend_increments_send_count_and_preserves_document_id(self):
+        # Standard offer letter duplicate / resend behavior check
+        client = self._authenticated_client()
+        # Verify /api/offer-letter/bulk/check-duplicates route checks history
+        with patch.object(repository, "find_existing_offer_letters_batch", return_value={
+            "existing@example.invalid": {"recipient_email": "existing@example.invalid", "candidate_name": "Existing", "status": "Sent", "id": 42}
+        }):
+            resp = client.post("/api/offer-letter/bulk/check-duplicates", json={"emails": ["existing@example.invalid", "new@example.invalid"]})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["success"])
+        self.assertIn("existing@example.invalid", data["duplicates"])
+        self.assertNotIn("new@example.invalid", data["duplicates"])
+
+
+# ============================================================
+# INTERNSHIP CERTIFICATE BULK JOB MANAGER INTEGRATION TESTS
+# ============================================================
+
+class CertificateBulkJobManagerIntegrationTests(unittest.TestCase):
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_certificate_bulk_generate_propagates_job_id_and_updates_progress(self):
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Student A", "student_email": "a@example.invalid", "domain": "Web Development",
+             "start_date": "01/01/2026", "end_date": "01/03/2026"},
+            {"student_name": "Student B", "student_email": "b@example.invalid", "domain": "Data Science",
+             "start_date": "01/01/2026", "end_date": "01/03/2026"},
+        ]
+        progress_calls = []
+        with patch("certificate_service.generate_certificate_pdf", side_effect=["cert_a.pdf", "cert_b.pdf"]), \
+             patch.object(bulk_certificate_service.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items, "job_id": "cert-gen-job-1"}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(len(data["results"]), 2)
+        # Should have updated progress twice with processed_inc=1
+        processed_updates = [kw for jid, kw in progress_calls if jid == "cert-gen-job-1" and kw.get("processed_inc") == 1]
+        self.assertEqual(len(processed_updates), 2)
+
+    def test_certificate_bulk_generate_updates_progress_on_failure(self):
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Crash Student", "student_email": "crash@example.invalid", "domain": "Design",
+             "start_date": "01/01/2026", "end_date": "01/03/2026"}
+        ]
+        progress_calls = []
+        with patch("certificate_service.generate_certificate_pdf", side_effect=Exception("Font missing")), \
+             patch.object(bulk_certificate_service.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items, "job_id": "cert-gen-fail-job"}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(len(data["failed_items"]), 1)
+        failed_updates = [kw for jid, kw in progress_calls if jid == "cert-gen-fail-job" and kw.get("failed_inc") == 1]
+        self.assertEqual(len(failed_updates), 1)
+
+    def test_certificate_bulk_generate_cancel_stops_subsequent_items(self):
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Student 1", "student_email": "s1@example.invalid", "domain": "Web", "start_date": "01/01/2026", "end_date": "01/02/2026"},
+            {"student_name": "Student 2", "student_email": "s2@example.invalid", "domain": "Web", "start_date": "01/01/2026", "end_date": "01/02/2026"},
+        ]
+        # Route checks once, item 1 checks once, then item 2 checks and gets True
+        call_count = [0]
+        def mock_is_cancelled(job_id):
+            call_count[0] += 1
+            return call_count[0] > 2
+
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert1.pdf") as mock_pdf, \
+             patch.object(bulk_certificate_service.bulk_job_manager, "is_cancelled", side_effect=mock_is_cancelled):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items, "job_id": "cert-cancel-gen"}
+            )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(mock_pdf.call_count, 1)
+
+    def test_certificate_bulk_send_updates_progress_on_success(self):
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "C-1", "student_name": "Student 1", "student_email": "s1@example.invalid", "domain": "Web", "filename": "c1.pdf"},
+            {"certificate_id": "C-2", "student_name": "Student 2", "student_email": "s2@example.invalid", "domain": "Web", "filename": "c2.pdf"},
+        ]
+        progress_calls = []
+        with patch("certificate_service.generate_certificate_pdf", side_effect=["c1.pdf", "c2.pdf"]), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email", return_value=None), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None), \
+             patch.object(bulk_certificate_service.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "job_id": "cert-send-success-job"}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["successful_count"], 2)
+        sent_updates = [kw for jid, kw in progress_calls if jid == "cert-send-success-job" and kw.get("sent_inc") == 1]
+        self.assertEqual(len(sent_updates), 2)
+
+    def test_certificate_bulk_send_updates_progress_on_failure(self):
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "C-FAIL", "student_name": "Student Fail", "student_email": "fail@example.invalid", "domain": "Web", "filename": "cfail.pdf"}
+        ]
+        progress_calls = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cfail.pdf"), \
+             patch("certificate_service.send_certificate_email", side_effect=Exception("SMTP timeout")), \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email", return_value=None), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None), \
+             patch.object(bulk_certificate_service.bulk_job_manager, "update_progress",
+                          side_effect=lambda job_id, **kw: progress_calls.append((job_id, kw)) or None):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "job_id": "cert-send-fail-job"}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["failed_count"], 1)
+        failed_updates = [kw for jid, kw in progress_calls if jid == "cert-send-fail-job" and kw.get("failed_inc") == 1]
+        self.assertEqual(len(failed_updates), 1)
+
+    def test_certificate_bulk_send_cancellation_stops_before_next_recipient_and_no_history_for_unprocessed(self):
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "C-1", "student_name": "S1", "student_email": "s1@example.invalid", "domain": "Web", "filename": "c1.pdf"},
+            {"certificate_id": "C-2", "student_name": "S2", "student_email": "s2@example.invalid", "domain": "Web", "filename": "c2.pdf"},
+            {"certificate_id": "C-3", "student_name": "S3", "student_email": "s3@example.invalid", "domain": "Web", "filename": "c3.pdf"},
+        ]
+        # Route checks once (call 1 -> False), item 1 checks (call 2 -> False), item 2 checks (call 3 -> True)
+        call_count = [0]
+        def mock_is_cancelled(job_id):
+            call_count[0] += 1
+            return call_count[0] > 2
+
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="c1.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True) as mock_send, \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email", return_value=None), \
+             patch.object(bulk_certificate_service, "save_certificate_record",
+                          side_effect=lambda rec, **kw: saved_records.append(rec) or True), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None), \
+             patch.object(bulk_certificate_service.bulk_job_manager, "is_cancelled", side_effect=mock_is_cancelled):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "job_id": "cert-cancel-send"}
+            )
+        self.assertEqual(response.status_code, 409)
+        # Only item 1 was sent
+        self.assertEqual(mock_send.call_count, 1)
+        # S1 has a history record, but S2 and S3 must NOT have history records
+        saved_emails = [r["student_email"] for r in saved_records]
+        self.assertIn("s1@example.invalid", saved_emails)
+        self.assertNotIn("s2@example.invalid", saved_emails)
+        self.assertNotIn("s3@example.invalid", saved_emails)
+
+    def test_certificate_bulk_send_skips_historical_duplicates_when_send_again_all_is_false(self):
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "C-DUP", "student_name": "Dup", "student_email": "dup@example.invalid", "domain": "D", "filename": "c_dup.pdf"},
+            {"certificate_id": "C-NEW", "student_name": "New", "student_email": "new@example.invalid", "domain": "D", "filename": "c_new.pdf"},
+        ]
+        prior_record = {
+            "id": 101,
+            "certificate_id": "C-DUP",
+            "student_name": "Dup",
+            "student_email": "dup@example.invalid",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        sent_emails = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="c_new.pdf"), \
+             patch("certificate_service.send_certificate_email",
+                   side_effect=lambda *args, **kwargs: sent_emails.append(args[1] if len(args) > 1 else kwargs.get("student_email")) or True), \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email",
+                          side_effect=lambda email: prior_record if email == "dup@example.invalid" else None), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "skip_duplicate_emails": ["dup@example.invalid"], "send_again_all": False}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["skipped_count"], 1)
+        self.assertEqual(data["successful_count"], 1)
+        # dup@example.invalid was skipped, only new@example.invalid was sent
+        skipped_results = [r for r in data.get("results", []) if r.get("status") == "skipped_historical_duplicate"]
+        self.assertEqual(len(skipped_results), 1)
+        self.assertEqual(skipped_results[0]["student_email"], "dup@example.invalid")
+
+    def test_certificate_bulk_send_resend_increments_send_count_and_reuses_existing_record(self):
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "C-OLD", "student_name": "Prior", "student_email": "prior@example.invalid", "domain": "D", "filename": "c_prior.pdf"}
+        ]
+        prior_record = {
+            "id": 999,
+            "certificate_id": "C-OLD",
+            "student_name": "Prior",
+            "student_email": "prior@example.invalid",
+            "email_status": "sent",
+            "send_count": 2,
+        }
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="c_prior.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email", return_value=prior_record), \
+             patch.object(bulk_certificate_service, "save_certificate_record",
+                          side_effect=lambda rec, existing_id=None: saved_records.append((rec, existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "send_again_all": True}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["successful_count"], 1)
+        self.assertEqual(len(saved_records), 1)
+        rec, existing_id = saved_records[0]
+        self.assertEqual(existing_id, 999)
+        self.assertEqual(rec["id"], 999)
+        self.assertEqual(rec["send_count"], 3)  # incremented from 2 to 3
+        self.assertTrue(rec["send_again"])
+
+
 if __name__ == '__main__':
     unittest.main()
-

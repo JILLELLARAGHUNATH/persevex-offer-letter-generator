@@ -1085,8 +1085,15 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function displayEvaluationResults(results) {
-        const isPassed = !results.forceFail && results.invalid_count === 0 && results.valid_count > 0;
-        isEvaluated = isPassed;
+        // Hard failure: count mismatch or explicitly forced — no valid/invalid split is possible.
+        const isHardFail = !!results.forceFail;
+        // canGenerate: true when there is ≥1 valid unique record AND no hard failure.
+        const canGenerate = !isHardFail && results.valid_count > 0;
+        // isClean: all rows valid — the original "Evaluation Passed" state.
+        const isClean = canGenerate && results.invalid_count === 0;
+
+        // isEvaluated gates the generate-button click handler; must be true to proceed.
+        isEvaluated = canGenerate;
 
         currentBatchMetrics = {
             totalRows: results.total_rows || 0,
@@ -1098,23 +1105,31 @@ document.addEventListener("DOMContentLoaded", () => {
         evalValidCandidates.textContent = results.valid_count;
         if (evalDuplicateRows) evalDuplicateRows.textContent = results.duplicate_count || 0;
         evalInvalidRows.textContent = results.invalid_count;
+        // "Ready to Process" = valid unique records that will actually be generated.
+        // results.candidates already excludes invalid rows and duplicate occurrences.
         evalMatched.textContent = results.valid_count;
 
-        if (isPassed) {
+        if (isClean) {
+            // ── All valid ─────────────────────────────────────────────────────
             evalStatusBadge.className = "eval-status-badge";
             evalStatusBadge.textContent = `✓ Evaluation Passed (${results.valid_count} Unique ${results.valid_count === 1 ? 'Recipient' : 'Recipients'})`;
             evalInvalidSection.style.display = "none";
             generateBtn.disabled = false;
             sendBtn.disabled = true;
             validCandidatesList = results.candidates;
-        } else {
-            evalStatusBadge.className = "eval-status-badge eval-badge-failed";
-            evalStatusBadge.textContent = `⚠ Evaluation Failed (${results.invalid_count} Invalid)`;
-            generateBtn.disabled = true;
-            sendBtn.disabled = true;
-            validCandidatesList = [];
 
-            // Populate invalid table
+        } else if (canGenerate) {
+            // ── Partial: valid rows + some invalid rows ─────────────────────
+            // Generation is ENABLED for the valid records; invalid rows are skipped.
+            const inv = results.invalid_count;
+            evalStatusBadge.className = "eval-status-badge eval-badge-partial";
+            evalStatusBadge.textContent = `⚠ Evaluation Complete — ${inv} Invalid Row${inv === 1 ? '' : 's'} Skipped`;
+            generateBtn.disabled = false;
+            sendBtn.disabled = true;
+            // Set validCandidatesList to ONLY valid unique records (already filtered by the parser).
+            validCandidatesList = results.candidates;
+
+            // Populate invalid rows table so the user can see which rows are skipped.
             evalInvalidTableBody.innerHTML = "";
             (results.invalid_rows || []).forEach(inv => {
                 const tr = document.createElement("tr");
@@ -1127,6 +1142,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 evalInvalidTableBody.appendChild(tr);
             });
             evalInvalidSection.style.display = "block";
+
+        } else {
+            // ── Blocked: zero valid records or hard failure ─────────────────
+            // Generation is DISABLED; nothing can be processed.
+            evalStatusBadge.className = "eval-status-badge eval-badge-failed";
+            if (isHardFail) {
+                evalStatusBadge.textContent = `⚠ Evaluation Failed (${results.invalid_count} Invalid)`;
+            } else {
+                evalStatusBadge.textContent = `⚠ Evaluation Failed — No Valid Records`;
+            }
+            generateBtn.disabled = true;
+            sendBtn.disabled = true;
+            validCandidatesList = [];
+
+            // Show invalid rows breakdown so the user can see all problems.
+            evalInvalidTableBody.innerHTML = "";
+            (results.invalid_rows || []).forEach(inv => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight: 700; color: #dc2626;">${inv.row_num}</td>
+                    <td style="font-weight: 600;">${escapeHtml(inv.name)}</td>
+                    <td style="color: var(--brand-primary);">${escapeHtml(inv.email)}</td>
+                    <td style="color: #991b1b;"><span class="failed-reason-badge">${escapeHtml(inv.reason)}</span></td>
+                `;
+                evalInvalidTableBody.appendChild(tr);
+            });
+            evalInvalidSection.style.display = (results.invalid_rows || []).length > 0 ? "block" : "none";
         }
 
         // Duplicate Banner
@@ -1199,6 +1241,25 @@ document.addEventListener("DOMContentLoaded", () => {
         progressStatusTag.textContent = "Generating PDFs...";
         currentCandidateBox.style.display = "flex";
 
+        // Register this batch with the server-side BulkJobManager for live-progress tracking
+        let _genJobId = null;
+        try {
+            const jobResp = await fetch("/api/bulk/start-job", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workflow_type: "ca_letter",
+                    operation_type: "generation",
+                    total: total,
+                    title: "Generating CA Offer Letter PDFs"
+                })
+            });
+            if (jobResp.ok) {
+                const jobData = await jobResp.json();
+                _genJobId = jobData.job_id || null;
+            }
+        } catch (_) { /* non-fatal – continue without server tracking */ }
+
         for (let i = 0; i < total; i++) {
             const item = candidates[i];
             const candidateNum = i + 1;
@@ -1216,11 +1277,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     body: JSON.stringify({
                         student_name: item.name,
                         student_email: item.email,
-                        date: letterDate
+                        date: letterDate,
+                        job_id: _genJobId
                     })
                 });
 
                 const result = await response.json();
+
+                // Handle server-side cancel signal
+                if (response.status === 409 && result.cancelled) {
+                    showToast("Bulk generation cancelled.", "info");
+                    break;
+                }
 
                 if (response.ok && result.success) {
                     generated++;
@@ -1263,6 +1331,17 @@ document.addEventListener("DOMContentLoaded", () => {
             progressBarFill.style.width = `${pct}%`;
             progressPercentageLabel.textContent = `${pct}%`;
             progressCountLabel.textContent = `${completed} / ${total} generated`;
+        }
+
+        // Mark generation job complete on the server
+        if (_genJobId) {
+            try {
+                await fetch("/api/bulk/complete-job", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ job_id: _genJobId })
+                });
+            } catch (_) { /* non-fatal */ }
         }
 
         isProcessing = false;
@@ -1702,6 +1781,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const successCountEl = document.getElementById("successCount");
         const failedCountEl = document.getElementById("failedCount");
 
+        // Register this send batch with BulkJobManager for live-progress tracking
+        let _sendJobId = null;
+        try {
+            const jobResp = await fetch("/api/bulk/start-job", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    workflow_type: "ca_letter",
+                    operation_type: "sending",
+                    total: total,
+                    title: "Sending CA Offer Letter Emails"
+                })
+            });
+            if (jobResp.ok) {
+                const jobData = await jobResp.json();
+                _sendJobId = jobData.job_id || null;
+            }
+        } catch (_) { /* non-fatal */ }
+
         for (let i = 0; i < total; i++) {
             const item = recordsToSend[i];
             const candidateNum = i + 1;
@@ -1724,11 +1822,18 @@ document.addEventListener("DOMContentLoaded", () => {
                         send_again: Boolean(item.send_again),
                         previous_send_count: item.previous_send_count || 0,
                         id: item.id || item.existing_id || null,
-                        existing_id: item.existing_id || item.id || null
+                        existing_id: item.existing_id || item.id || null,
+                        job_id: _sendJobId
                     })
                 });
 
                 const result = await response.json();
+
+                // Handle server-side cancel signal
+                if (response.status === 409 && result.cancelled) {
+                    showToast("Bulk email dispatch cancelled.", "info");
+                    break;
+                }
 
                 if (response.ok && result.success) {
                     sent++;
@@ -1788,6 +1893,21 @@ document.addEventListener("DOMContentLoaded", () => {
             progressBarFill.style.width = `${pct}%`;
             progressPercentageLabel.textContent = `${pct}%`;
             progressCountLabel.textContent = `${completed} / ${total} sent${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`;
+        }
+
+        // Mark send job complete on the server; notify other tabs of stats update
+        if (_sendJobId) {
+            try {
+                await fetch("/api/bulk/complete-job", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ job_id: _sendJobId })
+                });
+            } catch (_) { /* non-fatal */ }
+        }
+        if (sent > 0) {
+            try { localStorage.setItem("persevex_stats_updated", Date.now().toString()); } catch (_) {}
+            try { localStorage.setItem("persevex_history_updated", Date.now().toString()); } catch (_) {}
         }
 
         isProcessing = false;
