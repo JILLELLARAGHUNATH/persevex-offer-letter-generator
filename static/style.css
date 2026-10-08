@@ -110,6 +110,8 @@ body {
     line-height: 1.5;
     min-height: 100vh;
     overflow-x: hidden;
+    /* Guard against any element accidentally blowing out horizontal scroll */
+    max-width: 100vw;
 }
 
 .app {
@@ -118,6 +120,7 @@ body {
     margin: 0 auto;
     padding: 16px 20px 32px;
     box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 /* ==========================================================
@@ -536,9 +539,15 @@ header h1 span.highlight {
    ========================================================== */
 main:not(.history-main):not(.ca-bulk-main):not(.verify-portal-main):not(#bulkOfferWorkspace) {
     display: grid;
-    grid-template-columns: minmax(400px, 440px) 1fr;
+    /*
+     * Fluid left column: min 340px, prefers ~38% of container, max 440px.
+     * Right column takes the remaining 1fr.
+     * Collapses to 1-column below the 992px breakpoint.
+     */
+    grid-template-columns: clamp(340px, 38%, 440px) 1fr;
     gap: 22px;
-    align-items: start;
+    align-items: stretch;
+    min-width: 0;
 }
 
 .history-main {
@@ -557,6 +566,8 @@ main:not(.history-main):not(.ca-bulk-main):not(.verify-portal-main):not(#bulkOff
     padding: 22px 24px;
     box-shadow: var(--shadow-card);
     transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .card:hover {
@@ -860,6 +871,7 @@ h3 {
     display: flex;
     gap: 10px;
     margin-top: 14px;
+    flex-shrink: 0;
 }
 
 .primary {
@@ -982,7 +994,8 @@ button:disabled,
 .preview-card {
     display: flex;
     flex-direction: column;
-    height: auto;
+    height: 100%;
+    min-height: 0;
     transition: all var(--transition-normal);
 }
 
@@ -993,14 +1006,14 @@ button:disabled,
     margin-bottom: 14px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .preview-container {
     position: relative;
     width: 100%;
-    height: 700px;
-    min-height: 520px;
-    max-height: calc(100vh - 210px);
+    flex: 1 1 auto;
+    min-height: clamp(320px, 45vh, 560px);
     border-radius: var(--radius-md);
     overflow: hidden;
     background: #f8fafc;
@@ -2728,8 +2741,9 @@ button:disabled,
    RESPONSIVE DESIGN BREAKPOINTS
    ========================================================== */
 @media (max-width: 1200px) {
-    main:not(.history-main) {
-        grid-template-columns: 380px 1fr;
+    main:not(.history-main):not(.ca-bulk-main):not(.verify-portal-main):not(#bulkOfferWorkspace) {
+        /* Shrink left column slightly on laptops — still fluid via clamp() */
+        grid-template-columns: clamp(320px, 36%, 400px) 1fr;
         gap: 18px;
     }
     
@@ -2744,14 +2758,42 @@ button:disabled,
     }
 }
 
+/* 1024px: Narrow laptop — compress further but keep side-by-side */
+@media (max-width: 1024px) {
+    main:not(.history-main):not(.ca-bulk-main):not(.verify-portal-main):not(#bulkOfferWorkspace) {
+        grid-template-columns: clamp(300px, 40%, 380px) 1fr;
+        gap: 16px;
+    }
+}
+
+/* 992px: Stack cards vertically (tablet portrait / narrow laptop) */
 @media (max-width: 992px) {
-    main:not(.history-main) {
+    main:not(.history-main):not(.ca-bulk-main):not(.verify-portal-main):not(#bulkOfferWorkspace) {
         grid-template-columns: 1fr;
+        align-items: start;
+        gap: 16px;
+    }
+
+    /* When stacked, the preview card no longer needs to fill a grid cell height */
+    .preview-card {
+        height: auto;
+    }
+
+    /*
+     * Fluid preview height for stacked layout.
+     * clamp(min, preferred, max) — adapts to viewport height, no single fixed px.
+     *   min: 380px  — enough to see a PDF
+     *   preferred: 55vh — roughly half the viewport on most tablets
+     *   max: 620px  — prevents excessive height on wide tablets
+     */
+    .preview-container {
+        flex: none;
+        height: clamp(380px, 55vh, 620px);
+        min-height: 380px;
     }
     
     #pdfPreview {
-        height: 580px;
-        min-height: 440px;
+        height: 100%;
     }
     
     .history-filters {
@@ -2932,21 +2974,79 @@ button:disabled,
     }
 }
 
+/* 768px: standard tablet portrait */
+@media (max-width: 768px) {
+    .app {
+        padding: 12px 14px 28px;
+    }
+
+    .preview-container {
+        height: clamp(340px, 52vh, 560px);
+        min-height: 340px;
+    }
+
+    /* Wrap nav so it doesn't overflow on narrow tablets */
+    .nav-links-wrapper {
+        flex-wrap: wrap;
+    }
+}
+
+/* 600px: small tablet / large phone */
 @media (max-width: 600px) {
+    .app {
+        padding: 10px 12px 24px;
+    }
+
+    /*
+     * Fluid preview height on small devices.
+     * clamp(300px, 48vh, 480px) — responsive to actual viewport.
+     */
+    .preview-container {
+        height: clamp(300px, 48vh, 480px);
+        min-height: 300px;
+    }
+
     #pdfPreview {
-        height: 480px;
-        min-height: 380px;
+        height: 100%;
     }
     
     .empty-preview,
     .generating-preview {
-        min-height: 240px;
-        padding: 28px 16px;
+        min-height: 220px;
+        padding: 24px 14px;
+    }
+
+    /* Stack date fields side-by-side into single column at 600px */
+    .two {
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+
+    /* Compress hours grid to 2 columns before it collapses to 1 below 480px */
+    .three {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Ensure form card is not wider than viewport */
+    .card {
+        padding: 16px 14px;
+    }
+
+    /* Domain dropdown stays within bounds */
+    .domain-combobox-wrapper {
+        max-width: 100%;
+    }
+
+    .domain-dropdown-menu {
+        max-width: 100%;
+        left: 0;
+        right: 0;
     }
 }
 
+/* 480px: standard mobile — collapse grids, stack action buttons */
 @media (max-width: 480px) {
-    .two, .three {
+    .three {
         grid-template-columns: 1fr;
     }
     
@@ -2957,23 +3057,64 @@ button:disabled,
     .actions {
         flex-direction: column;
     }
+
+    .actions .primary,
+    .actions .email {
+        flex: none;
+        width: 100%;
+    }
     
     .brand {
-        font-size: 18px;
+        font-size: 16px;
+    }
+
+    .tagline {
+        display: none;
     }
     
     .header-stat {
-        padding: 6px 10px;
-        font-size: 12px;
+        padding: 5px 8px;
+        font-size: 11.5px;
     }
     
     .history-btn, .logout-btn {
-        padding: 8px 12px;
+        padding: 7px 10px;
         font-size: 12px;
+    }
+
+    .preview-container {
+        height: clamp(260px, 44vh, 420px);
+        min-height: 260px;
     }
     
     .history-summary-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* 380px: very narrow phones */
+@media (max-width: 380px) {
+    .app {
+        padding: 8px 10px 20px;
+    }
+
+    .card {
+        padding: 14px 12px;
+    }
+
+    /* Compress header further */
+    .brand-llp {
+        display: none;
+    }
+
+    .nav-tab-link {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .preview-container {
+        height: clamp(240px, 42vh, 380px);
+        min-height: 240px;
     }
 }
 
