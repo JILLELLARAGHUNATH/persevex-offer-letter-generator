@@ -181,7 +181,8 @@ Create a `.env.development` file in the project root:
 ```env
 PERSEVEX_ENV=development
 PERSEVEX_SESSION_SECRET=your-secure-session-secret
-ADMIN_PASSWORD=your-admin-password
+PERSEVEX_LOGIN_USERNAME=your-admin-username
+PERSEVEX_LOGIN_PASSWORD=your-admin-password
 
 # Email / SMTP Configuration
 SENDER_EMAIL=your-email@persevex.com
@@ -205,8 +206,9 @@ Open your browser at `http://127.0.0.1:5000`.
 | Variable | Required | Description |
 |---|---|---|
 | `PERSEVEX_ENV` | Yes | Runtime mode: `development`, `production`, or `test`. |
-| `PERSEVEX_SESSION_SECRET` | Recommended | Secret key for signing Flask user sessions. |
-| `ADMIN_PASSWORD` | Recommended | Password used for admin dashboard access. |
+| `PERSEVEX_SESSION_SECRET` | Yes | Secret key for signing Flask user sessions. |
+| `PERSEVEX_LOGIN_USERNAME` | For Login | Admin username for session authentication. |
+| `PERSEVEX_LOGIN_PASSWORD` | For Login | Admin password for session authentication. |
 | `SENDER_EMAIL` | For Email | SMTP username / sender address. |
 | `SENDER_PASSWORD` | For Email | SMTP password or app password. |
 | `SUPABASE_URL` | Optional | Supabase project API URL. If omitted, local SQLite is used. |
