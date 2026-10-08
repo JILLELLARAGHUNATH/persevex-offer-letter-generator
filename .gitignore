@@ -47,13 +47,13 @@ ca_pdf_visual_tests/
 .env.*
 
 # Local Antigravity / GSD development tooling
-.agent/
-.agents/
-.gemini/
-.gsd/
-GSD-STYLE.md
-PROJECT_RULES.md
-VERSION
-adapters/
-model_capabilities.yaml
-scripts/
+/.agent/
+/.agents/
+/.gemini/
+/.gsd/
+/GSD-STYLE.md
+/PROJECT_RULES.md
+/VERSION
+/adapters/
+/model_capabilities.yaml
+/scripts/
