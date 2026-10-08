@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Persevex Offer Letter Generator</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <style>
         /* ==========================================================
@@ -98,6 +101,148 @@
         .domain-dropdown-custom-option.active {
             background-color: #f1f5f9;
             color: var(--brand-primary, #2563eb);
+        }
+
+        /* ==========================================================
+           COMPACT INLINE FIELD PRESENTATION (DATES & HOURS SECTION)
+           ========================================================== */
+        .visually-hidden {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
+        .compact-field-group {
+            margin-bottom: 10px;
+        }
+        .compact-field-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            height: 42px;
+            padding: 0 12px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: var(--radius-md, 8px);
+            box-shadow: var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.05));
+            transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                        background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            box-sizing: border-box;
+            cursor: text;
+        }
+        .compact-field-container:hover {
+            border-color: #94a3b8;
+        }
+        .compact-field-container:focus-within {
+            border-color: var(--brand-primary, #2563eb);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12), var(--shadow-xs, 0 1px 2px rgba(15, 23, 42, 0.05));
+            background: #ffffff;
+        }
+        .compact-field-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            flex-shrink: 0;
+            transition: color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .compact-field-icon svg {
+            display: block;
+        }
+        .compact-field-container:hover .compact-field-icon {
+            color: #64748b;
+        }
+        .compact-field-container:focus-within .compact-field-icon {
+            color: var(--brand-primary, #2563eb);
+        }
+        .compact-field-container input,
+        .compact-field-container select {
+            flex: 1 1 auto;
+            width: 100%;
+            min-width: 0;
+            height: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            font-size: 13.5px;
+            color: var(--text-main, #0f172a);
+            transition: color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .compact-field-container input::placeholder {
+            color: var(--text-light, #94a3b8);
+            font-size: 13.5px;
+            transition: color 0.2s ease, opacity 0.2s ease;
+        }
+        .compact-field-container:focus-within input::placeholder {
+            color: #cbd5e1;
+        }
+        .compact-field-container input:hover,
+        .compact-field-container select:hover,
+        .compact-field-container input:focus,
+        .compact-field-container select:focus {
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+            background: transparent !important;
+        }
+        .compact-field-container select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E') !important;
+            background-repeat: no-repeat !important;
+            background-position: right 4px center !important;
+            background-size: 14px !important;
+            padding-right: 24px !important;
+            cursor: pointer;
+        }
+        .compact-field-container input[type="date"] {
+            cursor: pointer;
+            font-size: 13.5px;
+            color: var(--text-main, #0f172a);
+        }
+        .compact-field-container input#domain {
+            padding-right: 32px !important;
+        }
+
+        .hours-compact-grid {
+            margin-top: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .compact-field-container {
+                padding: 0 10px;
+                gap: 8px;
+            }
+            .two {
+                grid-template-columns: 1fr !important;
+                gap: 8px;
+            }
+            .three.hours-compact-grid {
+                grid-template-columns: 1fr !important;
+                gap: 8px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .compact-field-container,
+            .compact-field-icon,
+            .compact-field-container input,
+            .compact-field-container select,
+            .compact-field-container input::placeholder,
+            .domain-dropdown-toggle {
+                transition: none !important;
+            }
         }
     </style>
 </head>
@@ -281,47 +426,65 @@
                 >
 
                 <!-- STUDENT NAME -->
-                <div class="form-group">
-                    <label for="student_name">
-                        Student Name
-                    </label>
-                    <input
-                        id="student_name"
-                        type="text"
-                        required
-                        placeholder="e.g. Snehil Das"
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
+                <div class="form-group compact-field-group">
+                    <div class="compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </span>
+                        <label for="student_name" class="visually-hidden">Name</label>
+                        <input
+                            id="student_name"
+                            type="text"
+                            required
+                            placeholder="Name"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                    </div>
                 </div>
 
                 <!-- STUDENT EMAIL -->
-                <div class="form-group">
-                    <label for="student_email">
-                        Student Email
-                    </label>
-                    <input
-                        id="student_email"
-                        type="email"
-                        required
-                        placeholder="student@example.com"
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
+                <div class="form-group compact-field-group">
+                    <div class="compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                <polyline points="22,6 12,13 2,6"></polyline>
+                            </svg>
+                        </span>
+                        <label for="student_email" class="visually-hidden">Mail</label>
+                        <input
+                            id="student_email"
+                            type="email"
+                            required
+                            placeholder="Mail"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                    </div>
                 </div>
 
                 <!-- DOMAIN -->
-                <div class="form-group domain-combobox-group">
-                    <label for="domain">
-                        Domain
-                    </label>
-                    <div class="domain-combobox-wrapper">
+                <div class="form-group compact-field-group domain-combobox-group">
+                    <div class="domain-combobox-wrapper compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                        </span>
+                        <label for="domain" class="visually-hidden">Domain</label>
                         <input
                             id="domain"
                             name="domain"
                             type="text"
                             required
-                            placeholder="e.g. Data Analytics"
+                            placeholder="Domain"
                             autocomplete="off"
                             spellcheck="false"
                             role="combobox"
@@ -350,60 +513,85 @@
                 </div>
 
                 <!-- DURATION -->
-                <div class="form-group">
-                    <label for="duration">
-                        Months of Duration
-                    </label>
-                    <select id="duration" required>
-                        <option value="2 months">2 months</option>
-                        <option value="3 months">3 months</option>
-                        <option value="4 months">4 months</option>
-                        <option value="5 months">5 months</option>
-                        <option value="6 months">6 months</option>
-                    </select>
+                <div class="form-group compact-field-group">
+                    <div class="compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </span>
+                        <label for="duration" class="visually-hidden">Duration</label>
+                        <select id="duration" required>
+                            <option value="2 months">2 months</option>
+                            <option value="3 months">3 months</option>
+                            <option value="4 months">4 months</option>
+                            <option value="5 months">5 months</option>
+                            <option value="6 months">6 months</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- DATES -->
-                <div class="form-group">
+                <div class="form-group compact-field-group">
                     <div class="two">
-                        <div>
-                            <label for="start_date">
-                                Start Date
-                            </label>
+                        <div class="compact-field-container">
+                            <span class="compact-field-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
+                            <label for="start_date" class="visually-hidden">Start Date</label>
                             <input
                                 id="start_date"
                                 type="date"
                                 required
+                                placeholder="dd-mm-yyyy"
                             >
                         </div>
 
-                        <div>
-                            <label for="end_date">
-                                End Date
-                            </label>
+                        <div class="compact-field-container">
+                            <span class="compact-field-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
+                            <label for="end_date" class="visually-hidden">End Date</label>
                             <input
                                 id="end_date"
                                 type="date"
                                 required
+                                placeholder="dd-mm-yyyy"
                             >
                         </div>
                     </div>
                 </div>
 
                 <!-- STIPEND -->
-                <div class="form-group">
-                    <label for="stipend">
-                        Stipend
-                        <span class="label-hint">(Optional)</span>
-                    </label>
-                    <input
-                        id="stipend"
-                        type="text"
-                        inputmode="numeric"
-                        placeholder="e.g. 18000"
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
+                <div class="form-group compact-field-group">
+                    <div class="compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                        </span>
+                        <label for="stipend" class="visually-hidden">Stipend (Optional)</label>
+                        <input
+                            id="stipend"
+                            type="text"
+                            inputmode="numeric"
+                            placeholder="Stipend (Optional)"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                    </div>
                 </div>
 
                 <!-- HOURS SECTION -->
@@ -418,39 +606,55 @@
                         </h3>
                     </div>
 
-                    <div class="three">
-                        <div>
-                            <label for="weeks">
-                                Weeks
-                            </label>
+                    <div class="three hours-compact-grid">
+                        <div class="compact-field-container">
+                            <span class="compact-field-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
+                            <label for="weeks" class="visually-hidden">Weeks</label>
                             <input
                                 id="weeks"
                                 type="text"
                                 readonly
+                                placeholder="Weeks"
                             >
                         </div>
 
-                        <div>
-                            <label for="hours_per_week">
-                                Hours / Week
-                            </label>
+                        <div class="compact-field-container">
+                            <span class="compact-field-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                            </span>
+                            <label for="hours_per_week" class="visually-hidden">Hours / Week</label>
                             <input
                                 id="hours_per_week"
                                 type="number"
                                 min="1"
                                 step="1"
-                                placeholder="15"
+                                placeholder="Hours / Week"
                             >
                         </div>
 
-                        <div>
-                            <label for="total_hours">
-                                Total Hours
-                            </label>
+                        <div class="compact-field-container">
+                            <span class="compact-field-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 10"></polyline>
+                                </svg>
+                            </span>
+                            <label for="total_hours" class="visually-hidden">Total Hours</label>
                             <input
                                 id="total_hours"
                                 type="text"
                                 readonly
+                                placeholder="Total Hours"
                             >
                         </div>
                     </div>
@@ -1193,6 +1397,7 @@ function initDomainCombobox() {
 
     let activeIndex = -1;
     let visibleItems = [];
+    let isSelecting = false;
 
     function _esc(s) {
         return String(s || "")
@@ -1241,6 +1446,12 @@ function initDomainCombobox() {
 
                 item.addEventListener("mousedown", (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
+                    selectDomain(domain);
+                });
+                item.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     selectDomain(domain);
                 });
 
@@ -1257,6 +1468,12 @@ function initDomainCombobox() {
             customItem.innerHTML = `<span>Use custom: <strong>${_esc(customVal)}</strong></span>`;
             customItem.addEventListener("mousedown", (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                selectDomain(customVal);
+            });
+            customItem.addEventListener("click", (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 selectDomain(customVal);
             });
             dropdownList.appendChild(customItem);
@@ -1267,10 +1484,14 @@ function initDomainCombobox() {
     }
 
     function selectDomain(val) {
+        isSelecting = true;
         domainInput.value = val;
         closeDropdown();
         domainInput.dispatchEvent(new Event("input", { bubbles: true }));
         domainInput.dispatchEvent(new Event("change", { bubbles: true }));
+        closeDropdown();
+        domainInput.blur();
+        isSelecting = false;
     }
 
     function updateDropdownVisibility(hasItems) {
@@ -1323,16 +1544,19 @@ function initDomainCombobox() {
     }
 
     domainInput.addEventListener("focus", () => {
+        if (isSelecting) return;
         openDropdown(false);
     });
 
     domainInput.addEventListener("click", () => {
+        if (isSelecting) return;
         if (dropdownList.style.display !== "block") {
             openDropdown(false);
         }
     });
 
     domainInput.addEventListener("input", () => {
+        if (isSelecting) return;
         renderList(domainInput.value);
     });
 
