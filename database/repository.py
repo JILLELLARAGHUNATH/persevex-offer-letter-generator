@@ -1,4 +1,3 @@
-import os
 import re
 import sqlite3
 import tempfile
@@ -8,7 +7,6 @@ from pathlib import Path
 from environment_config import load_application_environment
 
 from database.config import (
-    DATABASE_TYPE,
     SQLITE_DB_PATH,
     SUPABASE_URL,
     SUPABASE_KEY,

@@ -9,7 +9,6 @@ from database.repository import (
     save_certificate_record,
     bulk_save_certificate_records,
     find_existing_certificates_batch,
-    get_certificate_by_id,
     get_previous_sent_certificate_by_email,
     save_bulk_job_record,
 )

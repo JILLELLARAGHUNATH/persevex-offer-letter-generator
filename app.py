@@ -42,7 +42,6 @@ from flask import (
     send_file,
 )
 
-import threading
 import pymupdf
 import certificate_service
 import database.repository as repository
@@ -4905,7 +4904,7 @@ def export_history():
         if export_format in ("excel", "xlsx"):
             try:
                 import openpyxl
-                from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+                from openpyxl.styles import Font, PatternFill, Alignment
 
                 wb = openpyxl.Workbook()
                 ws = wb.active

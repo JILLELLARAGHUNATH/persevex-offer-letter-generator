@@ -1,17 +1,15 @@
 import os
 import io
 import re
-import csv
 import base64
 import secrets
 import string
 import sqlite3
 import smtplib
 import imaplib
-import shutil
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime
 from email.message import EmailMessage
 
 import pymupdf
