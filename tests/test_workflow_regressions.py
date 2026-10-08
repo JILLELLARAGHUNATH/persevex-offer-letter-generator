@@ -1789,5 +1789,146 @@ class CertificateBulkJobManagerIntegrationTests(unittest.TestCase):
         self.assertTrue(rec["send_again"])
 
 
+# ============================================================
+# INTERNSHIP OFFER LETTER DOMAIN COMBOBOX REGRESSION TESTS
+# ============================================================
+
+class OfferLetterDomainComboboxRegressionTests(unittest.TestCase):
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_offer_letter_template_contains_all_23_predefined_domains(self):
+        template_path = Path(__file__).parent.parent / "templates" / "index.html"
+        self.assertTrue(template_path.exists(), "templates/index.html must exist")
+        content = template_path.read_text(encoding="utf-8")
+
+        expected_domains = [
+            "Data Science",
+            "Machine Learning",
+            "Artificial Intelligence",
+            "Web Development",
+            "AWS Cloud Computing",
+            "Human Resource",
+            "Digital Marketing",
+            "Finance",
+            "Stock Market & Crypto Trading",
+            "IOT",
+            "Embedded System",
+            "AutoCAD",
+            "Cyber Security",
+            "VLSI",
+            "Logistic and Supply Chain",
+            "Drone Mechanics",
+            "Business Analytics",
+            "Medical Coding",
+            "Data Analytics",
+            "Psychology",
+            "Java",
+            "UI/UX",
+            "Hybrid Electric Vehicle",
+        ]
+        self.assertEqual(len(expected_domains), 23, "Must have exactly 23 predefined domains")
+        for domain in expected_domains:
+            self.assertIn(f'"{domain}"', content, f"Predefined domain '{domain}' must be present in templates/index.html")
+
+    def test_offer_letter_template_contains_combobox_structure(self):
+        template_path = Path(__file__).parent.parent / "templates" / "index.html"
+        content = template_path.read_text(encoding="utf-8")
+
+        self.assertIn('id="domain"', content, "Domain input id must remain 'domain'")
+        self.assertIn('role="combobox"', content, "Domain input must have role='combobox'")
+        self.assertIn('id="domainDropdownToggle"', content, "Toggle button must be present")
+        self.assertIn('id="domainDropdownList"', content, "Dropdown list must be present")
+        self.assertIn('initDomainCombobox', content, "initDomainCombobox function must be defined and called")
+
+    def test_single_offer_letter_generate_with_predefined_domain(self):
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Test Student",
+            "student_email": "test@example.invalid",
+            "domain": "Data Science",
+            "duration": "2 months",
+            "start_date": "2026-10-01",
+            "end_date": "2026-11-30",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "hours_per_week": 20,
+        }
+        with patch.object(application, "generate_pdf", return_value="dummy_offer.pdf"):
+            response = client.post("/generate", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data.get("filename"), "dummy_offer.pdf")
+
+    def test_single_offer_letter_generate_with_custom_domain(self):
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Quantum Student",
+            "student_email": "quantum@example.invalid",
+            "domain": "Quantum Computing",
+            "duration": "2 months",
+            "start_date": "2026-10-01",
+            "end_date": "2026-11-30",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "hours_per_week": 20,
+        }
+        captured_args = []
+        def mock_generate_pdf(ltype, dpayload):
+            captured_args.append((ltype, dpayload))
+            return "quantum_offer.pdf"
+
+        with patch.object(application, "generate_pdf", side_effect=mock_generate_pdf):
+            response = client.post("/generate", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data.get("filename"), "quantum_offer.pdf")
+        self.assertEqual(len(captured_args), 1)
+        self.assertEqual(captured_args[0][1]["domain"], "Quantum Computing")
+
+    def test_single_offer_letter_send_preserves_custom_domain(self):
+        client = self._authenticated_client()
+        payload = {
+            "filename": "quantum_offer.pdf",
+            "student_name": "Quantum Student",
+            "student_email": "quantum@example.invalid",
+            "domain": "Quantum Computing",
+            "duration": "2 months",
+            "start_date": "01/10/2026",
+            "end_date": "30/11/2026",
+            "stipend": "Unpaid",
+            "letter_type": "with_hours",
+            "hours_per_week": 20,
+            "send_again": False,
+        }
+        dummy_pdf = application.GENERATED_DIR / "quantum_offer.pdf"
+        dummy_pdf.write_bytes(b"%PDF-1.4 dummy content")
+        try:
+            smtp_mock = MagicMock()
+            supabase_mock = MagicMock()
+            with patch.object(application, "get_previous_email_record", return_value=None), \
+                 patch.object(application, "SENDER_EMAIL", "sender@example.invalid"), \
+                 patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+                 patch.object(application.smtplib, "SMTP_SSL", return_value=smtp_mock), \
+                 patch.object(application, "supabase", supabase_mock):
+                smtp_mock.__enter__.return_value = smtp_mock
+                response = client.post("/send-email", json=payload)
+            self.assertEqual(response.status_code, 200)
+            data = response.get_json()
+            self.assertTrue(data.get("success"))
+            self.assertEqual(smtp_mock.send_message.call_count, 1)
+            # Verify custom domain was saved in supabase insert
+            insert_call = supabase_mock.table.return_value.insert.call_args
+            self.assertIsNotNone(insert_call)
+            saved_record = insert_call[0][0]
+            self.assertEqual(saved_record.get("internship_domain"), "Quantum Computing")
+        finally:
+            if dummy_pdf.exists():
+                dummy_pdf.unlink()
+
+
 if __name__ == '__main__':
     unittest.main()

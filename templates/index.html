@@ -6,6 +6,100 @@
     <title>Persevex Offer Letter Generator</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* ==========================================================
+           DOMAIN SEARCHABLE COMBOBOX
+           ========================================================== */
+        .domain-combobox-group {
+            position: relative;
+        }
+        .domain-combobox-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        .domain-combobox-wrapper input#domain {
+            width: 100%;
+            padding-right: 36px;
+            box-sizing: border-box;
+        }
+        .domain-dropdown-toggle {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--text-light, #94a3b8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px;
+            border-radius: 4px;
+            transition: color 0.15s ease, transform 0.2s ease;
+            z-index: 2;
+        }
+        .domain-dropdown-toggle:hover {
+            color: var(--brand-primary, #2563eb);
+        }
+        .domain-dropdown-toggle.open svg {
+            transform: rotate(180deg);
+        }
+        .domain-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            max-height: 240px;
+            overflow-y: auto;
+            background: #ffffff;
+            border: 1.5px solid var(--border-color, #e2e8f0);
+            border-radius: var(--radius-md, 8px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            z-index: 1050;
+            margin: 0;
+            padding: 4px 0;
+            list-style: none;
+        }
+        .domain-dropdown-item {
+            padding: 8px 14px;
+            font-size: 13.5px;
+            color: var(--text-main, #1e293b);
+            cursor: pointer;
+            transition: background-color 0.12s ease, color 0.12s ease;
+            user-select: none;
+            line-height: 1.4;
+        }
+        .domain-dropdown-item:hover,
+        .domain-dropdown-item.active {
+            background-color: #f1f5f9;
+            color: var(--brand-primary, #2563eb);
+            font-weight: 500;
+        }
+        .domain-dropdown-item.selected {
+            background-color: #eff6ff;
+            color: var(--brand-primary, #2563eb);
+            font-weight: 600;
+        }
+        .domain-dropdown-item mark {
+            background: transparent;
+            color: var(--brand-primary, #2563eb);
+            font-weight: 700;
+        }
+        .domain-dropdown-custom-option {
+            padding: 8px 14px;
+            font-size: 13px;
+            color: var(--text-muted, #64748b);
+            border-top: 1px dashed var(--border-color, #e2e8f0);
+            cursor: pointer;
+            background: #fafafa;
+        }
+        .domain-dropdown-custom-option:hover,
+        .domain-dropdown-custom-option.active {
+            background-color: #f1f5f9;
+            color: var(--brand-primary, #2563eb);
+        }
+    </style>
 </head>
 <body>
 
@@ -217,18 +311,42 @@
                 </div>
 
                 <!-- DOMAIN -->
-                <div class="form-group">
+                <div class="form-group domain-combobox-group">
                     <label for="domain">
                         Domain
                     </label>
-                    <input
-                        id="domain"
-                        type="text"
-                        required
-                        placeholder="e.g. Data Analytics"
-                        autocomplete="off"
-                        spellcheck="false"
-                    >
+                    <div class="domain-combobox-wrapper">
+                        <input
+                            id="domain"
+                            name="domain"
+                            type="text"
+                            required
+                            placeholder="e.g. Data Analytics"
+                            autocomplete="off"
+                            spellcheck="false"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-haspopup="listbox"
+                        >
+                        <button
+                            type="button"
+                            id="domainDropdownToggle"
+                            class="domain-dropdown-toggle"
+                            aria-label="Toggle domain options"
+                            tabindex="-1"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div
+                            id="domainDropdownList"
+                            class="domain-dropdown-menu"
+                            role="listbox"
+                            style="display: none;"
+                        ></div>
+                    </div>
                 </div>
 
                 <!-- DURATION -->
@@ -1037,6 +1155,236 @@ const resendModal = document.getElementById("resendModal");
 const duplicateEmail = document.getElementById("duplicateEmail");
 const confirmResendBtn = document.getElementById("confirmResendBtn");
 const cancelResendBtn = document.getElementById("cancelResendBtn");
+
+/* ==========================================================
+   SEARCHABLE DOMAIN COMBOBOX INITIALIZATION
+   ========================================================== */
+function initDomainCombobox() {
+    const domainInput = document.getElementById("domain");
+    const toggleBtn = document.getElementById("domainDropdownToggle");
+    const dropdownList = document.getElementById("domainDropdownList");
+    if (!domainInput || !dropdownList) return;
+
+    const PREDEFINED_DOMAINS = [
+        "Data Science",
+        "Machine Learning",
+        "Artificial Intelligence",
+        "Web Development",
+        "AWS Cloud Computing",
+        "Human Resource",
+        "Digital Marketing",
+        "Finance",
+        "Stock Market & Crypto Trading",
+        "IOT",
+        "Embedded System",
+        "AutoCAD",
+        "Cyber Security",
+        "VLSI",
+        "Logistic and Supply Chain",
+        "Drone Mechanics",
+        "Business Analytics",
+        "Medical Coding",
+        "Data Analytics",
+        "Psychology",
+        "Java",
+        "UI/UX",
+        "Hybrid Electric Vehicle"
+    ];
+
+    let activeIndex = -1;
+    let visibleItems = [];
+
+    function _esc(s) {
+        return String(s || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function renderList(query = "") {
+        dropdownList.innerHTML = "";
+        activeIndex = -1;
+        const trimmed = query.trim().toLowerCase();
+
+        const matches = PREDEFINED_DOMAINS.filter(domain => {
+            if (!trimmed) return true;
+            return domain.toLowerCase().includes(trimmed);
+        });
+
+        visibleItems = matches.slice();
+
+        if (matches.length > 0) {
+            matches.forEach(domain => {
+                const item = document.createElement("div");
+                item.className = "domain-dropdown-item";
+                item.setAttribute("role", "option");
+                if (domain.toLowerCase() === domainInput.value.trim().toLowerCase()) {
+                    item.classList.add("selected");
+                }
+
+                // Substring highlighting
+                if (trimmed) {
+                    const idx = domain.toLowerCase().indexOf(trimmed);
+                    if (idx >= 0) {
+                        const before = domain.substring(0, idx);
+                        const match = domain.substring(idx, idx + trimmed.length);
+                        const after = domain.substring(idx + trimmed.length);
+                        item.innerHTML = `${_esc(before)}<mark>${_esc(match)}</mark>${_esc(after)}`;
+                    } else {
+                        item.textContent = domain;
+                    }
+                } else {
+                    item.textContent = domain;
+                }
+
+                item.addEventListener("mousedown", (e) => {
+                    e.preventDefault();
+                    selectDomain(domain);
+                });
+
+                dropdownList.appendChild(item);
+            });
+        }
+
+        // Custom domain feedback item when typed query does not match any predefined domain
+        if (trimmed && !PREDEFINED_DOMAINS.some(d => d.toLowerCase() === trimmed)) {
+            const customVal = domainInput.value.trim();
+            const customItem = document.createElement("div");
+            customItem.className = "domain-dropdown-item domain-dropdown-custom-option";
+            customItem.setAttribute("role", "option");
+            customItem.innerHTML = `<span>Use custom: <strong>${_esc(customVal)}</strong></span>`;
+            customItem.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                selectDomain(customVal);
+            });
+            dropdownList.appendChild(customItem);
+            visibleItems.push(customVal);
+        }
+
+        updateDropdownVisibility(visibleItems.length > 0);
+    }
+
+    function selectDomain(val) {
+        domainInput.value = val;
+        closeDropdown();
+        domainInput.dispatchEvent(new Event("input", { bubbles: true }));
+        domainInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    function updateDropdownVisibility(hasItems) {
+        if (hasItems) {
+            dropdownList.style.display = "block";
+            domainInput.setAttribute("aria-expanded", "true");
+            if (toggleBtn) toggleBtn.classList.add("open");
+        } else {
+            closeDropdown();
+        }
+    }
+
+    function openDropdown(showAll = false) {
+        const val = domainInput.value.trim();
+        const isExactMatch = PREDEFINED_DOMAINS.some(d => d.toLowerCase() === val.toLowerCase());
+        const query = (showAll || !val || isExactMatch) ? "" : val;
+        renderList(query);
+    }
+
+    function closeDropdown() {
+        dropdownList.style.display = "none";
+        domainInput.setAttribute("aria-expanded", "false");
+        if (toggleBtn) toggleBtn.classList.remove("open");
+        activeIndex = -1;
+    }
+
+    function updateActiveHighlight() {
+        const items = dropdownList.querySelectorAll(".domain-dropdown-item");
+        items.forEach((it, idx) => {
+            if (idx === activeIndex) {
+                it.classList.add("active");
+                it.scrollIntoView({ block: "nearest" });
+            } else {
+                it.classList.remove("active");
+            }
+        });
+    }
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (dropdownList.style.display === "block") {
+                closeDropdown();
+            } else {
+                domainInput.focus();
+                openDropdown(true);
+            }
+        });
+    }
+
+    domainInput.addEventListener("focus", () => {
+        openDropdown(false);
+    });
+
+    domainInput.addEventListener("click", () => {
+        if (dropdownList.style.display !== "block") {
+            openDropdown(false);
+        }
+    });
+
+    domainInput.addEventListener("input", () => {
+        renderList(domainInput.value);
+    });
+
+    domainInput.addEventListener("keydown", (e) => {
+        const isOpen = dropdownList.style.display === "block";
+
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            if (!isOpen) {
+                openDropdown(true);
+                return;
+            }
+            const count = visibleItems.length;
+            if (count > 0) {
+                activeIndex = (activeIndex + 1) % count;
+                updateActiveHighlight();
+            }
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!isOpen) {
+                openDropdown(true);
+                return;
+            }
+            const count = visibleItems.length;
+            if (count > 0) {
+                activeIndex = (activeIndex - 1 + count) % count;
+                updateActiveHighlight();
+            }
+        } else if (e.key === "Enter") {
+            if (isOpen && activeIndex >= 0 && activeIndex < visibleItems.length) {
+                e.preventDefault();
+                selectDomain(visibleItems[activeIndex]);
+            }
+        } else if (e.key === "Escape") {
+            if (isOpen) {
+                e.preventDefault();
+                closeDropdown();
+            }
+        } else if (e.key === "Tab") {
+            closeDropdown();
+        }
+    });
+
+    document.addEventListener("click", (e) => {
+        const wrapper = domainInput.closest(".domain-combobox-wrapper");
+        if (wrapper && !wrapper.contains(e.target)) {
+            closeDropdown();
+        }
+    });
+}
+
+initDomainCombobox();
 
 /* ==========================================================
    STATE
