@@ -1930,5 +1930,242 @@ class OfferLetterDomainComboboxRegressionTests(unittest.TestCase):
                 dummy_pdf.unlink()
 
 
+class InternshipCertificateBulkIssueDateAndProgressTests(unittest.TestCase):
+    """
+    Focused regression tests for Internship Completion Certificate Bulk workflow:
+    1. Issue Date - remove dependency on Excel/CSV, batch issue date picker support, safe defaults and validation.
+    2. Real-time generation progress - per-item tracking, eye icon preview without regenerating.
+    3. Real-time sending progress - verified success counts, safe cancellation without partial history.
+    """
+
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_validate_bulk_records_succeeds_without_issued_date_column(self):
+        """Excel/CSV upload validation succeeds without an Issued Date column."""
+        parsed_rows = [
+            {
+                "student_name": "Priya Sharma",
+                "student_email": "priya@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "01-03-2026",
+                # No issued_date provided in uploaded row
+            },
+            {
+                "student_name": "Rahul Verma",
+                "student_email": "rahul@example.invalid",
+                "domain": "Web Development",
+                "start_date": "01-02-2026",
+                "end_date": "01-04-2026",
+                "issued_date": "",  # Empty issued_date
+            }
+        ]
+        result = bulk_certificate_service.validate_bulk_records(parsed_rows)
+        self.assertEqual(result["total_records"], 2)
+        self.assertEqual(result["valid_records_count"], 2)
+        self.assertEqual(result["invalid_records_count"], 0)
+        for row in result["rows"]:
+            self.assertTrue(row["is_valid"])
+            self.assertEqual(row["errors"], [])
+
+    def test_bulk_generate_uses_provided_batch_issue_date_for_all_records(self):
+        """Batch issue date passed in generation request applies to all certificates in the batch (normalized to DD-MM-YYYY)."""
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Student A", "student_email": "a@example.invalid", "domain": "AI",
+             "start_date": "01/01/2026", "end_date": "01/02/2026"},
+            {"student_name": "Student B", "student_email": "b@example.invalid", "domain": "AI",
+             "start_date": "01/01/2026", "end_date": "01/02/2026"},
+        ]
+        captured_data = []
+        def mock_generate_pdf(data, output_dir, **kwargs):
+            captured_data.append(data.copy())
+            return f"cert_{data['student_name']}.pdf"
+
+        with patch("certificate_service.generate_certificate_pdf", side_effect=mock_generate_pdf), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items, "issue_date": "2026-05-15"}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(len(captured_data), 2)
+        # Dates are normalized to standard DD-MM-YYYY format
+        for item in captured_data:
+            self.assertEqual(item["issued_date"], "15-05-2026")
+
+    def test_bulk_generate_defaults_to_today_when_no_issue_date_provided(self):
+        """When no issue date is provided and row has no date, defaults safely to today's date."""
+        from datetime import datetime
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Student Default", "student_email": "default@example.invalid", "domain": "Cloud",
+             "start_date": "01/01/2026", "end_date": "01/02/2026"}
+        ]
+        captured_data = []
+        def mock_generate_pdf(data, output_dir, **kwargs):
+            captured_data.append(data.copy())
+            return "cert_default.pdf"
+
+        with patch("certificate_service.generate_certificate_pdf", side_effect=mock_generate_pdf), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(len(captured_data), 1)
+        today_str = datetime.now().strftime("%d-%m-%Y")
+        self.assertEqual(captured_data[0]["issued_date"], today_str)
+
+    def test_bulk_generate_rejects_invalid_issue_date_with_400(self):
+        """Passing an invalid or malformed issue date returns 400."""
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Student Bad", "student_email": "bad@example.invalid", "domain": "Cloud",
+             "start_date": "01/01/2026", "end_date": "01/02/2026"}
+        ]
+        response = client.post(
+            "/api/certificate/bulk/generate",
+            json={"rows": items, "issue_date": "not-a-valid-date"}
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertFalse(data.get("success"))
+        self.assertIn("invalid issue date", data.get("error", "").lower())
+
+    def test_preview_sample_accepts_and_uses_batch_issue_date(self):
+        """Preview sample endpoint accepts and normalizes the selected issue date."""
+        client = self._authenticated_client()
+        payload = {
+            "student_name": "Preview Student",
+            "domain": "Data Engineering",
+            "start_date": "01/01/2026",
+            "end_date": "01/03/2026",
+            "issue_date": "2026-07-25"
+        }
+        with patch("certificate_service.render_certificate_preview_image", return_value="data:image/png;base64,mock") as mock_preview:
+            response = client.post("/api/certificate/preview-sample", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"))
+        mock_preview.assert_called_once()
+        passed_data = mock_preview.call_args[0][0]
+        self.assertEqual(passed_data["issued_date"], "25-07-2026")
+
+    def test_preview_generated_certificate_image_endpoint(self):
+        """Public /verify/<cert_id>/image serves rendered PNG image without regeneration."""
+        client = application.app.test_client()
+        mock_record = {
+            "certificate_id": "CERT-12345",
+            "student_name": "Verified Student",
+            "student_email": "verified@example.invalid",
+            "internship_domain": "Cybersecurity",
+            "start_date": "01/01/2026",
+            "end_date": "01/03/2026",
+            "issued_date": "15-03-2026",
+            "certificate_status": "active"
+        }
+        with patch("certificate_service.db_get_certificate_by_id", return_value=mock_record), \
+             patch("certificate_service.generate_certificate_image_bytes", return_value=b"\x89PNG\r\n\x1a\nfakeimage"):
+            response = client.get("/verify/CERT-12345/image")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content_type, "image/png")
+        self.assertEqual(response.data, b"\x89PNG\r\n\x1a\nfakeimage")
+
+    def test_bulk_generation_increments_processed_not_sent_counter(self):
+        """
+        R1 regression: generation success must increment processed_inc=1 and must NOT
+        increment sent_inc.  sent_inc is reserved exclusively for the email-dispatch workflow.
+        """
+        from services.bulk_job_manager import BulkJobManager
+
+        test_manager = BulkJobManager()
+        job = test_manager.create_job("certificate", "generation", total=2)
+        job_id = job["job_id"]
+
+        items = [
+            {"student_name": "R1 Student A", "student_email": "r1a@example.invalid",
+             "domain": "AI", "start_date": "01/01/2026", "end_date": "01/02/2026"},
+            {"student_name": "R1 Student B", "student_email": "r1b@example.invalid",
+             "domain": "AI", "start_date": "01/01/2026", "end_date": "01/02/2026"},
+        ]
+
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert_r1.pdf"), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True), \
+             patch.object(bulk_certificate_service, "bulk_job_manager", test_manager):
+            bulk_certificate_service.generate_bulk_certificates(
+                valid_rows=items,
+                output_dir=".",
+                job_id=job_id,
+                issue_date="09-10-2026",
+            )
+
+        final = test_manager.get_job(job_id)
+        # processed must equal the number of items attempted
+        self.assertEqual(final["processed"], 2,
+                         "processed counter must be incremented once per generation attempt")
+        # sent must remain 0 — generation does not constitute a send
+        self.assertEqual(final["sent"], 0,
+                         "sent counter must NOT be incremented during generation (email-dispatch only)")
+
+    def test_single_candidate_real_pdf_generation_with_qr_and_pil(self):
+        """
+        Issue 1: End-to-end PDF generation for a candidate without mocking Pillow/qrcode.
+        Proves that Pillow/qrcode integration generates QR and PDF bytes successfully.
+        """
+        import certificate_service
+        cert_data = {
+            "student_name": "E2E Test Student",
+            "student_email": "e2e@example.invalid",
+            "domain": "Artificial Intelligence",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "issued_date": "09-10-2026",
+            "certificate_id": "PXL-CERT-E2E-TEST"
+        }
+        pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(cert_data)
+        self.assertTrue(isinstance(pdf_bytes, bytes))
+        self.assertTrue(len(pdf_bytes) > 1000)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertEqual(filename, "E2E_Test_Student_Certificate.pdf")
+
+    def test_certificate_template_preview_column_renders_eye_icon_only_after_generation(self):
+        """
+        Issue 2: Verify template contracts:
+        1. renderBulkPreviewTable uses inactive placeholder '—' before generation (no text Preview button).
+        2. updateRowPreviewToEyeIcon injects .btn-preview-eye with accessible aria-label and calls previewGeneratedCertificate.
+        3. updateRowPreviewToFailed ensures failed rows show '—' and no active eye icon.
+        """
+        with open("templates/certificate.html", "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # No pre-generation text button in renderBulkPreviewTable
+        self.assertNotIn('onclick="previewBulkRecord(${i})">Preview</button>', content)
+
+        # Inactive placeholder used initially
+        self.assertIn("let previewAction = '<span style=\"color: var(--text-muted); font-size: 11px;\">—</span>';", content)
+
+        # Eye icon button rendered with accessible aria-label and previewGeneratedCertificate call
+        self.assertIn('aria-label="Preview certificate for ${escapeHtml(studentName)}"', content)
+        self.assertIn('class="btn-preview-eye"', content)
+        self.assertIn("previewGeneratedCertificate(", content)
+
+        # Failed rows do NOT show eye icon
+        self.assertIn("function updateRowPreviewToFailed", content)
+        self.assertIn("Failed rows do NOT show an eye icon button", content)
+
+
 if __name__ == '__main__':
     unittest.main()

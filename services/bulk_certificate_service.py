@@ -187,9 +187,13 @@ def validate_bulk_records(parsed_rows):
         if end_err:
             errors.append(f"End Date: {end_err}")
 
-        clean_issued, issued_err = parse_and_validate_date(raw_issued)
-        if issued_err:
-            errors.append(f"Issued Date: {issued_err}")
+        # Issue Date is NOT required as an Excel/CSV column for the bulk certificate workflow.
+        # If provided and parseable, normalize it; missing or empty is never an error.
+        clean_issued = ""
+        if raw_issued:
+            parsed_d, _ = parse_and_validate_date(raw_issued)
+            if parsed_d:
+                clean_issued = parsed_d
 
         is_duplicate = False
         if email:
@@ -288,13 +292,21 @@ def get_sample_excel_template():
 
 
 
-def generate_bulk_certificates(valid_rows, output_dir, base_url="https://persevex.vercel.app", supabase_client=None, job_id=None):
+def generate_bulk_certificates(
+    valid_rows,
+    output_dir,
+    base_url="https://persevex.vercel.app",
+    supabase_client=None,
+    job_id=None,
+    issue_date=None,
+):
     """
     Generate certificate PDFs for all valid rows with resume safety (idempotent):
     - Identifies and skips records with existing active certificates in DB
     - Generates new certificates only for missing records
     - Accumulates and returns granular failed_items
     - Bulk saves new records in a single database transaction/request
+    - Applies selected batch issue_date (or today's date) across all generated certificates
     """
     results = []
     already_exists_count = 0
@@ -303,6 +315,14 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
     failed_items = []
     records_to_save = []
     was_cancelled = False
+
+    # Validate batch issue_date if explicitly passed
+    clean_batch_issue_date = None
+    if issue_date:
+        parsed_issue, issue_err = parse_and_validate_date(issue_date)
+        if issue_err:
+            raise ValueError(f"Invalid Issue Date: {issue_err}")
+        clean_batch_issue_date = parsed_issue
 
     # 1. Batch lookup to detect existing certificates
     try:
@@ -321,8 +341,19 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
             domain = str(item.get("domain") or "").strip()
             start_date = str(item.get("start_date") or "").strip()
             end_date = str(item.get("end_date") or "").strip()
-            issued_date = str(item.get("issued_date") or "").strip()
             row_idx = item.get("row_index")
+
+            # Determine effective issue date:
+            # 1. Batch issue_date (selected via UI)
+            # 2. Row's issued_date if provided
+            # 3. Current local date fallback
+            if clean_batch_issue_date:
+                issued_date = clean_batch_issue_date
+            elif item.get("issued_date"):
+                parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
+                issued_date = parsed_row_date or str(item.get("issued_date")).strip()
+            else:
+                issued_date = datetime.now().strftime("%d-%m-%Y")
 
             email_clean = student_email.lower()
             domain_clean = domain.lower()
@@ -422,11 +453,20 @@ def generate_bulk_certificates(valid_rows, output_dir, base_url="https://perseve
                     "error": None
                 })
             if job_id:
-                bulk_job_manager.update_progress(job_id, processed_inc=1)
+                bulk_job_manager.update_progress(
+                    job_id,
+                    processed_inc=1,
+                    current_item_name=student_name,
+                )
         except Exception as exc:
             failed_count += 1
             if job_id:
-                bulk_job_manager.update_progress(job_id, failed_inc=1)
+                bulk_job_manager.update_progress(
+                    job_id,
+                    failed_inc=1,
+                    processed_inc=1,
+                    current_item_name=str(item.get("student_name") or "Unknown"),
+                )
             err_msg = str(exc)
             failed_items.append({
                 "row_index": item.get("row_index"),

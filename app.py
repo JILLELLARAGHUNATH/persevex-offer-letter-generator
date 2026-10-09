@@ -2660,6 +2660,21 @@ def bulk_complete_job():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+@app.get("/api/bulk/job/<job_id>")
+def bulk_get_job(job_id):
+    """
+    Returns live status and counts for a specific bulk job by job_id.
+    """
+    try:
+        job = bulk_job_manager.get_job(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "Job not found."}), 404
+        return jsonify({"success": True, "job": job})
+    except Exception as exc:
+        print("BULK GET JOB ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
 # ============================================================
 # GENERATE API
 # ============================================================
@@ -6186,12 +6201,16 @@ def bulk_certificate_preview_sample():
             return jsonify({"success": False, "error": "Student Name is required for preview."}), 400
 
         base_url = certificate_service.get_public_base_url(request)
+        raw_issued = (data.get("issued_date") or data.get("issue_date") or "").strip()
+        clean_issued = None
+        if raw_issued:
+            clean_issued, _ = bulk_certificate_service.parse_and_validate_date(raw_issued)
         preview_data = {
             "student_name": student_name,
             "domain": domain or "Internship Domain",
             "start_date": data.get("start_date") or "",
             "end_date": data.get("end_date") or "",
-            "issued_date": data.get("issued_date") or "",
+            "issued_date": clean_issued or raw_issued or datetime.now().strftime("%d-%m-%Y"),
             "certificate_id": "PXL-CERT-PREVIEW",
         }
         preview_img = certificate_service.render_certificate_preview_image(preview_data, base_url=base_url)
@@ -6212,12 +6231,20 @@ def bulk_certificate_generate():
         data = request.get_json(force=True) or {}
         rows = data.get("rows") or []
         job_id = (data.get("job_id") or "").strip() or None
+        issue_date_param = (data.get("issue_date") or data.get("issued_date") or "").strip()
 
         if not rows:
             return jsonify({"success": False, "error": "No valid rows provided for certificate generation."}), 400
 
         if job_id and bulk_job_manager.is_cancelled(job_id):
             return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
+
+        validated_issue_date = None
+        if issue_date_param:
+            clean_date, date_err = bulk_certificate_service.parse_and_validate_date(issue_date_param)
+            if date_err:
+                return jsonify({"success": False, "error": f"Invalid Issue Date: {date_err}"}), 400
+            validated_issue_date = clean_date
 
         base_url = certificate_service.get_public_base_url(request)
         result = bulk_certificate_service.generate_bulk_certificates(
@@ -6226,6 +6253,7 @@ def bulk_certificate_generate():
             base_url=base_url,
             supabase_client=supabase,
             job_id=job_id,
+            issue_date=validated_issue_date,
         )
 
         if result.get("cancelled"):

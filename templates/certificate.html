@@ -6,6 +6,32 @@
     <title>Persevex Certificate Generator</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .btn-preview-eye {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border-radius: 6px;
+            border: 1px solid #93c5fd;
+            background: #eff6ff;
+            color: #2563eb;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-preview-eye:hover {
+            background: #dbeafe !important;
+            border-color: #3b82f6 !important;
+            color: #1d4ed8 !important;
+            transform: scale(1.05);
+        }
+        .btn-preview-eye:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+    </style>
 </head>
 <body>
 
@@ -389,7 +415,7 @@
                     </svg>
                 </div>
                 <h3 class="upload-dropzone-title">Click or Drag & Drop Student List</h3>
-                <p class="upload-dropzone-desc">Upload a CSV or Excel spreadsheet containing Student Name, Student Email, Domain, Start Date, End Date, and Issued Date.</p>
+                <p class="upload-dropzone-desc">Upload a CSV or Excel spreadsheet containing Student Name, Student Email, Domain, Start Date, and End Date (Issue Date configured below).</p>
                 <button type="button" class="export-btn" style="pointer-events: none;">Select File</button>
             </div>
 
@@ -423,6 +449,35 @@
                             <span class="val-label">Duplicates</span>
                             <span class="val-val" id="bulkDuplicateRows" style="color: #f59e0b;">0</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- BULK ISSUE DATE CONTROL CARD -->
+                <div class="bulk-date-control-card" style="margin-top: 18px; margin-bottom: 6px; padding: 14px 18px; background: #ffffff; border: 1px solid var(--border-color, #e2e8f0); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(14, 165, 233, 0.1); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                            📅
+                        </div>
+                        <div>
+                            <label for="bulkIssueDateInput" style="display: block; font-size: 13.5px; font-weight: 700; color: var(--text-main, #0f172a); margin-bottom: 2px;">
+                                Certificate Issue Date
+                            </label>
+                            <span style="font-size: 12px; color: var(--text-muted, #64748b);">
+                                This date will be printed on every certificate in this bulk batch (defaults to today).
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input
+                            type="date"
+                            id="bulkIssueDateInput"
+                            class="form-input"
+                            style="padding: 7px 12px; font-size: 13px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px; font-weight: 600; color: var(--text-main, #0f172a); outline: none; background: #fff;"
+                            onchange="handleBulkIssueDateChange(event)"
+                        />
+                        <button type="button" class="btn-clear-date" onclick="resetBulkIssueDateToToday()" style="padding: 7px 12px; font-size: 12px; border: 1px solid var(--border-color, #cbd5e1); background: #f8fafc; border-radius: 6px; cursor: pointer; color: var(--text-main, #0f172a); font-weight: 500;" title="Reset to today's date">
+                            Today
+                        </button>
                     </div>
                 </div>
 
@@ -599,7 +654,7 @@
             <img id="bulkPreviewImg" class="cert-modal-image" src="" alt="Certificate Preview" style="display: none;" />
         </div>
         <div class="cert-modal-footer">
-            <span class="cert-preview-note">ℹ Preview mode with sample verification QR. No permanent record created.</span>
+            <span id="bulkPreviewModalFooterNote" class="cert-preview-note">ℹ Preview mode with sample verification QR. No permanent record created.</span>
             <button type="button" class="clear-btn" onclick="closeBulkPreviewModal()">Close Preview</button>
         </div>
     </div>
@@ -761,6 +816,9 @@ function switchCertificateMode(mode) {
     document.getElementById('bulkCertWorkspace').style.display = isBulk ? 'grid' : 'none';
     document.getElementById('tabSingleCert').classList.toggle('active', !isBulk);
     document.getElementById('tabBulkCert').classList.toggle('active', isBulk);
+    if (isBulk) {
+        initBulkIssueDate();
+    }
 }
 
 // Stepped Checklist Animation Helpers
@@ -797,6 +855,7 @@ function animateStepProgression() {
 
 // Single Certificate Generation & Email Dispatch
 document.addEventListener('DOMContentLoaded', () => {
+    initBulkIssueDate();
     const domainSelect = document.getElementById('domain_select');
     const customInput = document.getElementById('custom_domain_input');
     const form = document.getElementById('certificateForm');
@@ -1184,6 +1243,53 @@ window.addEventListener('storage', function(event) {
     }
 });
 
+// Bulk Issue Date Helpers
+function getTodayDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function initBulkIssueDate() {
+    const input = document.getElementById('bulkIssueDateInput');
+    if (input && !input.value) {
+        input.value = getTodayDateString();
+    }
+}
+
+function getSelectedBulkIssueDate() {
+    const input = document.getElementById('bulkIssueDateInput');
+    const val = input ? input.value.trim() : '';
+    if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        return val;
+    }
+    return getTodayDateString();
+}
+
+function resetBulkIssueDateToToday() {
+    const input = document.getElementById('bulkIssueDateInput');
+    if (input) {
+        input.value = getTodayDateString();
+        input.style.borderColor = '';
+        handleBulkIssueDateChange();
+    }
+}
+
+function handleBulkIssueDateChange() {
+    const selectedDate = getSelectedBulkIssueDate();
+    const input = document.getElementById('bulkIssueDateInput');
+    if (input) {
+        input.style.borderColor = '';
+    }
+    // Update all rendered preview rows' issued date cell dynamically
+    const dateCells = document.querySelectorAll('.bulk-row-issued-date');
+    dateCells.forEach(cell => {
+        cell.textContent = selectedDate;
+    });
+}
+
 // Bulk Certificate Functions
 async function handleBulkFileSelect(event) {
     const file = event.target.files[0];
@@ -1204,6 +1310,7 @@ async function handleBulkFileSelect(event) {
 
         if (data.success) {
             currentBulkRows = data.rows || [];
+            initBulkIssueDate();
             renderBulkValidationSummary(data);
             renderBulkPreviewTable(data.rows);
             document.getElementById('bulkValidationSection').style.display = 'block';
@@ -1228,30 +1335,58 @@ function renderBulkValidationSummary(data) {
 
 function renderBulkPreviewTable(rows) {
     const tbody = document.getElementById('bulkTableBody');
+    const selectedDate = getSelectedBulkIssueDate();
     tbody.innerHTML = rows.map((r, i) => {
         const isVal = r.is_valid;
         const badge = isVal
             ? '<span class="status-sym-sent" style="font-size: 13px; color: #10b981; font-weight: 700;">✔ Valid</span>'
-            : `<span class="status-sym-failed" style="font-size: 12px; color: #ef4444; font-weight: 700;" title="${r.error_message}">❌ ${r.error_message || 'Invalid'}</span>`;
+            : `<span class="status-sym-failed" style="font-size: 12px; color: #ef4444; font-weight: 700;" title="${escapeHtml(r.error_message)}">❌ ${escapeHtml(r.error_message || 'Invalid')}</span>`;
 
-        const previewAction = isVal
-            ? `<button type="button" class="btn-row-preview" onclick="previewBulkRecord(${i})" title="Preview certificate for ${r.student_name || 'student'}">Preview</button>`
-            : `<span style="color: var(--text-muted); font-size: 11px;">—</span>`;
+        const existingGen = currentGeneratedBulkItems && currentGeneratedBulkItems.find(g =>
+            (g.row_index && g.row_index === r.row_index) ||
+            (g.student_email && r.student_email && g.student_email.toLowerCase() === r.student_email.toLowerCase())
+        );
+
+        let previewAction = '<span style="color: var(--text-muted); font-size: 11px;">—</span>';
+        if (existingGen && existingGen.certificate_id) {
+            const studentName = existingGen.student_name || r.student_name || 'Student';
+            const certId = existingGen.certificate_id || '';
+            const domain = existingGen.domain || r.domain || '';
+            const startDate = existingGen.start_date || r.start_date || '';
+            const endDate = existingGen.end_date || r.end_date || '';
+            const issuedDate = existingGen.issued_date || selectedDate || '';
+            previewAction = `
+                <button
+                    type="button"
+                    class="btn-preview-eye"
+                    onclick="previewGeneratedCertificate('${escapeHtml(certId)}', '${escapeHtml(studentName)}', '${escapeHtml(domain)}', '${escapeHtml(startDate)}', '${escapeHtml(endDate)}', '${escapeHtml(issuedDate)}')"
+                    aria-label="Preview certificate for ${escapeHtml(studentName)}"
+                    title="Preview certificate for ${escapeHtml(studentName)}"
+                >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            `;
+        }
+
+        const displayIssuedDate = selectedDate || r.issued_date || getTodayDateString();
 
         return `
-            <tr class="${isVal ? '' : 'row-invalid'}">
+            <tr id="bulk-row-${i}" class="${isVal ? '' : 'row-invalid'}" data-idx="${i}" data-row-idx="${r.row_index}">
                 <td style="text-align: center;">
                     <input type="checkbox" class="bulk-row-check" data-idx="${i}" ${isVal ? 'checked' : 'disabled'}>
                 </td>
                 <td>${r.row_index}</td>
-                <td><strong>${r.student_name || '-'}</strong></td>
-                <td>${r.student_email || '-'}</td>
-                <td>${r.domain || '-'}</td>
-                <td>${r.start_date || '-'}</td>
-                <td>${r.end_date || '-'}</td>
-                <td>${r.issued_date || '-'}</td>
-                <td>${badge}</td>
-                <td style="text-align: center;">${previewAction}</td>
+                <td><strong>${escapeHtml(r.student_name || '-')}</strong></td>
+                <td>${escapeHtml(r.student_email || '-')}</td>
+                <td>${escapeHtml(r.domain || '-')}</td>
+                <td>${escapeHtml(r.start_date || '-')}</td>
+                <td>${escapeHtml(r.end_date || '-')}</td>
+                <td class="bulk-row-issued-date" id="bulk-issued-date-cell-${i}">${escapeHtml(displayIssuedDate)}</td>
+                <td class="bulk-row-status" id="bulk-status-cell-${i}">${badge}</td>
+                <td class="bulk-row-preview" id="bulk-preview-cell-${i}" style="text-align: center;">${previewAction}</td>
             </tr>
         `;
     }).join('');
@@ -1270,6 +1405,7 @@ function resetBulkWorkspace() {
     document.getElementById('bulkProgressArea').style.display = 'none';
     document.getElementById('bulkGenerationFailedArea').style.display = 'none';
     document.getElementById('bulkEmailFailedArea').style.display = 'none';
+    resetBulkIssueDateToToday();
     const genBtn = document.getElementById('bulkGenerateBtn');
     if (genBtn) {
         genBtn.style.display = 'inline-flex';
@@ -1395,9 +1531,14 @@ async function previewBulkRecord(index) {
     const subtitle = document.getElementById('bulkPreviewModalSubtitle');
     const loading = document.getElementById('bulkPreviewLoading');
     const img = document.getElementById('bulkPreviewImg');
+    const note = document.getElementById('bulkPreviewModalFooterNote');
 
+    const batchDate = getSelectedBulkIssueDate();
     title.textContent = `Certificate Preview — ${row.student_name || 'Student'}`;
-    subtitle.textContent = `${row.domain || 'Internship'} | ${row.start_date || ''} → ${row.end_date || ''} (Issued: ${row.issued_date || ''})`;
+    subtitle.textContent = `${row.domain || 'Internship'} | ${row.start_date || ''} → ${row.end_date || ''} (Issued: ${batchDate})`;
+    if (note) {
+        note.textContent = 'ℹ Preview mode with sample verification QR. No permanent record created.';
+    }
 
     modal.style.display = 'flex';
     loading.style.display = 'flex';
@@ -1414,7 +1555,7 @@ async function previewBulkRecord(index) {
                 domain: row.domain,
                 start_date: row.start_date,
                 end_date: row.end_date,
-                issued_date: row.issued_date
+                issued_date: batchDate
             })
         });
         const data = await res.json();
@@ -1423,7 +1564,7 @@ async function previewBulkRecord(index) {
             img.style.display = 'block';
             loading.style.display = 'none';
         } else {
-            loading.innerHTML = `<p style="color: #ef4444; font-weight: 700;">❌ ${data.error || 'Failed to render preview.'}</p>`;
+            loading.innerHTML = `<p style="color: #ef4444; font-weight: 700;">❌ ${escapeHtml(data.error || 'Failed to render preview.')}</p>`;
         }
     } catch (err) {
         console.error('Preview error:', err);
@@ -1431,11 +1572,114 @@ async function previewBulkRecord(index) {
     }
 }
 
+function previewGeneratedCertificate(certId, studentName, domain, startDate, endDate, issuedDate) {
+    if (!certId) return;
+
+    const modal = document.getElementById('bulkCertPreviewModal');
+    const title = document.getElementById('bulkPreviewModalTitle');
+    const subtitle = document.getElementById('bulkPreviewModalSubtitle');
+    const loading = document.getElementById('bulkPreviewLoading');
+    const img = document.getElementById('bulkPreviewImg');
+    const note = document.getElementById('bulkPreviewModalFooterNote');
+
+    title.textContent = `Certificate Preview — ${studentName || 'Student'}`;
+    subtitle.textContent = `${domain || 'Internship'} | ${startDate || ''} → ${endDate || ''} (Issued: ${issuedDate || ''})`;
+    if (note) {
+        note.textContent = `Official generated certificate (ID: ${certId})`;
+    }
+
+    modal.style.display = 'flex';
+    loading.style.display = 'flex';
+    loading.innerHTML = '<div class="loading-spinner"></div><p>Loading generated certificate preview...</p>';
+    img.style.display = 'none';
+    img.src = '';
+
+    img.onload = () => {
+        loading.style.display = 'none';
+        img.style.display = 'block';
+    };
+
+    img.onerror = () => {
+        loading.innerHTML = `<p style="color: #ef4444; font-weight: 700;">❌ Unable to load certificate preview image for ID: ${escapeHtml(certId)}</p>`;
+    };
+
+    // Load crisp rendered image of the official generated certificate without regenerating
+    img.src = `/verify/${encodeURIComponent(certId)}/image?t=${Date.now()}`;
+}
+
+function updateRowPreviewToEyeIcon(rowIdx, item) {
+    const previewCell = document.getElementById(`bulk-preview-cell-${rowIdx}`);
+    if (previewCell) {
+        const studentName = item.student_name || 'Student';
+        const certId = item.certificate_id || '';
+        const domain = item.domain || '';
+        const startDate = item.start_date || '';
+        const endDate = item.end_date || '';
+        const issuedDate = item.issued_date || getSelectedBulkIssueDate();
+        previewCell.innerHTML = `
+            <button
+                type="button"
+                class="btn-preview-eye"
+                onclick="previewGeneratedCertificate('${escapeHtml(certId)}', '${escapeHtml(studentName)}', '${escapeHtml(domain)}', '${escapeHtml(startDate)}', '${escapeHtml(endDate)}', '${escapeHtml(issuedDate)}')"
+                aria-label="Preview certificate for ${escapeHtml(studentName)}"
+                title="Preview certificate for ${escapeHtml(studentName)}"
+            >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        `;
+    }
+    const statusCell = document.getElementById(`bulk-status-cell-${rowIdx}`);
+    if (statusCell) {
+        statusCell.innerHTML = '<span class="status-sym-sent" style="font-size: 12px; color: #10b981; font-weight: 700;">✔ Generated</span>';
+    }
+}
+
+function updateRowPreviewToFailed(rowIdx, errorMsg) {
+    // Failed rows do NOT show an eye icon button
+    const previewCell = document.getElementById(`bulk-preview-cell-${rowIdx}`);
+    if (previewCell) {
+        previewCell.innerHTML = `<span style="color: var(--text-muted); font-size: 11px;">—</span>`;
+    }
+    const statusCell = document.getElementById(`bulk-status-cell-${rowIdx}`);
+    if (statusCell) {
+        statusCell.innerHTML = `<span class="status-sym-failed" style="font-size: 12px; color: #ef4444; font-weight: 700;" title="${escapeHtml(errorMsg || 'Failed')}">❌ Generation failed</span>`;
+    }
+}
+
+function updateRowStatusByEmail(email, status, errorMsg) {
+    if (!email) return;
+    const lower = email.trim().toLowerCase();
+    const rows = document.querySelectorAll('#bulkTableBody tr');
+    rows.forEach(tr => {
+        const idx = tr.dataset.idx;
+        const rowData = currentBulkRows[idx];
+        if (rowData && (rowData.student_email || '').trim().toLowerCase() === lower) {
+            const statusCell = document.getElementById(`bulk-status-cell-${idx}`);
+            if (statusCell) {
+                if (status === 'sent') {
+                    statusCell.innerHTML = '<span class="status-sym-sent" style="font-size: 12px; color: #059669; font-weight: 700;">✔ Sent</span>';
+                } else if (status === 'skipped') {
+                    statusCell.innerHTML = '<span style="font-size: 12px; color: #64748b; font-weight: 700;">↷ Skipped</span>';
+                } else {
+                    statusCell.innerHTML = `<span class="status-sym-failed" style="font-size: 12px; color: #ef4444; font-weight: 700;" title="${escapeHtml(errorMsg || 'Failed')}">❌ Send failed</span>`;
+                }
+            }
+        }
+    });
+}
+
 function closeBulkPreviewModal() {
     const modal = document.getElementById('bulkCertPreviewModal');
     if (modal) modal.style.display = 'none';
     const img = document.getElementById('bulkPreviewImg');
     if (img) img.src = '';
+    const note = document.getElementById('bulkPreviewModalFooterNote');
+    if (note) {
+        note.textContent = 'ℹ Preview mode with sample verification QR. No permanent record created.';
+    }
 }
 
 function handleModalBackdropClick(event) {
@@ -1453,27 +1697,45 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ==========================================================
-   RESUME-SAFE CHUNKED BULK GENERATION ENGINE
+   REAL-TIME ITEM-BY-ITEM BULK GENERATION ENGINE
    ========================================================== */
 async function executeBulkGeneration(targetRows = null) {
-    let rowsToGenerate = [];
+    let itemsToProcess = [];
     const isRetry = Array.isArray(targetRows);
 
     if (isRetry) {
-        rowsToGenerate = targetRows;
-    } else {
-        const selectedIndices = [];
-        document.querySelectorAll('.bulk-row-check:checked').forEach(chk => {
-            selectedIndices.push(parseInt(chk.dataset.idx, 10));
+        itemsToProcess = targetRows.map(tr => {
+            const originalIndex = currentBulkRows.findIndex(r => r.row_index === tr.row_index || (r.student_email && r.student_email.toLowerCase() === (tr.student_email || '').toLowerCase()));
+            return { row: tr, originalIndex: originalIndex >= 0 ? originalIndex : tr.row_index };
         });
-        rowsToGenerate = selectedIndices.map(i => currentBulkRows[i]).filter(Boolean);
+    } else {
+        const selectedElements = Array.from(document.querySelectorAll('.bulk-row-check:checked'));
+        itemsToProcess = selectedElements.map(chk => {
+            const idx = parseInt(chk.dataset.idx, 10);
+            return { row: currentBulkRows[idx], originalIndex: idx };
+        }).filter(item => Boolean(item.row));
         currentGeneratedBulkItems = [];
         currentFailedGenerationItems = [];
     }
 
-    if (rowsToGenerate.length === 0) {
+    if (itemsToProcess.length === 0) {
         showToast('Please select at least one valid record to generate.', 'error');
         return;
+    }
+
+    // Validate the selected bulk issue date
+    const selectedIssueDate = getSelectedBulkIssueDate();
+    if (!selectedIssueDate || !/^\d{4}-\d{2}-\d{2}$/.test(selectedIssueDate) || isNaN(Date.parse(selectedIssueDate))) {
+        showToast('Please select a valid certificate issue date before starting generation.', 'error');
+        const input = document.getElementById('bulkIssueDateInput');
+        if (input) {
+            input.focus();
+            input.style.borderColor = '#ef4444';
+        }
+        return;
+    } else {
+        const input = document.getElementById('bulkIssueDateInput');
+        if (input) input.style.borderColor = '';
     }
 
     const genBtn = document.getElementById('bulkGenerateBtn');
@@ -1501,7 +1763,7 @@ async function executeBulkGeneration(targetRows = null) {
         document.getElementById('bulkGenerationFailedArea').style.display = 'none';
     }
 
-    const total = rowsToGenerate.length;
+    const total = itemsToProcess.length;
     let completed = 0;
     let newlyGeneratedCount = 0;
     let alreadyExistsCount = 0;
@@ -1519,7 +1781,7 @@ async function executeBulkGeneration(targetRows = null) {
     if (progressBreakdown) progressBreakdown.style.display = 'none';
     progressFailed.textContent = '0';
     progressRemaining.textContent = total;
-    progressCurrent.textContent = rowsToGenerate[0]?.student_name || '-';
+    progressCurrent.textContent = itemsToProcess[0]?.row?.student_name || '-';
 
     // Register this generation batch with BulkJobManager for live-progress tracking
     let _genJobId = null;
@@ -1540,87 +1802,99 @@ async function executeBulkGeneration(targetRows = null) {
         }
     } catch (_) { /* non-critical — never block the workflow */ }
 
-    // Chunk size: 15 certificates per request for high speed and resume reliability
-    const CHUNK_SIZE = 15;
-    const chunks = [];
-    for (let i = 0; i < total; i += CHUNK_SIZE) {
-        chunks.push(rowsToGenerate.slice(i, i + CHUNK_SIZE));
-    }
-
-    for (let c = 0; c < chunks.length; c++) {
-        const chunk = chunks[c];
-        const firstStudent = chunk[0]?.student_name || 'Processing...';
-        progressCurrent.textContent = firstStudent;
+    // Execute per-item generation for immediate real-time progress and dynamic preview icon updates
+    for (let i = 0; i < itemsToProcess.length; i++) {
+        const { row, originalIndex } = itemsToProcess[i];
+        progressCurrent.textContent = row.student_name || 'Processing...';
 
         try {
             const response = await fetch('/api/certificate/bulk/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ rows: chunk, job_id: _genJobId })
+                body: JSON.stringify({
+                    rows: [row],
+                    issue_date: selectedIssueDate,
+                    job_id: _genJobId
+                })
             });
             const result = await response.json();
+
             if (response.status === 409 && result.cancelled) {
                 showToast("Certificate generation cancelled.", "info");
                 break;
             }
 
-            if (result.success && Array.isArray(result.results)) {
-                if (typeof result.newly_generated_count === 'number') {
-                    newlyGeneratedCount += result.newly_generated_count;
-                }
-                if (typeof result.already_exists_count === 'number') {
-                    alreadyExistsCount += result.already_exists_count;
-                }
-
-                for (const item of result.results) {
-                    if (item.success) {
-                        const existsIdx = currentGeneratedBulkItems.findIndex(g => g.certificate_id === item.certificate_id);
-                        if (existsIdx >= 0) {
-                            currentGeneratedBulkItems[existsIdx] = item;
-                        } else {
-                            currentGeneratedBulkItems.push(item);
-                        }
+            if (result.success && Array.isArray(result.results) && result.results.length > 0) {
+                const itemRes = result.results[0];
+                if (itemRes.success) {
+                    if (itemRes.status === 'newly_generated') {
+                        newlyGeneratedCount++;
                     } else {
-                        failedCount++;
+                        alreadyExistsCount++;
+                    }
+                    const exIdx = currentGeneratedBulkItems.findIndex(g => g.certificate_id === itemRes.certificate_id);
+                    if (exIdx >= 0) {
+                        currentGeneratedBulkItems[exIdx] = itemRes;
+                    } else {
+                        currentGeneratedBulkItems.push(itemRes);
+                    }
+                    if (originalIndex !== undefined && originalIndex >= 0) {
+                        updateRowPreviewToEyeIcon(originalIndex, itemRes);
+                    }
+                } else {
+                    failedCount++;
+                    const failItem = {
+                        row_index: row.row_index,
+                        student_name: row.student_name,
+                        student_email: row.student_email,
+                        domain: row.domain,
+                        start_date: row.start_date,
+                        end_date: row.end_date,
+                        issued_date: selectedIssueDate,
+                        error: itemRes.error || 'Generation failed'
+                    };
+                    batchFailedItems.push(failItem);
+                    if (originalIndex !== undefined && originalIndex >= 0) {
+                        updateRowPreviewToFailed(originalIndex, failItem.error);
                     }
                 }
-
-                if (Array.isArray(result.failed_items)) {
-                    batchFailedItems.push(...result.failed_items);
-                }
             } else {
-                failedCount += chunk.length;
-                chunk.forEach(ch => {
-                    batchFailedItems.push({
-                        row_index: ch.row_index,
-                        student_name: ch.student_name,
-                        student_email: ch.student_email,
-                        domain: ch.domain,
-                        start_date: ch.start_date,
-                        end_date: ch.end_date,
-                        issued_date: ch.issued_date,
-                        error: result.error || 'Server processing error'
-                    });
-                });
+                failedCount++;
+                const failItem = {
+                    row_index: row.row_index,
+                    student_name: row.student_name,
+                    student_email: row.student_email,
+                    domain: row.domain,
+                    start_date: row.start_date,
+                    end_date: row.end_date,
+                    issued_date: selectedIssueDate,
+                    error: result.error || 'Server processing error'
+                };
+                batchFailedItems.push(failItem);
+                if (originalIndex !== undefined && originalIndex >= 0) {
+                    updateRowPreviewToFailed(originalIndex, failItem.error);
+                }
             }
         } catch (err) {
-            console.error('Bulk generate chunk error:', err);
-            failedCount += chunk.length;
-            chunk.forEach(ch => {
-                batchFailedItems.push({
-                    row_index: ch.row_index,
-                    student_name: ch.student_name,
-                    student_email: ch.student_email,
-                    domain: ch.domain,
-                    start_date: ch.start_date,
-                    end_date: ch.end_date,
-                    issued_date: ch.issued_date,
-                    error: 'Network connection or server error'
-                });
-            });
+            console.error('Bulk generate item error:', err);
+            failedCount++;
+            const failItem = {
+                row_index: row.row_index,
+                student_name: row.student_name,
+                student_email: row.student_email,
+                domain: row.domain,
+                start_date: row.start_date,
+                end_date: row.end_date,
+                issued_date: selectedIssueDate,
+                error: 'Network connection or server error'
+            };
+            batchFailedItems.push(failItem);
+            if (originalIndex !== undefined && originalIndex >= 0) {
+                updateRowPreviewToFailed(originalIndex, failItem.error);
+            }
         }
 
-        completed += chunk.length;
+        completed++;
         const remaining = Math.max(0, total - completed);
         const pct = Math.min(100, (completed / total) * 100);
         const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
@@ -1639,7 +1913,6 @@ async function executeBulkGeneration(targetRows = null) {
     currentFailedGenerationItems = batchFailedItems;
     renderGenerationFailedTable(currentFailedGenerationItems);
 
-    // Mark generation job as complete in BulkJobManager (fire-and-forget)
     if (_genJobId) {
         try {
             await fetch('/api/bulk/complete-job', {
@@ -1681,7 +1954,7 @@ function retryFailedGenerations() {
 }
 
 /* ==========================================================
-   RESUME-SAFE CHUNKED BULK EMAIL ENGINE WITH DUPLICATE HANDLING
+   RESUME-SAFE BULK EMAIL ENGINE WITH DUPLICATE HANDLING
    ========================================================== */
 async function initiateBulkEmailDispatch() {
     if (!currentGeneratedBulkItems || currentGeneratedBulkItems.length === 0) return;
@@ -1833,25 +2106,19 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
         }
     } catch (_) { /* non-critical — never block the workflow */ }
 
-    const EMAIL_CHUNK_SIZE = 5;
-    const chunks = [];
-    for (let i = 0; i < total; i += EMAIL_CHUNK_SIZE) {
-        chunks.push(itemsToSend.slice(i, i + EMAIL_CHUNK_SIZE));
-    }
-
-    for (let c = 0; c < chunks.length; c++) {
+    // Execute per-item email dispatch for immediate real-time progress updates
+    for (let i = 0; i < itemsToSend.length; i++) {
         if (_cancelRequested) break;
 
-        const chunk = chunks[c];
-        const firstEmail = chunk[0]?.student_email || 'Sending...';
-        progressCurrent.textContent = firstEmail;
+        const item = itemsToSend[i];
+        progressCurrent.textContent = item.student_email || 'Sending...';
 
         try {
             const response = await fetch('/api/certificate/bulk/send-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    items: chunk,
+                    items: [item],
                     skip_duplicate_emails: options && Array.isArray(options.skip_duplicate_emails) ? options.skip_duplicate_emails : [],
                     send_again_all: !!(options && options.send_again_all),
                     job_id: _sendJobId
@@ -1861,59 +2128,56 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
 
             if (response.status === 409 && result.cancelled) {
                 _cancelRequested = true;
-                if (Array.isArray(result.results)) {
-                    for (const item of result.results) {
-                        if (item.status === 'sent') {
-                            sentCount++;
-                        } else if (item.status === 'failed') {
-                            failedCount++;
-                        }
-                    }
-                }
                 showToast("Certificate bulk email dispatch cancelled.", "info");
                 break;
             }
 
-            if (result.success && Array.isArray(result.results)) {
-                for (const item of result.results) {
-                    if (item.status === 'sent') {
-                        sentCount++;
-                    } else if (item.status === 'skipped_batch_duplicate' || item.status === 'skipped_historical_duplicate' || item.status === 'skipped_duplicate') {
-                        // Skipped duplicate is not considered a failure
-                    } else {
-                        failedCount++;
-                    }
-                }
-                if (Array.isArray(result.failed_items)) {
-                    batchFailedEmailItems.push(...result.failed_items);
+            if (result.success && Array.isArray(result.results) && result.results.length > 0) {
+                const itemRes = result.results[0];
+                if (itemRes.status === 'sent') {
+                    sentCount++;
+                    updateRowStatusByEmail(item.student_email, 'sent');
+                } else if (itemRes.status === 'skipped_batch_duplicate' || itemRes.status === 'skipped_historical_duplicate' || itemRes.status === 'skipped_duplicate') {
+                    updateRowStatusByEmail(item.student_email, 'skipped');
+                } else {
+                    failedCount++;
+                    const failItem = {
+                        certificate_id: item.certificate_id,
+                        student_name: item.student_name,
+                        student_email: item.student_email,
+                        domain: item.domain,
+                        error: itemRes.error || 'Email dispatch failed'
+                    };
+                    batchFailedEmailItems.push(failItem);
+                    updateRowStatusByEmail(item.student_email, 'failed', failItem.error);
                 }
             } else {
-                failedCount += chunk.length;
-                chunk.forEach(ch => {
-                    batchFailedEmailItems.push({
-                        certificate_id: ch.certificate_id,
-                        student_name: ch.student_name,
-                        student_email: ch.student_email,
-                        domain: ch.domain,
-                        error: result.error || 'Server email error'
-                    });
-                });
+                failedCount++;
+                const failItem = {
+                    certificate_id: item.certificate_id,
+                    student_name: item.student_name,
+                    student_email: item.student_email,
+                    domain: item.domain,
+                    error: result.error || 'Server email error'
+                };
+                batchFailedEmailItems.push(failItem);
+                updateRowStatusByEmail(item.student_email, 'failed', failItem.error);
             }
         } catch (err) {
-            console.error('Bulk email chunk error:', err);
-            failedCount += chunk.length;
-            chunk.forEach(ch => {
-                batchFailedEmailItems.push({
-                    certificate_id: ch.certificate_id,
-                    student_name: ch.student_name,
-                    student_email: ch.student_email,
-                    domain: ch.domain,
-                    error: 'Network connection or SMTP dispatch error'
-                });
-            });
+            console.error('Bulk email item error:', err);
+            failedCount++;
+            const failItem = {
+                certificate_id: item.certificate_id,
+                student_name: item.student_name,
+                student_email: item.student_email,
+                domain: item.domain,
+                error: 'Network connection or SMTP dispatch error'
+            };
+            batchFailedEmailItems.push(failItem);
+            updateRowStatusByEmail(item.student_email, 'failed', failItem.error);
         }
 
-        completed += chunk.length;
+        completed++;
         const remaining = Math.max(0, total - completed);
         const pct = Math.min(100, (completed / total) * 100);
 
@@ -1934,7 +2198,6 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
     currentFailedEmailItems = batchFailedEmailItems;
     renderEmailFailedTable(currentFailedEmailItems);
 
-    // Mark send job as complete in BulkJobManager (fire-and-forget)
     if (_sendJobId) {
         try {
             const finalStatus = _cancelRequested ? 'cancelled' : undefined;
