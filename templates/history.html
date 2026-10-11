@@ -12,73 +12,98 @@
 <div class="app">
 
     <!-- =====================================================
-         HEADER
+         HORIZONTAL TOP NAVIGATION
          ===================================================== -->
-    <header>
-        <div class="brand-group">
-            <div class="brand-icon-wrapper">
-                <img src="/static/persevex-icon.png" alt="Persevex Logo" width="32" height="32">
-            </div>
-            <div class="brand-text-block">
-                <div class="brand">
-                    persevex <span class="brand-llp">LLP</span>
+    <header class="app-header">
+        <div class="header-inner">
+            <!-- Brand Section -->
+            <a href="/" class="brand-group" title="Persevex LLP">
+                <div class="brand-icon-wrapper">
+                    <img src="/static/persevex-icon.png" alt="Persevex Logo" class="brand-logo" width="36" height="36">
                 </div>
-                <div class="tagline">
-                    LEARN, GROW, SUCCEED
+                <div class="brand-text-block">
+                    <div class="brand">
+                        persevex <span class="brand-llp">LLP</span>
+                    </div>
+                    <div class="tagline">
+                        LEARN, GROW, SUCCEED
+                    </div>
+                </div>
+            </a>
+
+            <!-- 3D Navigation Tabs -->
+            <nav class="nav-links-wrapper" aria-label="Main Navigation">
+                <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Offer Letter</span>
+                </a>
+                <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>CA Letter</span>
+                </a>
+                <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="7"></circle>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                    </svg>
+                    <span>Certificate</span>
+                </a>
+                <a href="/ca-certificate" class="nav-tab-link" title="CA Certificate Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="6"></circle>
+                        <path d="M8 14l-2 7 6-3 6 3-2-7"></path>
+                        <path d="M9 10h.01M15 10h.01"></path>
+                    </svg>
+                    <span>CA Certificate</span>
+                </a>
+                <a href="/history" class="nav-tab-link active" title="Unified History">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>History</span>
+                </a>
+            </nav>
+
+            <!-- Right: Logout -->
+            <div class="header-right-group">
+                <div class="header-actions">
+                    <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span>Logout</span>
+                    </a>
                 </div>
             </div>
-        </div>
-
-        <h1>
-            UNIFIED <span class="highlight">HISTORY</span>
-        </h1>
-
-        <!-- Navigation Tabs -->
-        <nav class="nav-links-wrapper">
-            <a href="/" class="nav-tab-link" title="Offer Letter Generator">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                <span>Offer Letter</span>
-            </a>
-            <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="9" cy="7" r="4"></circle>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
-                <span>CA Letter</span>
-            </a>
-            <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="8" r="7"></circle>
-                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
-                </svg>
-                <span>Certificate</span>
-            </a>
-            <a href="/ca-certificate" class="nav-tab-link" title="CA Certificate Generator"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"></path><path d="M3 12h18"></path></svg><span>CA Certificate</span></a>
-            <a href="/history" class="nav-tab-link active" title="Unified History">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                </svg>
-                <span>History</span>
-            </a>
-        </nav>
-
-        <div class="header-actions">
-            <a href="/logout" class="logout-btn" title="Sign out of Persevex">
-                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-                <span>Logout</span>
-            </a>
         </div>
     </header>
+
+    <!-- =====================================================
+         WORKSPACE
+         ===================================================== -->
+    <div class="workspace">
+    <div class="workspace-inner">
+
+    <!-- Workspace top bar -->
+    <div class="workspace-topbar">
+        <div class="workspace-title-block">
+            <h1 class="workspace-topbar-title">UNIFIED <span class="highlight">HISTORY</span></h1>
+            <p class="workspace-topbar-sub">Centralized repository and delivery audit trail for all issued documents</p>
+        </div>
+    </div>
 
     <!-- =====================================================
          MAIN HISTORY WORKSPACE
@@ -1354,6 +1379,10 @@ window.addEventListener('storage', function(event) {
     }
 });
 </script>
+
+</div><!-- /.workspace-inner -->
+</div><!-- /.workspace -->
+</div><!-- /.app -->
 
 </body>
 </html>

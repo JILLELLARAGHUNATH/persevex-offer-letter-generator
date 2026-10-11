@@ -8,20 +8,129 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="bulk-ca-certificate-page">
+
 <div class="app">
-    <header>
-        <div class="brand-group"><div class="brand-icon-wrapper"><img src="/static/persevex-icon.png" width="32" height="32" alt="Persevex Logo"></div><div class="brand-text-block"><div class="brand">persevex <span class="brand-llp">LLP</span></div><div class="tagline">LEARN, GROW, SUCCEED</div></div></div>
-        <h1>CA <span class="highlight">CERTIFICATE</span></h1>
-        <nav class="nav-links-wrapper" aria-label="Primary navigation">
-            <a href="/" class="nav-tab-link"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg><span>Offer Letter</span></a>
-            <a href="/campus-ambassador" class="nav-tab-link"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg><span>CA Letter</span></a>
-            <a href="/certificate" class="nav-tab-link"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg><span>Certificate</span></a>
-            <a href="/ca-certificate" class="nav-tab-link active"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"></path><path d="M3 12h18"></path></svg><span>CA Certificate</span></a>
-            <a href="/history" class="nav-tab-link"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span>History</span></a>
-        </nav>
-        <div class="header-stats" aria-label="CA Certificate delivery summary"><div class="header-stat success-stat"><span>Success: <strong id="successCount">{{ success_count or 0 }}</strong></span></div><div class="header-stat failed-stat"><span>Failed: <strong id="failedCount">{{ failed_count or 0 }}</strong></span></div></div>
-        <div class="header-actions"><a href="/logout" class="logout-btn"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><span>Logout</span></a></div>
+
+    <!-- =====================================================
+         HORIZONTAL TOP NAVIGATION
+         ===================================================== -->
+    <header class="app-header">
+        <div class="header-inner">
+            <!-- Brand Section -->
+            <a href="/" class="brand-group" title="Persevex LLP">
+                <div class="brand-icon-wrapper">
+                    <img src="/static/persevex-icon.png" alt="Persevex Logo" class="brand-logo" width="36" height="36">
+                </div>
+                <div class="brand-text-block">
+                    <div class="brand">
+                        persevex <span class="brand-llp">LLP</span>
+                    </div>
+                    <div class="tagline">
+                        LEARN, GROW, SUCCEED
+                    </div>
+                </div>
+            </a>
+
+            <!-- 3D Navigation Tabs -->
+            <nav class="nav-links-wrapper" aria-label="Main Navigation">
+                <a href="/" class="nav-tab-link" title="Offer Letter Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>Offer Letter</span>
+                </a>
+                <a href="/campus-ambassador" class="nav-tab-link" title="Campus Ambassador Offer Letter">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg>
+                    <span>CA Letter</span>
+                </a>
+                <a href="/certificate" class="nav-tab-link" title="Certificate Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="7"></circle>
+                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                    </svg>
+                    <span>Certificate</span>
+                </a>
+                <a href="/ca-certificate" class="nav-tab-link active" title="CA Certificate Generator">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="6"></circle>
+                        <path d="M8 14l-2 7 6-3 6 3-2-7"></path>
+                        <path d="M9 10h.01M15 10h.01"></path>
+                    </svg>
+                    <span>CA Certificate</span>
+                </a>
+                <a href="/history" class="nav-tab-link" title="Unified History">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>History</span>
+                </a>
+            </nav>
+
+            <!-- Right: Stats & Logout -->
+            <div class="header-right-group">
+                <div class="header-stats" aria-label="CA Certificate delivery summary">
+                    <div class="header-stat success-stat" title="Total Successful CA Certificate Deliveries">
+                        <div class="stat-icon-wrapper">
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                        <span>
+                            Success:
+                            <strong id="successCount">{{ success_count or 0 }}</strong>
+                        </span>
+                    </div>
+
+                    <div class="header-stat failed-stat" title="Total Failed CA Certificate Attempts">
+                        <div class="stat-icon-wrapper">
+                            <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </div>
+                        <span>
+                            Failed:
+                            <strong id="failedCount">{{ failed_count or 0 }}</strong>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="header-actions">
+                    <a href="/logout" class="logout-btn" title="Sign out of Persevex">
+                        <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </div>
     </header>
+
+    <!-- =====================================================
+         WORKSPACE
+         ===================================================== -->
+    <div class="workspace">
+    <div class="workspace-inner">
+
+    <!-- Workspace top bar (page title below navigation) -->
+    <div class="workspace-topbar">
+        <div class="workspace-title-block">
+            <h1 class="workspace-topbar-title">CA <span class="highlight">CERTIFICATE</span></h1>
+            <p class="workspace-topbar-sub">Batch issue and dispatch certified Campus Ambassador credentials from tabular data</p>
+        </div>
+    </div>
     <div class="mode-switcher-container"><div class="mode-switcher-pills"><a class="mode-pill-btn" href="/ca-certificate">Single CA Certificate</a><a class="mode-pill-btn active" href="/ca-certificate/bulk">Bulk CA Certificates</a></div></div>
     <main class="ca-bulk-results-layout">
         <section class="card ca-bulk-input-card">
@@ -118,5 +227,10 @@ $('generationProgressDetail').textContent=doneMsg;
 if(sent||failed)localStorage.setItem('persevex_history_updated',Date.now().toString());}
 $('fileInput').onchange=e=>e.target.files[0]&&uploadFile(e.target.files[0]);$('validate').onclick=validateRows;$('generate').onclick=generateAll;$('sendAll').onclick=()=>sendRows(state.generated,false);$('retryFailed').onclick=()=>sendRows(state.failed,true);$('resultSearch').oninput=e=>{state.search=e.target.value;state.page=1;renderRows();};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.filter=b.dataset.filter;state.page=1;renderRows();});$('prevPage').onclick=()=>{if(state.page>1){state.page--;renderRows();}};$('nextPage').onclick=()=>{state.page++;renderRows();};$('date').onchange=()=>{state.validated=false;$('generate').disabled=true;};$('downloadAll').onclick=async()=>{if(state.busy||!state.generated.length)return;const parts=[];for(let i=0;i<state.generated.length;i+=25)parts.push(state.generated.slice(i,i+25));state.busy=true;$('downloadAll').disabled=true;$('uploadStatus').textContent=`Preparing ${parts.length} ZIP part${parts.length===1?'':'s'}…`;try{for(let i=0;i<parts.length;i++){const r=await fetch('/api/ca-certificate/bulk/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({certificates:parts[i].map(x=>({participant_name:x.participant_name,participant_email:x.participant_email,program_date:$('date').value}))})});if(!r.ok)throw new Error(`Download part ${i+1} failed.`);const a=document.createElement('a');a.href=URL.createObjectURL(await r.blob());a.download=`Persevex_CA_Certificates_Part_${i+1}_of_${parts.length}.zip`;a.click();$('uploadStatus').textContent=`Downloaded ZIP part ${i+1} of ${parts.length}.`;}}catch(error){$('uploadStatus').textContent=error.message||'Download failed.';}finally{state.busy=false;$('downloadAll').disabled=!state.generated.length;}};$('clearBulk').onclick=()=>{if(state.busy)return;$('fileInput').value='';$('names').value='';$('emails').value='';$('fileMeta').hidden=true;$('uploadStatus').textContent='';$('resultsDashboard').hidden=true;$('emptyResults').hidden=false;state.rows=[];state.generated=[];state.failed=[];$('generate').disabled=true;$('downloadAll').disabled=true;$('sendAll').disabled=true;$('retryFailed').disabled=true;};
 </script>
+
+</div><!-- /.workspace-inner -->
+</div><!-- /.workspace -->
+</div><!-- /.app -->
+
 </body>
 </html>
