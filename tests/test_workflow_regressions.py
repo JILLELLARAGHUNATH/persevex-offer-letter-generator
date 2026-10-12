@@ -2028,6 +2028,40 @@ class InternshipCertificateBulkIssueDateAndProgressTests(unittest.TestCase):
         today_str = datetime.now().strftime("%d-%m-%Y")
         self.assertEqual(captured_data[0]["issued_date"], today_str)
 
+    def test_bulk_generate_falls_back_to_today_when_row_issued_date_is_invalid(self):
+        """When batch issue date is absent and row contains an invalid date, falls back to today's date."""
+        from datetime import datetime
+        client = self._authenticated_client()
+        items = [
+            {
+                "student_name": "Student Invalid Date",
+                "student_email": "invalid_date@example.invalid",
+                "domain": "DevOps",
+                "start_date": "01/01/2026",
+                "end_date": "01/02/2026",
+                "issued_date": "not-a-valid-date-format",
+            }
+        ]
+        captured_data = []
+        def mock_generate_pdf(data, output_dir, **kwargs):
+            captured_data.append(data.copy())
+            return "cert_fallback.pdf"
+
+        with patch("certificate_service.generate_certificate_pdf", side_effect=mock_generate_pdf), \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(len(captured_data), 1)
+        # The invalid row date must be silently replaced with today's date
+        today_str = datetime.now().strftime("%d-%m-%Y")
+        self.assertEqual(captured_data[0]["issued_date"], today_str)
+
     def test_bulk_generate_rejects_invalid_issue_date_with_400(self):
         """Passing an invalid or malformed issue date returns 400."""
         client = self._authenticated_client()

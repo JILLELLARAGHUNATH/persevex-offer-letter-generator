@@ -349,11 +349,9 @@ def generate_bulk_certificates(
             # 3. Current local date fallback
             if clean_batch_issue_date:
                 issued_date = clean_batch_issue_date
-            elif item.get("issued_date"):
-                parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
-                issued_date = parsed_row_date or str(item.get("issued_date")).strip()
             else:
-                issued_date = datetime.now().strftime("%d-%m-%Y")
+                parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
+                issued_date = parsed_row_date or datetime.now().strftime("%d-%m-%Y")
 
             email_clean = student_email.lower()
             domain_clean = domain.lower()
