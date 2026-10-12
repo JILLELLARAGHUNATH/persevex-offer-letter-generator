@@ -1847,17 +1847,10 @@ async function executeBulkGeneration(targetRows = null) {
             });
             const result = await response.json();
 
-            if ((response.status === 409 && result.cancelled) || result.cancelled) {
-                wasCancelled = true;
-                if (progressCurrent) progressCurrent.textContent = 'Cancelled by user';
-                showToast("Certificate generation cancelled.", "info");
-                break;
-            }
-
-            if (result.success && Array.isArray(result.results)) {
+            if (Array.isArray(result.results)) {
                 for (let j = 0; j < chunkItems.length; j++) {
                     const { row, originalIndex } = chunkItems[j];
-                    const itemRes = result.results[j] || result.results.find(r => r.row_index === row.row_index);
+                    const itemRes = result.results.find(r => r.row_index === row.row_index) || result.results[j];
 
                     if (itemRes && itemRes.success && itemRes.persisted !== false) {
                         if (itemRes.status === 'newly_generated') {
@@ -1874,7 +1867,7 @@ async function executeBulkGeneration(targetRows = null) {
                         if (originalIndex !== undefined && originalIndex >= 0) {
                             updateRowPreviewToEyeIcon(originalIndex, itemRes);
                         }
-                    } else {
+                    } else if (!result.cancelled) {
                         failedCount++;
                         const failItem = {
                             row_index: row.row_index,
@@ -1892,7 +1885,7 @@ async function executeBulkGeneration(targetRows = null) {
                         }
                     }
                 }
-            } else {
+            } else if (!result.cancelled) {
                 for (let j = 0; j < chunkItems.length; j++) {
                     const { row, originalIndex } = chunkItems[j];
                     failedCount++;
@@ -1911,6 +1904,13 @@ async function executeBulkGeneration(targetRows = null) {
                         updateRowPreviewToFailed(originalIndex, failItem.error);
                     }
                 }
+            }
+
+            if ((response.status === 409 && result.cancelled) || result.cancelled) {
+                wasCancelled = true;
+                if (progressCurrent) progressCurrent.textContent = 'Cancelled by user';
+                showToast("Certificate generation cancelled.", "info");
+                break;
             }
         } catch (err) {
             console.error('Bulk generate chunk error:', err);

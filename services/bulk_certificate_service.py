@@ -292,6 +292,43 @@ def get_sample_excel_template():
 
 
 
+def _disambiguate_certificate_filename(student_name, cert_id, batch_used_filenames, output_dir=None):
+    """
+    Ensure each certificate receives a unique filename that never collides with
+    files already in batch_used_filenames, the output directory, or the persistent cache.
+    """
+    safe_name = certificate_service.safe_filename(student_name)
+    base_fn = f"{safe_name}_Certificate.pdf"
+
+    def is_collision(fn):
+        if fn in batch_used_filenames:
+            return True
+        if output_dir and (Path(output_dir) / fn).exists():
+            return True
+        persistent_dir = getattr(certificate_service, "PERSISTENT_CERT_DIR", None)
+        if persistent_dir and (Path(persistent_dir) / fn).exists():
+            return True
+        return False
+
+    if not is_collision(base_fn):
+        batch_used_filenames.add(base_fn)
+        return base_fn
+
+    suffix = cert_id.split("-")[-1] if (cert_id and "-" in str(cert_id)) else "dup"
+    candidate = f"{safe_name}_{suffix}_Certificate.pdf"
+    if not is_collision(candidate):
+        batch_used_filenames.add(candidate)
+        return candidate
+
+    counter = 1
+    while True:
+        candidate = f"{safe_name}_{suffix}_{counter}_Certificate.pdf"
+        if not is_collision(candidate):
+            batch_used_filenames.add(candidate)
+            return candidate
+        counter += 1
+
+
 def generate_bulk_certificates(
     valid_rows,
     output_dir,
@@ -423,14 +460,8 @@ def generate_bulk_certificates(
                 # NEW CERTIFICATE GENERATION CASE
                 cert_id = precomputed_ids.pop(0) if precomputed_ids else certificate_service.generate_certificate_id(supabase_client)
 
-                # Prevent filename collision for identical student names
-                base_fn = f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
-                if base_fn in batch_used_filenames:
-                    suffix = cert_id.split("-")[-1] if "-" in cert_id else "dup"
-                    filename = f"{certificate_service.safe_filename(student_name)}_{suffix}_Certificate.pdf"
-                else:
-                    filename = base_fn
-                batch_used_filenames.add(filename)
+                # Prevent filename collision for identical student names across batches, requests, and disks
+                filename = _disambiguate_certificate_filename(student_name, cert_id, batch_used_filenames, output_dir=output_dir)
 
                 cert_data = {
                     "student_name": student_name,
@@ -558,9 +589,11 @@ def generate_bulk_certificates(
                 except Exception:
                     pass
 
-        # If durable persistence failed when Supabase was expected, reflect honestly in results
-        if not persistence_info["durable"]:
-            err_msg = f"Durable database persistence failed: {persistence_info['error'] or 'Supabase write failure'}"
+        # Durable Supabase persistence is required on Vercel or when Supabase is configured.
+        # In a local/offline environment without Supabase, local SQLite persistence is durable on disk
+        # and represents intended persistence.
+        if not persistence_info.get("success", False):
+            err_msg = f"Database persistence failed: {persistence_info.get('error') or 'Storage error'}"
             for res_item in results:
                 if res_item.get("status") == "newly_generated":
                     res_item["success"] = False
@@ -585,7 +618,7 @@ def generate_bulk_certificates(
             for res_item in results:
                 if res_item.get("status") == "newly_generated":
                     res_item["persisted"] = True
-                    res_item["durable"] = True
+                    res_item["durable"] = bool(persistence_info.get("durable", False))
 
     return {
         "total": len(valid_rows),
@@ -634,13 +667,9 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         domain = str(item.get("domain") or item.get("internship_domain") or "Internship").strip()
         filename = item.get("filename") or item.get("pdf_filename")
         if not filename:
-            base_fn = f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
-            if base_fn in seen_batch_filenames:
-                suffix = cert_id.split("-")[-1] if (cert_id and "-" in str(cert_id)) else str(i)
-                filename = f"{certificate_service.safe_filename(student_name)}_{suffix}_Certificate.pdf"
-            else:
-                filename = base_fn
-        seen_batch_filenames.add(filename)
+            filename = _disambiguate_certificate_filename(student_name, cert_id, seen_batch_filenames, output_dir=output_dir)
+        else:
+            seen_batch_filenames.add(filename)
         norm_email = student_email.lower()
 
         # In-batch duplicate guard: Never send the same email twice in one bulk operation

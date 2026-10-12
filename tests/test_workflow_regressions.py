@@ -2,6 +2,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -2332,12 +2333,14 @@ class BulkCertificateGenerationOptimizationTests(unittest.TestCase):
             self.assertTrue(cid.startswith("PXL-CERT-"))
 
         # Test collision resolution
-        simulated_collision = "PXL-CERT-2026-COLLID"
+        current_year = datetime.now().year
+        simulated_collision = f"PXL-CERT-{current_year}-COLLID"
         with patch.object(repository, "check_existing_certificate_ids_batch", return_value={simulated_collision}):
             with patch("secrets.choice", side_effect=list("COLLID") + list("NEWID1")):
                 resolved_ids = certificate_service.generate_bulk_certificate_ids(1)
                 self.assertEqual(len(resolved_ids), 1)
                 self.assertNotEqual(resolved_ids[0], simulated_collision)
+                self.assertEqual(resolved_ids[0], f"PXL-CERT-{current_year}-NEWID1")
 
     def test_individual_pdf_generation_failure_isolated(self):
         """When an individual record fails during PDF generation, other records succeed and count reconciles."""
@@ -2583,7 +2586,8 @@ class BulkCertificateGenerationOptimizationTests(unittest.TestCase):
             return True
 
         with tempfile.TemporaryDirectory() as td:
-            with patch.object(certificate_service, "send_certificate_email", side_effect=mock_send), \
+            with patch.object(certificate_service, "PERSISTENT_CERT_DIR", Path(td) / "persistent"), \
+                 patch.object(certificate_service, "send_certificate_email", side_effect=mock_send), \
                  patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
                  patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=True):
                 result = bulk_certificate_service.send_bulk_certificate_emails(
@@ -2596,6 +2600,135 @@ class BulkCertificateGenerationOptimizationTests(unittest.TestCase):
         self.assertNotEqual(sent_filenames[0], sent_filenames[1])
         self.assertEqual(sent_filenames[0], "Priya_Patel_Certificate.pdf")
         self.assertEqual(sent_filenames[1], "Priya_Patel_X222_Certificate.pdf")
+
+    def test_cross_batch_duplicate_name_does_not_overwrite_existing_pdf(self):
+        """Pre-existing PDF for a student name is never overwritten by a subsequent batch or request."""
+        with tempfile.TemporaryDirectory() as td:
+            out_path = Path(td)
+            existing_pdf = out_path / "Aarav_Sharma_Certificate.pdf"
+            sentinel_bytes = b"%PDF-1.4 PRE_EXISTING_CERTIFICATE_BYTES"
+            existing_pdf.write_bytes(sentinel_bytes)
+
+            items = [{
+                "student_name": "Aarav Sharma",
+                "student_email": "new.aarav@example.invalid",
+                "domain": "Cloud",
+                "start_date": "01-01-2026",
+                "end_date": "01-02-2026",
+                "row_index": 1,
+            }]
+            with patch.object(certificate_service, "PERSISTENT_CERT_DIR", Path(td) / "persistent"), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value={"success": True, "durable": True, "supabase_persisted": True, "sqlite_persisted": True}):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+
+            self.assertEqual(result["newly_generated_count"], 1)
+            # The pre-existing file MUST NOT be modified
+            self.assertEqual(existing_pdf.read_bytes(), sentinel_bytes)
+
+            new_fn = result["results"][0]["filename"]
+            self.assertNotEqual(new_fn, "Aarav_Sharma_Certificate.pdf", "New certificate must receive a disambiguated filename")
+            self.assertTrue(new_fn.startswith("Aarav_Sharma_"))
+            self.assertTrue((out_path / new_fn).exists())
+
+    def test_local_sqlite_only_persistence_succeeds_without_supabase(self):
+        """In a local offline environment without Supabase, SQLite-only save succeeds and marks durable=False honestly."""
+        items = [{
+            "student_name": "Local Student",
+            "student_email": "local@example.invalid",
+            "domain": "Backend",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "row_index": 1,
+        }]
+        sqlite_only_result = {
+            "success": True,
+            "durable": False,
+            "supabase_persisted": False,
+            "sqlite_persisted": True,
+            "error": None,
+            "count": 1,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=sqlite_only_result):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026",
+                    supabase_client=None,
+                )
+            self.assertEqual(result["newly_generated_count"], 1)
+            self.assertEqual(result["failed_count"], 0)
+            res_item = result["results"][0]
+            self.assertTrue(res_item["success"])
+            self.assertTrue(res_item["persisted"])
+            self.assertFalse(res_item["durable"], "Must not falsely claim durable Supabase save")
+            self.assertEqual(res_item["status"], "newly_generated")
+
+    def test_vercel_sqlite_only_persistence_fails_honestly(self):
+        """On Vercel where SQLite is ephemeral, failed Supabase persistence marks records as persistence_failed."""
+        items = [{
+            "student_name": "Vercel Student",
+            "student_email": "vercel@example.invalid",
+            "domain": "Frontend",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "row_index": 1,
+        }]
+        vercel_fail_result = {
+            "success": False,
+            "durable": False,
+            "supabase_persisted": False,
+            "sqlite_persisted": True,
+            "error": "Supabase outage on Vercel",
+            "count": 1,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=vercel_fail_result):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026",
+                )
+            self.assertEqual(result["newly_generated_count"], 0)
+            self.assertEqual(result["failed_count"], 1)
+            res_item = result["results"][0]
+            self.assertFalse(res_item["success"])
+            self.assertEqual(res_item["status"], "persistence_failed")
+            self.assertFalse(res_item["persisted"])
+            self.assertFalse(res_item["durable"])
+
+    def test_bulk_generation_cancellation_preserves_partial_results(self):
+        """When generation is cancelled mid-batch, items generated before cancellation are preserved in results."""
+        items = [
+            {"student_name": f"Student {i}", "student_email": f"st{i}@example.invalid",
+             "domain": "DevOps", "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": i}
+            for i in range(3)
+        ]
+        # Simulate cancellation triggered after the first item is processed
+        call_count = 0
+        def cancel_after_one(job_id):
+            nonlocal call_count
+            call_count += 1
+            return call_count > 1
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service.bulk_job_manager, "is_cancelled", side_effect=cancel_after_one), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value={"success": True, "durable": True, "supabase_persisted": True, "sqlite_persisted": True}):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026",
+                    job_id="test-job-partial-cancel"
+                )
+        self.assertTrue(result["cancelled"])
+        self.assertEqual(result["newly_generated_count"], 1)
+        self.assertEqual(len(result["results"]), 1)
+        self.assertTrue(result["results"][0]["success"])
+        self.assertEqual(result["results"][0]["student_name"], "Student 0")
 
 
 if __name__ == '__main__':

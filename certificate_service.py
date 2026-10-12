@@ -542,14 +542,19 @@ def generate_certificate_pdf(data, output_dir=None, base_url=None, template_vers
         try:
             output_path = Path(output_dir) / filename
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_bytes(pdf_bytes)
+            temp_output = output_path.with_suffix(f".tmp.{os.getpid()}.{secrets.token_hex(4)}")
+            temp_output.write_bytes(pdf_bytes)
+            os.replace(temp_output, output_path)
         except Exception as save_err:
             pass
 
     # Opportunistically write to persistent cert dir if writable
     try:
         persistent_path = PERSISTENT_CERT_DIR / filename
-        persistent_path.write_bytes(pdf_bytes)
+        persistent_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_persistent = persistent_path.with_suffix(f".tmp.{os.getpid()}.{secrets.token_hex(4)}")
+        temp_persistent.write_bytes(pdf_bytes)
+        os.replace(temp_persistent, persistent_path)
     except Exception:
         pass
 
