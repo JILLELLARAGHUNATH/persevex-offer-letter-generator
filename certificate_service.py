@@ -59,26 +59,66 @@ def safe_filename(name):
     return name or "Student"
 
 
+def generate_bulk_certificate_ids(count, supabase_client=None, existing_ids=None):
+    """
+    Generate `count` unique Certificate IDs in format: PXL-CERT-YYYY-XXXXXX
+    Ensures internal uniqueness and verifies against database in a single batch query
+    instead of per-certificate round trips.
+    """
+    if count <= 0:
+        return []
+
+    current_year = datetime.now().year
+    alphabet = string.ascii_uppercase + string.digits
+    known_used = set(str(cid).strip() for cid in (existing_ids or []) if cid)
+    generated_ids = []
+
+    # Generate count unique candidate IDs
+    candidates = []
+    while len(candidates) < count:
+        random_suffix = "".join(secrets.choice(alphabet) for _ in range(6))
+        candidate = f"PXL-CERT-{current_year}-{random_suffix}"
+        if candidate not in known_used and candidate not in candidates:
+            candidates.append(candidate)
+
+    # Check collisions in database via single batch query
+    existing_in_db = repository.check_existing_certificate_ids_batch(candidates, supabase_client=supabase_client)
+
+    for candidate in candidates:
+        if candidate not in existing_in_db:
+            generated_ids.append(candidate)
+            known_used.add(candidate)
+        else:
+            # Collision handling (extremely rare): generate until non-colliding
+            resolved = False
+            for _ in range(20):
+                random_suffix = "".join(secrets.choice(alphabet) for _ in range(6))
+                new_candidate = f"PXL-CERT-{current_year}-{random_suffix}"
+                if new_candidate not in known_used:
+                    single_rec, db_error = db_get_certificate_by_id(new_candidate, supabase_client, return_error_detail=True)
+                    if db_error:
+                        raise RuntimeError(f"Database error while verifying candidate certificate ID collision: {db_error}")
+                    if not single_rec:
+                        generated_ids.append(new_candidate)
+                        known_used.add(new_candidate)
+                        resolved = True
+                        break
+            if not resolved:
+                raise RuntimeError(f"Failed to generate non-colliding certificate ID after 20 attempts for year {current_year}")
+
+    return generated_ids
+
+
 def generate_certificate_id(supabase_client=None):
     """
     Generate unique Certificate ID in format: PXL-CERT-YYYY-XXXXXX
     Ensures no collision with existing records.
+    Raises RuntimeError if database error prevents verifying uniqueness.
     """
-    current_year = datetime.now().year
-    alphabet = string.ascii_uppercase + string.digits
-
-    for _ in range(20):
-        random_suffix = "".join(secrets.choice(alphabet) for _ in range(6))
-        cert_id = f"PXL-CERT-{current_year}-{random_suffix}"
-
-        # Check collision
-        existing = db_get_certificate_by_id(cert_id, supabase_client)
-        if not existing:
-            return cert_id
-
-    # Fallback with timestamp if needed
-    ts_suffix = datetime.now().strftime("%f")[:6]
-    return f"PXL-CERT-{current_year}-{ts_suffix}"
+    ids = generate_bulk_certificate_ids(1, supabase_client=supabase_client)
+    if ids:
+        return ids[0]
+    raise RuntimeError("Failed to generate a verified unique certificate ID.")
 
 
 import socket
@@ -259,7 +299,7 @@ from database import repository
 
 def db_get_certificate_by_id(cert_id, supabase_client=None, return_error_detail=False):
     """Fetch certificate by ID with automatic Supabase + SQLite fallback."""
-    return repository.get_certificate_by_id(cert_id, return_error_detail=return_error_detail)
+    return repository.get_certificate_by_id(cert_id, supabase_client=supabase_client, return_error_detail=return_error_detail)
 
 
 def db_get_certificate_by_email(email, supabase_client=None):
@@ -486,16 +526,17 @@ def render_certificate_preview_image(data, base_url=None, dpi=150):
 
 
 
-def generate_certificate_pdf(data, output_dir=None, base_url=None, template_version="v1"):
+def generate_certificate_pdf(data, output_dir=None, base_url=None, template_version="v1", custom_filename=None):
     """
     Generates certificate PDF in memory and optionally writes to output_dir as local cache.
     Returns: filename string
     """
-    pdf_bytes, filename = generate_certificate_pdf_bytes(
+    pdf_bytes, default_filename = generate_certificate_pdf_bytes(
         data=data,
         base_url=base_url,
         template_version=template_version,
     )
+    filename = custom_filename or default_filename
 
     if output_dir is not None:
         try:

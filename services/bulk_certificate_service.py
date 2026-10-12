@@ -331,6 +331,23 @@ def generate_bulk_certificates(
         print("EXISTING CERTIFICATES BATCH LOOKUP ERROR:", repr(exc))
         existing_lookup = {}
 
+    # Count rows needing new certificate IDs and precompute in one batch query
+    new_rows_count = 0
+    for item in valid_rows:
+        student_email = str(item.get("student_email") or "").strip().lower()
+        domain = str(item.get("domain") or "").strip().lower()
+        start_date = str(item.get("start_date") or "").strip()
+        end_date = str(item.get("end_date") or "").strip()
+        existing = existing_lookup.get((student_email, domain, start_date, end_date))
+        if not (existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked"):
+            new_rows_count += 1
+
+    precomputed_ids = []
+    if new_rows_count > 0:
+        precomputed_ids = certificate_service.generate_bulk_certificate_ids(new_rows_count, supabase_client=supabase_client)
+
+    batch_used_filenames = set()
+
     for item in valid_rows:
         if job_id and bulk_job_manager.is_cancelled(job_id):
             was_cancelled = True
@@ -363,6 +380,7 @@ def generate_bulk_certificates(
                 # RESUME CASE: Certificate already exists in DB!
                 cert_id = str(existing.get("certificate_id")).strip()
                 filename = str(existing.get("pdf_filename") or f"{cert_id}.pdf").strip()
+                batch_used_filenames.add(filename)
 
                 # Ensure physical PDF exists locally for instant preview / download / email
                 target_pdf = Path(output_dir) / filename
@@ -379,7 +397,8 @@ def generate_bulk_certificates(
                                 "certificate_id": cert_id,
                             },
                             output_dir,
-                            base_url=base_url
+                            base_url=base_url,
+                            custom_filename=filename,
                         )
                     except Exception as render_exc:
                         print(f"WARNING: Re-rendering existing certificate {cert_id} PDF failed:", repr(render_exc))
@@ -402,7 +421,17 @@ def generate_bulk_certificates(
                 })
             else:
                 # NEW CERTIFICATE GENERATION CASE
-                cert_id = certificate_service.generate_certificate_id(supabase_client)
+                cert_id = precomputed_ids.pop(0) if precomputed_ids else certificate_service.generate_certificate_id(supabase_client)
+
+                # Prevent filename collision for identical student names
+                base_fn = f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
+                if base_fn in batch_used_filenames:
+                    suffix = cert_id.split("-")[-1] if "-" in cert_id else "dup"
+                    filename = f"{certificate_service.safe_filename(student_name)}_{suffix}_Certificate.pdf"
+                else:
+                    filename = base_fn
+                batch_used_filenames.add(filename)
+
                 cert_data = {
                     "student_name": student_name,
                     "student_email": student_email,
@@ -416,7 +445,8 @@ def generate_bulk_certificates(
                 filename = certificate_service.generate_certificate_pdf(
                     cert_data,
                     output_dir,
-                    base_url=base_url
+                    base_url=base_url,
+                    custom_filename=filename,
                 )
 
                 record = {
@@ -488,16 +518,74 @@ def generate_bulk_certificates(
             })
 
     # Bulk save accumulated new records in a single database transaction / request
+    persistence_info = {
+        "attempted": False,
+        "durable": True,
+        "supabase_persisted": True,
+        "sqlite_persisted": True,
+        "error": None,
+    }
+
     if records_to_save:
+        persistence_info["attempted"] = True
         try:
-            bulk_save_certificate_records(records_to_save)
+            save_res = bulk_save_certificate_records(records_to_save, supabase_client=supabase_client)
+            if isinstance(save_res, dict):
+                persistence_info["durable"] = bool(save_res.get("durable"))
+                persistence_info["supabase_persisted"] = bool(save_res.get("supabase_persisted"))
+                persistence_info["sqlite_persisted"] = bool(save_res.get("sqlite_persisted"))
+                persistence_info["error"] = save_res.get("error")
+                persistence_info["success"] = bool(save_res.get("success"))
+            elif save_res is True:
+                persistence_info["durable"] = True
+                persistence_info["supabase_persisted"] = True
+                persistence_info["sqlite_persisted"] = True
+                persistence_info["success"] = True
+            elif save_res is False:
+                persistence_info["durable"] = False
+                persistence_info["supabase_persisted"] = False
+                persistence_info["success"] = False
+                persistence_info["error"] = "bulk_save_certificate_records returned False"
         except Exception as exc:
             print("BULK SAVE CERTIFICATES REPOSITORY WARNING:", repr(exc))
+            persistence_info["durable"] = False
+            persistence_info["supabase_persisted"] = False
+            persistence_info["success"] = False
+            persistence_info["error"] = repr(exc)
             for rec in records_to_save:
                 try:
                     save_certificate_record(rec)
                 except Exception:
                     pass
+
+        # If durable persistence failed when Supabase was expected, reflect honestly in results
+        if not persistence_info["durable"]:
+            err_msg = f"Durable database persistence failed: {persistence_info['error'] or 'Supabase write failure'}"
+            for res_item in results:
+                if res_item.get("status") == "newly_generated":
+                    res_item["success"] = False
+                    res_item["status"] = "persistence_failed"
+                    res_item["persisted"] = False
+                    res_item["durable"] = False
+                    res_item["error"] = err_msg
+                    failed_items.append({
+                        "row_index": res_item.get("row_index"),
+                        "student_name": res_item.get("student_name", "Unknown"),
+                        "student_email": res_item.get("student_email", ""),
+                        "domain": res_item.get("domain", ""),
+                        "start_date": res_item.get("start_date", ""),
+                        "end_date": res_item.get("end_date", ""),
+                        "issued_date": res_item.get("issued_date", ""),
+                        "stage": "persistence",
+                        "error": err_msg,
+                    })
+            failed_count += newly_generated_count
+            newly_generated_count = 0
+        else:
+            for res_item in results:
+                if res_item.get("status") == "newly_generated":
+                    res_item["persisted"] = True
+                    res_item["durable"] = True
 
     return {
         "total": len(valid_rows),
@@ -508,6 +596,7 @@ def generate_bulk_certificates(
         "results": results,
         "failed_items": failed_items,
         "cancelled": was_cancelled,
+        "persistence": persistence_info,
     }
 
 
@@ -532,6 +621,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
                 skip_set.add(str(em).strip().lower())
 
     seen_batch_emails = set()
+    seen_batch_filenames = set()
 
     for i, item in enumerate(certificate_items):
         if job_id and bulk_job_manager.is_cancelled(job_id):
@@ -543,6 +633,14 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
         student_name = str(item.get("student_name") or "Student").strip()
         domain = str(item.get("domain") or item.get("internship_domain") or "Internship").strip()
         filename = item.get("filename") or item.get("pdf_filename")
+        if not filename:
+            base_fn = f"{certificate_service.safe_filename(student_name)}_Certificate.pdf"
+            if base_fn in seen_batch_filenames:
+                suffix = cert_id.split("-")[-1] if (cert_id and "-" in str(cert_id)) else str(i)
+                filename = f"{certificate_service.safe_filename(student_name)}_{suffix}_Certificate.pdf"
+            else:
+                filename = base_fn
+        seen_batch_filenames.add(filename)
         norm_email = student_email.lower()
 
         # In-batch duplicate guard: Never send the same email twice in one bulk operation
@@ -603,7 +701,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             filename = certificate_service.generate_certificate_pdf(
                 data=email_data,
                 output_dir=Path(output_dir),
-                template_version=email_data.get("template_version", "v1")
+                template_version=email_data.get("template_version", "v1"),
+                custom_filename=filename,
             )
             pdf_path = Path(output_dir) / filename
 

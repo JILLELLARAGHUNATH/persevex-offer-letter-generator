@@ -21,6 +21,7 @@ import environment_config
 from database import repository
 from services.ca_bulk_service import parse_ca_file
 import services.bulk_certificate_service as bulk_certificate_service
+import certificate_service
 import smtplib
 
 unittest.addModuleCleanup(_test_storage.cleanup)
@@ -2199,6 +2200,402 @@ class InternshipCertificateBulkIssueDateAndProgressTests(unittest.TestCase):
         # Failed rows do NOT show eye icon
         self.assertIn("function updateRowPreviewToFailed", content)
         self.assertIn("Failed rows do NOT show an eye icon button", content)
+
+
+class BulkCertificateGenerationOptimizationTests(unittest.TestCase):
+    """
+    Focused regression and performance tests for optimized bulk certificate generation:
+    1. Small batch generation success and count reconciliation.
+    2. Large chunked duplicate detection in find_existing_certificates_batch across chunk boundaries.
+    3. Identical student names prevent filename overwriting / collisions.
+    4. Batch Certificate ID generation internal uniqueness and collision handling.
+    5. Mid-batch PDF failure isolation (partial failure reported without invalidating successful items).
+    6. Database persistence error handling and per-record fallback.
+    7. Absolute separation of generation and sending (generation endpoint NEVER sends email).
+    8. Send endpoint behavior preservation.
+    """
+
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_small_batch_generation_success_and_reconciliation(self):
+        """Generates a small batch of 3 records and reconciles counts exactly."""
+        items = [
+            {"student_name": f"Candidate {i}", "student_email": f"cand{i}@example.invalid",
+             "domain": "Python Development", "start_date": "01-01-2026", "end_date": "01-02-2026",
+             "row_index": i}
+            for i in range(1, 4)
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["generated_count"], 3)
+        self.assertEqual(result["newly_generated_count"], 3)
+        self.assertEqual(result["failed_count"], 0)
+        self.assertEqual(len(result["results"]), 3)
+        for r in result["results"]:
+            self.assertTrue(r["success"])
+            self.assertEqual(r["status"], "newly_generated")
+            self.assertTrue(r["certificate_id"].startswith("PXL-CERT-"))
+
+    def test_chunked_query_duplicate_detection_across_chunk_boundaries(self):
+        """find_existing_certificates_batch chunks queries of 50 to avoid URL length limits and merges results."""
+        emails = [f"student_{i}@example.invalid" for i in range(125)]
+        candidate_rows = [{"student_email": em} for em in emails]
+
+        mock_sb = MagicMock()
+        table_mock = MagicMock()
+        select_mock = MagicMock()
+
+        chunks_queried = []
+        def mock_in(col, chunk):
+            chunks_queried.append(list(chunk))
+            exec_mock = MagicMock()
+            # Return a match for the 10th and 75th emails
+            records = []
+            if "student_10@example.invalid" in chunk:
+                records.append({
+                    "student_email": "student_10@example.invalid",
+                    "internship_domain": "Data Science",
+                    "start_date": "01-01-2026",
+                    "end_date": "01-02-2026",
+                    "certificate_id": "PXL-CERT-2026-EXIST10",
+                    "certificate_status": "active"
+                })
+            if "student_75@example.invalid" in chunk:
+                records.append({
+                    "student_email": "student_75@example.invalid",
+                    "internship_domain": "Web Dev",
+                    "start_date": "01-01-2026",
+                    "end_date": "01-02-2026",
+                    "certificate_id": "PXL-CERT-2026-EXIST75",
+                    "certificate_status": "active"
+                })
+            exec_mock.execute.return_value = MagicMock(data=records)
+            return exec_mock
+
+        select_mock.in_.side_effect = mock_in
+        table_mock.select.return_value = select_mock
+        mock_sb.table.return_value = table_mock
+
+        lookup = repository.find_existing_certificates_batch(candidate_rows, supabase_client=mock_sb)
+        # Should have queried 3 chunks (50 + 50 + 25)
+        self.assertEqual(len(chunks_queried), 3)
+        self.assertEqual(len(chunks_queried[0]), 50)
+        self.assertEqual(len(chunks_queried[1]), 50)
+        self.assertEqual(len(chunks_queried[2]), 25)
+        # Both records from across different chunks must be merged in lookup
+        key10 = ("student_10@example.invalid", "data science", "01-01-2026", "01-02-2026")
+        key75 = ("student_75@example.invalid", "web dev", "01-01-2026", "01-02-2026")
+        self.assertIn(key10, lookup)
+        self.assertIn(key75, lookup)
+        self.assertEqual(lookup[key10]["certificate_id"], "PXL-CERT-2026-EXIST10")
+        self.assertEqual(lookup[key75]["certificate_id"], "PXL-CERT-2026-EXIST75")
+
+    def test_identical_student_names_do_not_collide_files(self):
+        """Two students with identical names generate distinct PDFs without overwriting each other."""
+        items = [
+            {"student_name": "Aarav Sharma", "student_email": "aarav1@example.invalid",
+             "domain": "AI", "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 1},
+            {"student_name": "Aarav Sharma", "student_email": "aarav2@example.invalid",
+             "domain": "AI", "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 2},
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+            self.assertEqual(result["generated_count"], 2)
+            fn1 = result["results"][0]["filename"]
+            fn2 = result["results"][1]["filename"]
+            # Filenames must be distinct
+            self.assertNotEqual(fn1, fn2, "Identical student names must have distinct filenames")
+            self.assertTrue((Path(td) / fn1).exists())
+            self.assertTrue((Path(td) / fn2).exists())
+
+    def test_bulk_certificate_ids_internal_uniqueness_and_collision_handling(self):
+        """generate_bulk_certificate_ids generates unique IDs and resolves collisions."""
+        ids = certificate_service.generate_bulk_certificate_ids(25)
+        self.assertEqual(len(ids), 25)
+        self.assertEqual(len(set(ids)), 25, "All generated IDs must be internally unique")
+        for cid in ids:
+            self.assertTrue(cid.startswith("PXL-CERT-"))
+
+        # Test collision resolution
+        simulated_collision = "PXL-CERT-2026-COLLID"
+        with patch.object(repository, "check_existing_certificate_ids_batch", return_value={simulated_collision}):
+            with patch("secrets.choice", side_effect=list("COLLID") + list("NEWID1")):
+                resolved_ids = certificate_service.generate_bulk_certificate_ids(1)
+                self.assertEqual(len(resolved_ids), 1)
+                self.assertNotEqual(resolved_ids[0], simulated_collision)
+
+    def test_individual_pdf_generation_failure_isolated(self):
+        """When an individual record fails during PDF generation, other records succeed and count reconciles."""
+        items = [
+            {"student_name": "Good 1", "student_email": "good1@example.invalid", "domain": "ML",
+             "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 1},
+            {"student_name": "Bad 2", "student_email": "bad2@example.invalid", "domain": "ML",
+             "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 2},
+            {"student_name": "Good 3", "student_email": "good3@example.invalid", "domain": "ML",
+             "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 3},
+        ]
+        real_gen = certificate_service.generate_certificate_pdf
+        def selective_fail(data, output_dir=None, **kwargs):
+            if data["student_name"] == "Bad 2":
+                raise RuntimeError("Simulated render engine failure")
+            return real_gen(data, output_dir=output_dir, **kwargs)
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch("certificate_service.generate_certificate_pdf", side_effect=selective_fail), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["newly_generated_count"], 2)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(len(result["failed_items"]), 1)
+        self.assertEqual(result["failed_items"][0]["student_name"], "Bad 2")
+        self.assertEqual(result["results"][0]["success"], True)
+        self.assertEqual(result["results"][1]["success"], False)
+        self.assertEqual(result["results"][2]["success"], True)
+
+    def test_database_persistence_fallback_on_bulk_error(self):
+        """When bulk_save_certificate_records fails, per-record fallback is invoked."""
+        items = [
+            {"student_name": "Student A", "student_email": "a@example.invalid", "domain": "Cloud",
+             "start_date": "01-01-2026", "end_date": "01-02-2026", "row_index": 1}
+        ]
+        fallback_calls = []
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", side_effect=Exception("Batch write error")), \
+                 patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda r: fallback_calls.append(r) or True):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+        self.assertEqual(len(fallback_calls), 1)
+        self.assertEqual(fallback_calls[0]["student_name"], "Student A")
+
+    def test_generation_and_sending_strictly_separated_no_email_sent(self):
+        """
+        CRITICAL ARCHITECTURAL SAFETY:
+        Calling /api/certificate/bulk/generate must NEVER call send_certificate_email
+        or any SMTP transport. Generation and sending must remain 100% separate operations.
+        """
+        client = self._authenticated_client()
+        items = [
+            {"student_name": "Safety Candidate", "student_email": "safety@example.invalid",
+             "domain": "Cybersecurity", "start_date": "01-01-2026", "end_date": "01-02-2026"}
+        ]
+        with patch.object(certificate_service, "send_certificate_email") as mock_send, \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+            response = client.post(
+                "/api/certificate/bulk/generate",
+                json={"rows": items, "issue_date": "2026-05-15"}
+            )
+        self.assertEqual(response.status_code, 200)
+        # Assert send_certificate_email was NEVER called
+        mock_send.assert_not_called()
+
+    def test_existing_send_endpoint_unchanged(self):
+        """The separate bulk email send endpoint (/api/certificate/bulk/send-email) functions as expected."""
+        client = self._authenticated_client()
+        items = [
+            {"certificate_id": "PXL-CERT-2026-SEND01", "student_name": "Send Test",
+             "student_email": "sendtest@example.invalid", "domain": "DevOps",
+             "start_date": "01-01-2026", "end_date": "01-02-2026", "filename": "Send_Test_Certificate.pdf"}
+        ]
+        with patch.object(certificate_service, "send_certificate_email", return_value=True) as mock_send, \
+             patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=True):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items}
+            )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["successful_count"], 1)
+        mock_send.assert_called_once()
+
+    def test_check_existing_certificate_ids_batch_raises_on_supabase_error(self):
+        """Database error in Supabase ID lookup raises RuntimeError and is never treated as empty set."""
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.side_effect = Exception("Supabase connection timeout")
+        with self.assertRaises(RuntimeError) as ctx:
+            repository.check_existing_certificate_ids_batch(["PXL-CERT-2026-TEST01"], supabase_client=mock_sb)
+        self.assertIn("Supabase connection timeout", str(ctx.exception))
+
+    def test_generate_bulk_certificate_ids_fails_safely_on_lookup_error(self):
+        """generate_bulk_certificate_ids fails safely when uniqueness cannot be verified, returning no unsafe ID."""
+        with patch.object(repository, "check_existing_certificate_ids_batch", side_effect=RuntimeError("DB unreachable")):
+            with self.assertRaises(RuntimeError) as ctx:
+                certificate_service.generate_bulk_certificate_ids(5)
+            self.assertIn("DB unreachable", str(ctx.exception))
+
+    def test_bulk_save_certificate_records_reports_honest_durability(self):
+        """bulk_save_certificate_records distinguishes durable Supabase writes from SQLite-only fallback."""
+        records = [{
+            "certificate_id": "PXL-CERT-2026-DUR01",
+            "student_name": "Durable Student",
+            "student_email": "durable@example.invalid",
+            "internship_domain": "Cloud",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "issued_date": "15-02-2026",
+        }]
+        # Case A: Supabase succeeds
+        mock_sb_good = MagicMock()
+        mock_sb_good.table.return_value.upsert.return_value.execute.return_value.data = [{"id": 1}]
+        with patch("database.repository.get_supabase_client", return_value=mock_sb_good):
+            res_good = repository.bulk_save_certificate_records(records)
+            self.assertTrue(res_good["durable"])
+            self.assertTrue(res_good["supabase_persisted"])
+            self.assertTrue(res_good["success"])
+
+        # Case B: Supabase fails, only SQLite succeeds
+        mock_sb_bad = MagicMock()
+        mock_sb_bad.table.return_value.upsert.return_value.execute.side_effect = Exception("Supabase write 503")
+        with patch("database.repository.get_supabase_client", return_value=mock_sb_bad):
+            res_bad = repository.bulk_save_certificate_records(records)
+            self.assertFalse(res_bad["durable"], "SQLite-only fallback must NOT report durable=True")
+            self.assertFalse(res_bad["supabase_persisted"])
+            self.assertFalse(res_bad["success"])
+            self.assertTrue(res_bad["sqlite_persisted"])
+
+    def test_generate_bulk_certificates_reports_persistence_failure_honestly(self):
+        """When durable Supabase save fails, generate_bulk_certificates reports failure honestly while preserving PDF."""
+        items = [{
+            "student_name": "Test Student",
+            "student_email": "persist.fail@example.invalid",
+            "domain": "DevOps",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "row_index": 1
+        }]
+        failed_save_result = {
+            "success": False,
+            "durable": False,
+            "supabase_persisted": False,
+            "sqlite_persisted": True,
+            "error": "Supabase outage",
+            "count": 1
+        }
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=failed_save_result):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-02-2026"
+                )
+            self.assertEqual(result["newly_generated_count"], 0)
+            self.assertEqual(result["failed_count"], 1)
+            self.assertFalse(result["results"][0]["success"])
+            self.assertEqual(result["results"][0]["status"], "persistence_failed")
+            self.assertFalse(result["results"][0]["persisted"])
+            # The PDF file was still generated on disk
+            pdf_path = Path(td) / result["results"][0]["filename"]
+            self.assertTrue(pdf_path.exists())
+
+    def test_send_bulk_certificate_emails_preserves_disambiguated_filenames(self):
+        """send_bulk_certificate_emails uses the custom disambiguated filename for email attachments."""
+        items = [
+            {"certificate_id": "PXL-CERT-2026-AAA111", "student_name": "Rohan Sharma",
+             "student_email": "rohan1@example.invalid", "domain": "Web",
+             "filename": "Rohan_Sharma_AAA111_Certificate.pdf"},
+            {"certificate_id": "PXL-CERT-2026-BBB222", "student_name": "Rohan Sharma",
+             "student_email": "rohan2@example.invalid", "domain": "Web",
+             "filename": "Rohan_Sharma_BBB222_Certificate.pdf"},
+        ]
+        sent_filenames = []
+        sent_pdf_paths = []
+        def mock_send(email_data, pdf_path, filename):
+            sent_filenames.append(filename)
+            sent_pdf_paths.append(str(pdf_path))
+            return True
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(certificate_service, "send_certificate_email", side_effect=mock_send), \
+                 patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+                 patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=True):
+                result = bulk_certificate_service.send_bulk_certificate_emails(
+                    certificate_items=items,
+                    output_dir=td,
+                    send_again_all=True
+                )
+        self.assertEqual(result["successful_count"], 2)
+        self.assertEqual(sent_filenames, ["Rohan_Sharma_AAA111_Certificate.pdf", "Rohan_Sharma_BBB222_Certificate.pdf"])
+        self.assertTrue(sent_pdf_paths[0].endswith("Rohan_Sharma_AAA111_Certificate.pdf"))
+        self.assertTrue(sent_pdf_paths[1].endswith("Rohan_Sharma_BBB222_Certificate.pdf"))
+
+    def test_check_existing_certificate_ids_batch_raises_on_null_data(self):
+        """Null data returned from Supabase raises RuntimeError to prevent treating incomplete results as free IDs."""
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value.data = None
+        with self.assertRaises(RuntimeError) as ctx:
+            repository.check_existing_certificate_ids_batch(["PXL-CERT-2026-TEST01"], supabase_client=mock_sb)
+        self.assertIn("null data", str(ctx.exception).lower())
+
+    def test_bulk_save_certificate_records_on_vercel_without_supabase_fails(self):
+        """On Vercel, SQLite fallback is ephemeral and must not report overall_success or durable."""
+        records = [{
+            "certificate_id": "PXL-CERT-2026-VCL01",
+            "student_name": "Vercel Student",
+            "student_email": "vercel@example.invalid",
+            "internship_domain": "Cloud",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "issued_date": "15-02-2026",
+        }]
+        with patch.dict(os.environ, {"VERCEL": "1"}), \
+             patch("database.repository.get_supabase_client", return_value=None):
+            res = repository.bulk_save_certificate_records(records)
+            self.assertFalse(res["durable"])
+            self.assertFalse(res["success"])
+            self.assertFalse(res["supabase_persisted"])
+            self.assertTrue(res["sqlite_persisted"])
+
+    def test_send_bulk_certificate_emails_disambiguates_missing_filenames_for_duplicate_names(self):
+        """When items omit filenames, duplicate student names in email queue receive disambiguated filenames."""
+        items = [
+            {"certificate_id": "PXL-CERT-2026-X111", "student_name": "Priya Patel",
+             "student_email": "priya1@example.invalid", "domain": "AI"},
+            {"certificate_id": "PXL-CERT-2026-X222", "student_name": "Priya Patel",
+             "student_email": "priya2@example.invalid", "domain": "AI"},
+        ]
+        sent_filenames = []
+        def mock_send(email_data, pdf_path, filename):
+            sent_filenames.append(filename)
+            return True
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(certificate_service, "send_certificate_email", side_effect=mock_send), \
+                 patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+                 patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=True):
+                result = bulk_certificate_service.send_bulk_certificate_emails(
+                    certificate_items=items,
+                    output_dir=td,
+                    send_again_all=True
+                )
+        self.assertEqual(result["successful_count"], 2)
+        self.assertEqual(len(sent_filenames), 2)
+        self.assertNotEqual(sent_filenames[0], sent_filenames[1])
+        self.assertEqual(sent_filenames[0], "Priya_Patel_Certificate.pdf")
+        self.assertEqual(sent_filenames[1], "Priya_Patel_X222_Certificate.pdf")
 
 
 if __name__ == '__main__':

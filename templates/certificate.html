@@ -1827,46 +1827,74 @@ async function executeBulkGeneration(targetRows = null) {
         }
     } catch (_) { /* non-critical — never block the workflow */ }
 
-    // Execute per-item generation for immediate real-time progress and dynamic preview icon updates
-    for (let i = 0; i < itemsToProcess.length; i++) {
-        const { row, originalIndex } = itemsToProcess[i];
-        progressCurrent.textContent = row.student_name || 'Processing...';
+    // Execute generation in safe, balanced chunks (15 rows) for fast throughput while preserving live progress & preview icons
+    const CHUNK_SIZE = 15;
+    let wasCancelled = false;
+    for (let c = 0; c < itemsToProcess.length; c += CHUNK_SIZE) {
+        const chunkItems = itemsToProcess.slice(c, c + CHUNK_SIZE);
+        const chunkRows = chunkItems.map(item => item.row);
+        progressCurrent.textContent = chunkRows[0]?.student_name || 'Processing...';
 
         try {
             const response = await fetch('/api/certificate/bulk/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    rows: [row],
+                    rows: chunkRows,
                     issue_date: selectedIssueDate,
                     job_id: _genJobId
                 })
             });
             const result = await response.json();
 
-            if (response.status === 409 && result.cancelled) {
+            if ((response.status === 409 && result.cancelled) || result.cancelled) {
+                wasCancelled = true;
+                if (progressCurrent) progressCurrent.textContent = 'Cancelled by user';
                 showToast("Certificate generation cancelled.", "info");
                 break;
             }
 
-            if (result.success && Array.isArray(result.results) && result.results.length > 0) {
-                const itemRes = result.results[0];
-                if (itemRes.success) {
-                    if (itemRes.status === 'newly_generated') {
-                        newlyGeneratedCount++;
+            if (result.success && Array.isArray(result.results)) {
+                for (let j = 0; j < chunkItems.length; j++) {
+                    const { row, originalIndex } = chunkItems[j];
+                    const itemRes = result.results[j] || result.results.find(r => r.row_index === row.row_index);
+
+                    if (itemRes && itemRes.success && itemRes.persisted !== false) {
+                        if (itemRes.status === 'newly_generated') {
+                            newlyGeneratedCount++;
+                        } else {
+                            alreadyExistsCount++;
+                        }
+                        const exIdx = currentGeneratedBulkItems.findIndex(g => g.certificate_id === itemRes.certificate_id);
+                        if (exIdx >= 0) {
+                            currentGeneratedBulkItems[exIdx] = itemRes;
+                        } else {
+                            currentGeneratedBulkItems.push(itemRes);
+                        }
+                        if (originalIndex !== undefined && originalIndex >= 0) {
+                            updateRowPreviewToEyeIcon(originalIndex, itemRes);
+                        }
                     } else {
-                        alreadyExistsCount++;
+                        failedCount++;
+                        const failItem = {
+                            row_index: row.row_index,
+                            student_name: row.student_name,
+                            student_email: row.student_email,
+                            domain: row.domain,
+                            start_date: row.start_date,
+                            end_date: row.end_date,
+                            issued_date: selectedIssueDate,
+                            error: (itemRes && itemRes.error) || 'Generation or persistence failed'
+                        };
+                        batchFailedItems.push(failItem);
+                        if (originalIndex !== undefined && originalIndex >= 0) {
+                            updateRowPreviewToFailed(originalIndex, failItem.error);
+                        }
                     }
-                    const exIdx = currentGeneratedBulkItems.findIndex(g => g.certificate_id === itemRes.certificate_id);
-                    if (exIdx >= 0) {
-                        currentGeneratedBulkItems[exIdx] = itemRes;
-                    } else {
-                        currentGeneratedBulkItems.push(itemRes);
-                    }
-                    if (originalIndex !== undefined && originalIndex >= 0) {
-                        updateRowPreviewToEyeIcon(originalIndex, itemRes);
-                    }
-                } else {
+                }
+            } else {
+                for (let j = 0; j < chunkItems.length; j++) {
+                    const { row, originalIndex } = chunkItems[j];
                     failedCount++;
                     const failItem = {
                         row_index: row.row_index,
@@ -1876,14 +1904,18 @@ async function executeBulkGeneration(targetRows = null) {
                         start_date: row.start_date,
                         end_date: row.end_date,
                         issued_date: selectedIssueDate,
-                        error: itemRes.error || 'Generation failed'
+                        error: result.error || 'Server processing error'
                     };
                     batchFailedItems.push(failItem);
                     if (originalIndex !== undefined && originalIndex >= 0) {
                         updateRowPreviewToFailed(originalIndex, failItem.error);
                     }
                 }
-            } else {
+            }
+        } catch (err) {
+            console.error('Bulk generate chunk error:', err);
+            for (let j = 0; j < chunkItems.length; j++) {
+                const { row, originalIndex } = chunkItems[j];
                 failedCount++;
                 const failItem = {
                     row_index: row.row_index,
@@ -1893,33 +1925,16 @@ async function executeBulkGeneration(targetRows = null) {
                     start_date: row.start_date,
                     end_date: row.end_date,
                     issued_date: selectedIssueDate,
-                    error: result.error || 'Server processing error'
+                    error: 'Network connection or server error'
                 };
                 batchFailedItems.push(failItem);
                 if (originalIndex !== undefined && originalIndex >= 0) {
                     updateRowPreviewToFailed(originalIndex, failItem.error);
                 }
             }
-        } catch (err) {
-            console.error('Bulk generate item error:', err);
-            failedCount++;
-            const failItem = {
-                row_index: row.row_index,
-                student_name: row.student_name,
-                student_email: row.student_email,
-                domain: row.domain,
-                start_date: row.start_date,
-                end_date: row.end_date,
-                issued_date: selectedIssueDate,
-                error: 'Network connection or server error'
-            };
-            batchFailedItems.push(failItem);
-            if (originalIndex !== undefined && originalIndex >= 0) {
-                updateRowPreviewToFailed(originalIndex, failItem.error);
-            }
         }
 
-        completed++;
+        completed += chunkItems.length;
         const remaining = Math.max(0, total - completed);
         const pct = Math.min(100, (completed / total) * 100);
         const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
@@ -1943,17 +1958,26 @@ async function executeBulkGeneration(targetRows = null) {
             await fetch('/api/bulk/complete-job', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ job_id: _genJobId })
+                body: JSON.stringify({
+                    job_id: _genJobId,
+                    status: wasCancelled ? 'cancelled' : 'completed'
+                })
             });
         } catch (_) { /* non-critical */ }
     }
 
     const totalSuccess = newlyGeneratedCount + alreadyExistsCount;
-    progressBar.style.width = '100%';
-    progressPercent.textContent = '100%';
-    progressTitle.textContent = 'Certificate Generation Completed';
-    progressCurrent.textContent = `Finished (${totalSuccess} ready [New: ${newlyGeneratedCount}, Existing: ${alreadyExistsCount}], ${failedCount} failed)`;
-    showToast(`${totalSuccess} Certificates ready (${newlyGeneratedCount} new, ${alreadyExistsCount} existing, ${failedCount} failed).`, totalSuccess > 0 ? 'success' : 'error');
+    if (wasCancelled) {
+        progressTitle.textContent = 'Certificate Generation Cancelled';
+        progressCurrent.textContent = `Cancelled (${totalSuccess} of ${total} ready [New: ${newlyGeneratedCount}, Existing: ${alreadyExistsCount}], ${failedCount} failed)`;
+        showToast(`Generation cancelled. ${totalSuccess} of ${total} certificates ready.`, 'info');
+    } else {
+        progressBar.style.width = '100%';
+        progressPercent.textContent = '100%';
+        progressTitle.textContent = 'Certificate Generation Completed';
+        progressCurrent.textContent = `Finished (${totalSuccess} ready [New: ${newlyGeneratedCount}, Existing: ${alreadyExistsCount}], ${failedCount} failed)`;
+        showToast(`${totalSuccess} Certificates ready (${newlyGeneratedCount} new, ${alreadyExistsCount} existing, ${failedCount} failed).`, totalSuccess > 0 ? 'success' : 'error');
+    }
     localStorage.setItem('persevex_stats_updated', Date.now().toString());
     refreshStats();
 
