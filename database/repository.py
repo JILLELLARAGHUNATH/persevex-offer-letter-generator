@@ -1815,47 +1815,54 @@ def bulk_save_certificate_records(records_list, supabase_client=None):
         supabase_error = "Supabase client not configured"
 
     # 2. Local SQLite Bulk Upsert
-    try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        cursor = conn.cursor()
-        tuples = [
-            (
-                r["certificate_id"],
-                r["student_name"],
-                r["student_email"],
-                r["internship_domain"],
-                r["start_date"],
-                r["end_date"],
-                r["issued_date"],
-                r["generated_date"],
-                r["created_at"],
-                r["certificate_status"],
-                r["email_status"],
-                r["sent_at"],
-                r["send_count"],
-                r["pdf_filename"],
-                r["error_message"],
-                r["template_version"],
-            )
-            for r in clean_records
-        ]
-        cursor.executemany("""
-            INSERT OR REPLACE INTO certificate_history (
-                certificate_id, student_name, student_email, internship_domain,
-                start_date, end_date, issued_date, generated_date, created_at,
-                certificate_status, email_status, sent_at, send_count,
-                pdf_filename, error_message, template_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, tuples)
-        conn.commit()
-        conn.close()
-        sqlite_persisted = True
-    except Exception as exc:
-        sqlite_error = repr(exc)
-        print("LOCAL DB BULK SAVE ERROR:", repr(exc))
-
+    # On Vercel the project-root SQLite path is read-only. When Supabase has
+    # already persisted the batch, skip the local write — it would raise
+    # OperationalError and pollute logs without providing any additional durability.
     import os as _os
     is_vercel = bool(_os.environ.get("VERCEL"))
+    if is_vercel and supabase_persisted:
+        # Supabase is authoritative on Vercel; SQLite fallback is not available.
+        sqlite_persisted = False
+    else:
+        try:
+            conn = sqlite3.connect(SQLITE_DB_PATH)
+            cursor = conn.cursor()
+            tuples = [
+                (
+                    r["certificate_id"],
+                    r["student_name"],
+                    r["student_email"],
+                    r["internship_domain"],
+                    r["start_date"],
+                    r["end_date"],
+                    r["issued_date"],
+                    r["generated_date"],
+                    r["created_at"],
+                    r["certificate_status"],
+                    r["email_status"],
+                    r["sent_at"],
+                    r["send_count"],
+                    r["pdf_filename"],
+                    r["error_message"],
+                    r["template_version"],
+                )
+                for r in clean_records
+            ]
+            cursor.executemany("""
+                INSERT OR REPLACE INTO certificate_history (
+                    certificate_id, student_name, student_email, internship_domain,
+                    start_date, end_date, issued_date, generated_date, created_at,
+                    certificate_status, email_status, sent_at, send_count,
+                    pdf_filename, error_message, template_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, tuples)
+            conn.commit()
+            conn.close()
+            sqlite_persisted = True
+        except Exception as exc:
+            sqlite_error = repr(exc)
+            print("LOCAL DB BULK SAVE ERROR:", repr(exc))
+
     is_durable = supabase_persisted
     overall_success = supabase_persisted if (sb or is_vercel) else sqlite_persisted
 

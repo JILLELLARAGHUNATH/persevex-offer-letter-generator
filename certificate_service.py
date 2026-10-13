@@ -46,7 +46,14 @@ def init_local_db():
         print("LOCAL DB INIT ERROR:", repr(exc))
 
 
-init_local_db()
+import os as _os
+# Skip local SQLite initialisation on Vercel: the project-root path is
+# read-only there and the call would only produce a caught OperationalError
+# log on every cold start.  Supabase is the authoritative persistence layer
+# on Vercel, so skipping the local init has no functional impact.
+if not _os.environ.get("VERCEL"):
+    init_local_db()
+
 
 
 # ============================================================
