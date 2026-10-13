@@ -2730,6 +2730,96 @@ class BulkCertificateGenerationOptimizationTests(unittest.TestCase):
         self.assertTrue(result["results"][0]["success"])
         self.assertEqual(result["results"][0]["student_name"], "Student 0")
 
+    def test_check_existing_certificate_ids_batch_vercel_skips_sqlite_on_supabase_success(self):
+        """In Vercel mode, successful Supabase check is authoritative and skips opening local SQLite."""
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [
+            {"certificate_id": "PXL-CERT-2026-EXISTS"}
+        ]
+        with patch.dict(os.environ, {"VERCEL": "1"}), patch("sqlite3.connect") as mock_connect:
+            found = repository.check_existing_certificate_ids_batch(
+                ["PXL-CERT-2026-EXISTS", "PXL-CERT-2026-NEW01"],
+                supabase_client=mock_sb
+            )
+            mock_connect.assert_not_called()
+            self.assertEqual(found, {"PXL-CERT-2026-EXISTS"})
+
+    def test_check_existing_certificate_ids_batch_detects_existing_supabase_ids(self):
+        """Existing IDs persisted in Supabase are accurately returned."""
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [
+            {"certificate_id": "PXL-CERT-2026-TAKEN1"},
+            {"certificate_id": "PXL-CERT-2026-TAKEN2"}
+        ]
+        with patch.dict(os.environ, {"VERCEL": "1"}):
+            found = repository.check_existing_certificate_ids_batch(
+                ["PXL-CERT-2026-TAKEN1", "PXL-CERT-2026-TAKEN2", "PXL-CERT-2026-FREE01"],
+                supabase_client=mock_sb
+            )
+            self.assertEqual(found, {"PXL-CERT-2026-TAKEN1", "PXL-CERT-2026-TAKEN2"})
+
+    def test_check_existing_certificate_ids_batch_handles_duplicate_ids_in_batch(self):
+        """Duplicate candidate IDs within the same input batch are properly deduplicated and detected."""
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.return_value.data = [
+            {"certificate_id": "PXL-CERT-2026-DUP01"}
+        ]
+        with patch.dict(os.environ, {"VERCEL": "1"}):
+            found = repository.check_existing_certificate_ids_batch(
+                ["PXL-CERT-2026-DUP01", "PXL-CERT-2026-DUP01", "PXL-CERT-2026-DUP01"],
+                supabase_client=mock_sb
+            )
+            self.assertEqual(found, {"PXL-CERT-2026-DUP01"})
+            # Verify the in_ query was executed with deduplicated clean IDs
+            in_call = mock_sb.table().select().in_.call_args
+            self.assertEqual(in_call[0][1], ["PXL-CERT-2026-DUP01"])
+
+    def test_check_existing_certificate_ids_batch_vercel_fails_safely_on_supabase_failure(self):
+        """In Vercel mode, Supabase lookup errors or unconfigured client fail safely with RuntimeError."""
+        # Case A: Query failure
+        mock_sb = MagicMock()
+        mock_sb.table.return_value.select.return_value.in_.return_value.execute.side_effect = Exception("Supabase 503")
+        with patch.dict(os.environ, {"VERCEL": "1"}):
+            with self.assertRaises(RuntimeError) as ctx:
+                repository.check_existing_certificate_ids_batch(["PXL-CERT-2026-TEST01"], supabase_client=mock_sb)
+            self.assertIn("Supabase 503", str(ctx.exception))
+
+        # Case B: Unconfigured client in Vercel mode
+        with patch.dict(os.environ, {"VERCEL": "1"}), patch("database.repository.get_supabase_client", return_value=None):
+            with self.assertRaises(RuntimeError) as ctx:
+                repository.check_existing_certificate_ids_batch(["PXL-CERT-2026-TEST01"], supabase_client=None)
+            self.assertIn("not configured", str(ctx.exception).lower())
+
+    def test_check_existing_certificate_ids_batch_local_dev_queries_sqlite(self):
+        """In local development (non-Vercel), SQLite is queried and local records are detected."""
+        test_cert_id = "PXL-CERT-2026-LOCAL01"
+        conn = sqlite3.connect(repository.SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO certificate_history (certificate_id, student_name) VALUES (?, 'Local User')",
+            (test_cert_id,)
+        )
+        conn.commit()
+        conn.close()
+
+        def cleanup_record():
+            try:
+                c = sqlite3.connect(repository.SQLITE_DB_PATH)
+                c.execute("DELETE FROM certificate_history WHERE certificate_id = ?", (test_cert_id,))
+                c.commit()
+                c.close()
+            except Exception:
+                pass
+
+        self.addCleanup(cleanup_record)
+
+        env_copy = os.environ.copy()
+        env_copy.pop("VERCEL", None)
+        with patch.dict(os.environ, env_copy, clear=True), patch("database.repository.get_supabase_client", return_value=None):
+            found = repository.check_existing_certificate_ids_batch([test_cert_id, "PXL-CERT-2026-LOCALFREE"], supabase_client=None)
+            self.assertIn(test_cert_id, found)
+            self.assertNotIn("PXL-CERT-2026-LOCALFREE", found)
+
 
 if __name__ == '__main__':
     unittest.main()

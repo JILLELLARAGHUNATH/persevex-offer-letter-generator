@@ -2078,6 +2078,9 @@ def check_existing_certificate_ids_batch(cert_ids, supabase_client=None):
     if not clean_ids:
         return set()
 
+    import os as _os
+    is_vercel = bool(_os.environ.get("VERCEL"))
+
     found_ids = set()
     sb = supabase_client or get_supabase_client()
     # When an explicit supabase_client is passed, verify it is not a test-only .invalid domain.
@@ -2094,6 +2097,12 @@ def check_existing_certificate_ids_batch(cert_ids, supabase_client=None):
             if ".invalid" in obj_url or ".invalid" in env_url:
                 sb = None
 
+    if is_vercel and not sb:
+        raise RuntimeError(
+            "Supabase client is not configured for certificate ID uniqueness verification in Vercel production environment."
+        )
+
+    supabase_checked = False
     if sb:
         chunk_size = 50
         for i in range(0, len(clean_ids), chunk_size):
@@ -2114,6 +2123,11 @@ def check_existing_certificate_ids_batch(cert_ids, supabase_client=None):
             except Exception as exc:
                 print("SUPABASE CHECK EXISTING CERT IDS ERROR:", repr(exc))
                 raise RuntimeError(f"Database error while checking certificate ID uniqueness against Supabase: {exc}") from exc
+        supabase_checked = True
+
+    # In Vercel production, successful Supabase batch query is authoritative; do not open local SQLite.
+    if is_vercel and supabase_checked:
+        return found_ids
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
