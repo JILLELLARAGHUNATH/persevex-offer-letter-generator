@@ -1,3 +1,4 @@
+# Diagnostic test for Vercel automatic deployment trigger
 import tempfile
 import os
 import io
