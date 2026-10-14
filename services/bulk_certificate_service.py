@@ -10,6 +10,9 @@ from database.repository import (
     bulk_save_certificate_records,
     find_existing_certificates_batch,
     get_previous_sent_certificate_by_email,
+    get_certificate_by_id,
+    find_active_certificate,
+    _normalize_cert_date,
     save_bulk_job_record,
 )
 import certificate_service
@@ -376,6 +379,8 @@ def generate_bulk_certificates(
         start_date = str(item.get("start_date") or "").strip()
         end_date = str(item.get("end_date") or "").strip()
         existing = existing_lookup.get((student_email, domain, start_date, end_date))
+        if not existing and start_date and end_date:
+            existing = existing_lookup.get((student_email, domain, _normalize_cert_date(start_date), _normalize_cert_date(end_date)))
         if not (existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked"):
             new_rows_count += 1
 
@@ -412,6 +417,8 @@ def generate_bulk_certificates(
 
             # Check if this certificate already exists in DB
             existing = existing_lookup.get((email_clean, domain_clean, start_date, end_date))
+            if not existing and start_date and end_date:
+                existing = existing_lookup.get((email_clean, domain_clean, _normalize_cert_date(start_date), _normalize_cert_date(end_date)))
 
             if existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked":
                 # RESUME CASE: Certificate already exists in DB!
@@ -706,24 +713,63 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
 
         seen_batch_emails.add(norm_email)
 
-        prev_rec = get_previous_sent_certificate_by_email(student_email)
-        is_resend = bool(prev_rec and str(prev_rec.get("email_status") or "").strip().lower() == "sent")
-        target_id = prev_rec.get("id") if is_resend else None
-        if is_resend and prev_rec:
-            cert_id = str(prev_rec.get("certificate_id") or cert_id).strip()
-            send_count = (int(prev_rec.get("send_count") or 1) + 1)
+        # Determine the target database record for THIS certificate specifically
+        item_cert_id = str(item.get("certificate_id") or "").strip()
+        this_cert_rec = None
+
+        if item_cert_id:
+            try:
+                this_cert_rec = get_certificate_by_id(item_cert_id)
+            except Exception:
+                this_cert_rec = None
+
+        # Fallback 1: match candidate by exact identity tuple (email, domain, start_date, end_date)
+        if not this_cert_rec and domain and item.get("start_date") and item.get("end_date"):
+            try:
+                this_cert_rec = find_active_certificate(
+                    student_email, domain, item.get("start_date"), item.get("end_date")
+                )
+            except Exception:
+                this_cert_rec = None
+
+        # Fallback 2: get_previous_sent_certificate_by_email ONLY IF it refers to THIS certificate
+        # (Preserves backwards compatibility with tests that mock get_previous_sent_certificate_by_email,
+        # while preventing overwriting a different course or historical issuance of the same student)
+        prev_rec = None
+        try:
+            prev_rec = get_previous_sent_certificate_by_email(student_email)
+        except Exception:
+            prev_rec = None
+
+        if not this_cert_rec and prev_rec:
+            prev_cid = str(prev_rec.get("certificate_id") or "").strip()
+            prev_domain = str(prev_rec.get("internship_domain") or prev_rec.get("domain") or "").strip().lower()
+            if (item_cert_id and prev_cid == item_cert_id) or (not item_cert_id and (not domain or domain.lower() == prev_domain)):
+                this_cert_rec = prev_rec
+
+        if this_cert_rec:
+            cert_id = str(this_cert_rec.get("certificate_id") or item_cert_id or cert_id).strip()
+            target_id = this_cert_rec.get("id")
+            cert_status = str(this_cert_rec.get("email_status") or "").strip().lower()
+            is_resend = (cert_status == "sent")
+            prev_send_count = int(this_cert_rec.get("send_count") or (1 if is_resend else 0))
+            send_count = (prev_send_count + 1) if is_resend else 1
         else:
+            cert_id = str(item_cert_id or cert_id).strip()
+            target_id = None
+            is_resend = False
+            prev_send_count = 0
             send_count = 1
 
         email_data = {
             "student_email": student_email,
             "student_name": student_name,
             "domain": domain,
-            "start_date": item.get("start_date") or (prev_rec.get("start_date") if prev_rec else ""),
-            "end_date": item.get("end_date") or (prev_rec.get("end_date") if prev_rec else ""),
-            "issued_date": item.get("issued_date") or (prev_rec.get("issued_date") if prev_rec else ""),
+            "start_date": item.get("start_date") or (this_cert_rec.get("start_date") if this_cert_rec else ""),
+            "end_date": item.get("end_date") or (this_cert_rec.get("end_date") if this_cert_rec else ""),
+            "issued_date": item.get("issued_date") or (this_cert_rec.get("issued_date") if this_cert_rec else ""),
             "certificate_id": cert_id,
-            "template_version": item.get("template_version") or "v1",
+            "template_version": item.get("template_version") or (this_cert_rec.get("template_version") if this_cert_rec else "v1"),
         }
 
         try:
@@ -742,7 +788,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
                 bulk_job_manager.update_progress(job_id, sent_inc=1)
             now_iso = datetime.now().isoformat()
 
-            # Update DB record: in-place resend update if previous sent record exists, else insert
+            # Update DB record: in-place resend update if previous sent record exists, else update pending or insert
             save_payload = {
                 "certificate_id": cert_id,
                 "student_name": student_name,
@@ -761,6 +807,8 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             if is_resend and target_id:
                 save_payload["id"] = target_id
                 save_payload["send_again"] = True
+            elif target_id:
+                save_payload["id"] = target_id
 
             save_certificate_record(save_payload, existing_id=target_id if is_resend else None)
 
@@ -780,29 +828,26 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             now_iso = datetime.now().isoformat()
             err_msg = str(exc)
 
-            prev_rec = get_previous_sent_certificate_by_email(student_email)
-            is_resend = bool(prev_rec and str(prev_rec.get("email_status") or "").strip().lower() == "sent")
-            target_id = prev_rec.get("id") if is_resend else None
-            prev_count = int(prev_rec.get("send_count") or 0) if prev_rec else 0
-
             fail_payload = {
                 "certificate_id": cert_id,
                 "student_name": student_name,
                 "student_email": student_email,
                 "internship_domain": domain,
-                "start_date": item.get("start_date") or (prev_rec.get("start_date") if prev_rec else ""),
-                "end_date": item.get("end_date") or (prev_rec.get("end_date") if prev_rec else ""),
-                "issued_date": item.get("issued_date") or (prev_rec.get("issued_date") if prev_rec else ""),
+                "start_date": email_data["start_date"],
+                "end_date": email_data["end_date"],
+                "issued_date": email_data["issued_date"],
                 "email_status": "failed",
                 "sent_at": now_iso,
-                "send_count": prev_count + 1,
+                "send_count": prev_send_count + 1 if is_resend else 0,
                 "pdf_filename": filename,
                 "error_message": err_msg,
-                "template_version": item.get("template_version") or "v1",
+                "template_version": email_data.get("template_version", "v1"),
             }
             if is_resend and target_id:
                 fail_payload["id"] = target_id
                 fail_payload["send_again"] = True
+            elif target_id:
+                fail_payload["id"] = target_id
 
             save_certificate_record(fail_payload, existing_id=target_id if is_resend else None)
 

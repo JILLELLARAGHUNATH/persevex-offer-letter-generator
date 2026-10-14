@@ -6150,6 +6150,7 @@ def certificate_bulk_check_duplicates():
             "success": True,
             "duplicate_count": len(duplicate_emails),
             "duplicates": duplicate_emails,
+            "duplicate_emails": duplicate_emails,
             "duplicate_map": duplicate_map
         })
     except Exception as exc:

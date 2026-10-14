@@ -2068,6 +2068,11 @@ def find_existing_certificates_batch(candidate_rows, supabase_client=None):
         key_full = (email_clean, domain_clean, start_clean, end_clean)
         lookup[key_full] = cert
 
+        start_norm = _normalize_cert_date(start_clean)
+        end_norm = _normalize_cert_date(end_clean)
+        if start_norm and end_norm:
+            lookup[(email_clean, domain_clean, start_norm, end_norm)] = cert
+
     return lookup
 
 

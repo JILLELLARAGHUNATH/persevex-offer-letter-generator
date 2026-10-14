@@ -1193,7 +1193,7 @@ function handleCertBulkSendOnlyNew() {
         showToast('No new certificate recipients in this batch.', 'info');
         return;
     }
-    executeBulkEmailDispatch(newItems, { skip_duplicate_emails: true });
+    executeBulkEmailDispatch(newItems, { skip_duplicate_emails: pendingBulkDuplicates });
 }
 
 function handleCertBulkSendAgainAll() {
@@ -2024,8 +2024,12 @@ async function initiateBulkEmailDispatch() {
         });
         const checkData = await checkRes.json();
 
-        if (checkData.success && Array.isArray(checkData.duplicate_emails) && checkData.duplicate_emails.length > 0) {
-            pendingBulkDuplicates = checkData.duplicate_emails;
+        const duplicatesFound = (Array.isArray(checkData.duplicate_emails) && checkData.duplicate_emails.length > 0)
+            ? checkData.duplicate_emails
+            : (Array.isArray(checkData.duplicates) && checkData.duplicates.length > 0 ? checkData.duplicates : null);
+
+        if (checkData.success && duplicatesFound && duplicatesFound.length > 0) {
+            pendingBulkDuplicates = duplicatesFound;
             pendingBulkAllItems = currentGeneratedBulkItems;
 
             const dupSet = new Set(pendingBulkDuplicates.map(e => String(e).trim().toLowerCase()));

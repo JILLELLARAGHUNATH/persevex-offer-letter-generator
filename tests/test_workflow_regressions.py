@@ -1790,6 +1790,134 @@ class CertificateBulkJobManagerIntegrationTests(unittest.TestCase):
         self.assertEqual(rec["send_count"], 3)  # incremented from 2 to 3
         self.assertTrue(rec["send_again"])
 
+    def test_certificate_bulk_send_different_course_preserves_distinct_certificate_id_and_does_not_overwrite_prior_record(self):
+        client = self._authenticated_client()
+        # Student previously completed Web Development with ID PEX-WD-001 (PK id 101)
+        prior_record = {
+            "id": 101,
+            "certificate_id": "PEX-WD-001",
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Web Development",
+            "start_date": "01-01-2025",
+            "end_date": "01-02-2025",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        # Student now completes Data Science in bulk with newly generated ID PEX-DS-002 (PK id 202, pending)
+        pending_record = {
+            "id": 202,
+            "certificate_id": "PEX-DS-002",
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "01-03-2025",
+            "end_date": "01-04-2025",
+            "email_status": "pending",
+            "send_count": 0,
+        }
+        items = [
+            {
+                "certificate_id": "PEX-DS-002",
+                "student_name": "Alice Smith",
+                "student_email": "alice@example.invalid",
+                "domain": "Data Science",
+                "start_date": "01-03-2025",
+                "end_date": "01-04-2025",
+                "filename": "Alice_PEX-DS-002.pdf",
+            }
+        ]
+
+        saved_records = []
+        sent_emails = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="Alice_PEX-DS-002.pdf"), \
+             patch("certificate_service.send_certificate_email",
+                   side_effect=lambda data, pdf, fn: sent_emails.append(dict(data)) or True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id",
+                          side_effect=lambda cid: pending_record if cid == "PEX-DS-002" else (prior_record if cid == "PEX-WD-001" else None)), \
+             patch.object(bulk_certificate_service, "get_previous_sent_certificate_by_email", return_value=prior_record), \
+             patch.object(bulk_certificate_service, "save_certificate_record",
+                          side_effect=lambda rec, existing_id=None: saved_records.append((rec, existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            response = client.post(
+                "/api/certificate/bulk/send-email",
+                json={"items": items, "send_again_all": True}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["successful_count"], 1)
+
+        # Dispatched email must retain Data Science certificate ID PEX-DS-002
+        self.assertEqual(len(sent_emails), 1)
+        self.assertEqual(sent_emails[0]["certificate_id"], "PEX-DS-002")
+        self.assertEqual(sent_emails[0]["domain"], "Data Science")
+
+        # Database update must target the new certificate's pending record (202), NOT prior record (101)
+        self.assertEqual(len(saved_records), 1)
+        rec, existing_id = saved_records[0]
+        self.assertEqual(rec["certificate_id"], "PEX-DS-002")
+        self.assertEqual(rec["internship_domain"], "Data Science")
+        self.assertEqual(rec["email_status"], "sent")
+        self.assertEqual(rec["send_count"], 1)
+        self.assertEqual(rec["id"], 202)
+        # Prior record 101 must NOT have been updated or overwritten
+        self.assertNotEqual(existing_id, 101)
+        self.assertNotEqual(rec["id"], 101)
+
+    def test_bulk_duplicate_check_endpoint_returns_both_duplicates_and_duplicate_emails_keys(self):
+        client = self._authenticated_client()
+        fake_dup_map = {
+            "dup@example.invalid": {"certificate_id": "PEX-OLD", "email_status": "sent"}
+        }
+        with patch("database.repository.find_existing_certificate_emails_batch", return_value=fake_dup_map):
+            response = client.post(
+                "/api/certificate/bulk-check-duplicates",
+                json={"emails": ["dup@example.invalid", "new@example.invalid"]}
+            )
+        self.assertEqual(response.status_code, 200)
+        res_data = response.get_json()
+        self.assertTrue(res_data["success"])
+        self.assertEqual(res_data["duplicate_count"], 1)
+        self.assertEqual(res_data["duplicates"], ["dup@example.invalid"])
+        self.assertEqual(res_data["duplicate_emails"], ["dup@example.invalid"])
+
+    def test_qr_verification_integrity_original_details_remain_intact_after_second_issuance(self):
+        client = self._authenticated_client()
+        # Verify that get_certificate_by_id returns distinct records for original vs new issuance
+        cert_1 = {
+            "certificate_id": "PEX-WD-001",
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Web Development",
+            "start_date": "01-01-2025",
+            "end_date": "01-02-2025",
+            "certificate_status": "active",
+        }
+        cert_2 = {
+            "certificate_id": "PEX-DS-002",
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "01-03-2025",
+            "end_date": "01-04-2025",
+            "certificate_status": "active",
+        }
+        with patch("certificate_service.db_get_certificate_by_id",
+                   side_effect=lambda cid, *args, **kwargs: (cert_1, None) if cid == "PEX-WD-001" else ((cert_2, None) if cid == "PEX-DS-002" else (None, "not_found"))):
+            # 1. Scanned original QR code for course 1 resolves to Web Development
+            res1 = client.get("/verify/PEX-WD-001")
+            self.assertEqual(res1.status_code, 200)
+            self.assertIn(b"Web Development", res1.data)
+            self.assertNotIn(b"Data Science", res1.data)
+
+            # 2. Scanned new QR code for course 2 resolves to Data Science
+            res2 = client.get("/verify/PEX-DS-002")
+            self.assertEqual(res2.status_code, 200)
+            self.assertIn(b"Data Science", res2.data)
+            self.assertNotIn(b"Web Development", res2.data)
+
+
 
 # ============================================================
 # INTERNSHIP OFFER LETTER DOMAIN COMBOBOX REGRESSION TESTS
