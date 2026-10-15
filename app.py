@@ -5889,12 +5889,14 @@ def certificate_generate():
         formatted_end = certificate_service.format_display_date(end_date)
         formatted_issued = certificate_service.format_display_date(issued_date)
 
-        # Idempotent lookup: Check for existing active certificate with exact candidate identity
+        # Idempotent lookup: Check for existing active certificate with exact complete candidate identity
         existing_cert = repository.find_active_certificate(
             email=student_email,
             domain=domain,
             start_date=formatted_start,
             end_date=formatted_end,
+            student_name=student_name,
+            issued_date=formatted_issued,
         )
 
         if existing_cert and str(existing_cert.get("certificate_status") or "").lower() != "revoked":
@@ -5929,12 +5931,13 @@ def certificate_generate():
                 }
             })
 
-        # 2. Check if student already has a previous sent certificate -> reuse that certificate_id
-        previous_sent_cert = repository.get_previous_sent_certificate_by_email(student_email)
-        if previous_sent_cert and str(previous_sent_cert.get("certificate_status") or "").lower() != "revoked":
-            cert_id = str(previous_sent_cert.get("certificate_id") or "").strip()
-        else:
-            cert_id = certificate_service.generate_certificate_id(supabase)
+        # 2. No exact active certificate found: always generate a fresh certificate ID.
+        # The previous fallback that reused a sent certificate_id based solely on email has
+        # been removed. Reusing the old ID caused the draft preview to load the historical
+        # database record (wrong student/course details) instead of the current form values.
+        # Intentional resend is handled exclusively in /api/certificate/send-email where the
+        # user has explicitly confirmed the action.
+        cert_id = certificate_service.generate_certificate_id(supabase)
 
         data["certificate_id"] = cert_id
         base_url = certificate_service.get_public_base_url(request)
@@ -5995,36 +5998,75 @@ def certificate_send_email():
         if not recipient:
             return jsonify({"success": False, "error": "Student email address is required."}), 400
 
-        # Resend detection based on normalized recipient email ONLY
+        # Duplicate & resend detection based on complete normalized 6-tuple identity
+        existing_cert = None
+        if cert_id:
+            try:
+                existing_cert = repository.get_certificate_by_id(cert_id)
+            except Exception:
+                existing_cert = None
+
+        cand_identity_data = {
+            "student_name": student_name,
+            "student_email": recipient,
+            "domain": domain,
+            "start_date": start_date,
+            "end_date": end_date,
+            "issued_date": issued_date,
+        }
+
+        if not existing_cert or not repository.is_same_certificate_identity(existing_cert, cand_identity_data):
+            try:
+                matching_active = repository.find_active_certificate(
+                    email=recipient,
+                    domain=domain,
+                    start_date=start_date,
+                    end_date=end_date,
+                    student_name=student_name,
+                    issued_date=issued_date,
+                )
+                if matching_active:
+                    existing_cert = matching_active
+            except Exception:
+                pass
+
+        # Also support test mocks where get_previous_sent_certificate_by_email is mocked
         previous_sent_record = None
-        if not send_again:
+        try:
             previous_sent_record = repository.get_previous_sent_certificate_by_email(recipient)
-            if previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent":
-                return jsonify({
-                    "success": False,
-                    "duplicate": True,
-                    "message": "This email has already received a certificate. Do you want to send it again?",
-                    "previous_record": previous_sent_record,
-                }), 409
-        else:
-            previous_sent_record = repository.get_previous_sent_certificate_by_email(recipient)
+        except Exception:
+            pass
 
-        is_resend = bool(send_again and previous_sent_record and str(previous_sent_record.get("email_status") or "").strip().lower() == "sent")
-        target_record_id = (data.get("id") or data.get("existing_id") or (previous_sent_record.get("id") if previous_sent_record else None)) if is_resend else None
+        if not existing_cert and previous_sent_record:
+            if (cert_id and str(previous_sent_record.get("certificate_id") or "").strip() == cert_id) or repository.is_same_certificate_identity(previous_sent_record, cand_identity_data):
+                existing_cert = previous_sent_record
 
-        # Persistent Certificate ID: if resend, MUST preserve the existing certificate_id
-        if is_resend and previous_sent_record:
-            cert_id = str(previous_sent_record.get("certificate_id") or cert_id).strip()
-            prev_count = int(previous_sent_record.get("send_count") or 1)
+        is_sent_already = bool(existing_cert and str(existing_cert.get("email_status") or "").strip().lower() == "sent")
+
+        if is_sent_already and not send_again:
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "message": "This certificate has already been sent to this student. Do you want to send it again?",
+                "previous_record": existing_cert,
+                "certificate_id": existing_cert.get("certificate_id"),
+                "email": recipient,
+            }), 409
+
+        is_resend = bool(send_again and is_sent_already)
+        target_record_id = (data.get("id") or data.get("existing_id") or (existing_cert.get("id") if existing_cert else None)) if is_resend else None
+
+        # Persistent Certificate ID: if resend of THIS certificate, preserve its existing certificate_id
+        if is_resend and existing_cert:
+            cert_id = str(existing_cert.get("certificate_id") or cert_id).strip()
+            prev_count = int(existing_cert.get("send_count") or 1)
             current_send_count = prev_count + 1
         else:
             current_send_count = 1
             if not cert_id:
                 cert_id = certificate_service.generate_certificate_id(supabase)
 
-        current_record = None
-        if cert_id:
-            current_record = repository.get_certificate_by_id(cert_id)
+        current_record = existing_cert or (repository.get_certificate_by_id(cert_id) if cert_id else None)
 
         cert_data = {
             "student_name": student_name,
@@ -6291,6 +6333,7 @@ def bulk_certificate_send_email():
         if job_id and bulk_job_manager.is_cancelled(job_id):
             return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
 
+        base_url = certificate_service.get_public_base_url(request)
         result = bulk_certificate_service.send_bulk_certificate_emails(
             certificate_items=items,
             output_dir=GENERATED_DIR,
@@ -6299,6 +6342,7 @@ def bulk_certificate_send_email():
             skip_duplicate_emails=skip_duplicate_emails,
             send_again_all=send_again_all,
             job_id=job_id,
+            base_url=base_url,
         )
 
         if result.get("cancelled"):
@@ -6383,6 +6427,27 @@ try:
     PERSISTENT_CERT_DIR.mkdir(parents=True, exist_ok=True)
 except OSError:
     pass
+
+
+@app.get("/verify")
+@app.get("/verify/")
+def verify_certificate_query():
+    """
+    Handles query-parameter based verification requests (e.g. /verify?certificate_id=PER-2026-XXXXX
+    or /verify?id=PER-2026-XXXXX) by redirecting to canonical path route.
+    """
+    cert_id = (request.args.get("certificate_id") or request.args.get("id") or "").strip()
+    if cert_id:
+        return redirect(url_for("verify_certificate", certificate_id=cert_id), code=302)
+    base_url = certificate_service.get_public_base_url(request)
+    return render_template(
+        "verify.html",
+        valid=False,
+        status="not_found",
+        certificate_id="",
+        base_url=base_url,
+        verification_url="",
+    ), 404
 
 
 @app.get("/verify/<certificate_id>")

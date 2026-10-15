@@ -2020,7 +2020,7 @@ async function initiateBulkEmailDispatch() {
         const checkRes = await fetch('/api/certificate/bulk-check-duplicates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emails: checkEmails })
+            body: JSON.stringify({ emails: checkEmails, records: currentGeneratedBulkItems })
         });
         const checkData = await checkRes.json();
 

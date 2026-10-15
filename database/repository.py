@@ -1877,9 +1877,11 @@ def bulk_save_certificate_records(records_list, supabase_client=None):
 
 
 def _normalize_cert_date(date_str):
-    """Normalize date strings to DD-MM-YYYY format for strict identity matching."""
+    """Normalize date strings or datetime objects to DD-MM-YYYY format for strict identity matching."""
     if not date_str:
         return ""
+    if isinstance(date_str, datetime):
+        return date_str.strftime("%d-%m-%Y")
     date_str = str(date_str).strip()
     if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", date_str):
         try:
@@ -1896,18 +1898,77 @@ def _normalize_cert_date(date_str):
             return datetime.strptime(date_str, "%d/%m/%Y").strftime("%d-%m-%Y")
         except Exception:
             pass
+    if re.fullmatch(r"\d{4}/\d{1,2}/\d{1,2}", date_str):
+        try:
+            return datetime.strptime(date_str, "%Y/%m/%d").strftime("%d-%m-%Y")
+        except Exception:
+            pass
+    if "T" in date_str:
+        try:
+            dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+            return dt.strftime("%d-%m-%Y")
+        except Exception:
+            pass
     return date_str
 
 
-def find_active_certificate(email, domain, start_date, end_date, supabase_client=None):
+def normalize_certificate_identity(name, email, domain, start_date, end_date, issued_date):
     """
-    Lookup an existing active certificate matching the exact candidate identity:
+    Returns the canonical 6-tuple identity for a certificate issuance:
+    (name, email, domain, start_date, end_date, issued_date)
+    where:
+    - name: stripped and lowercased
+    - email: stripped and lowercased
+    - domain: stripped and lowercased
+    - start_date: normalized to DD-MM-YYYY
+    - end_date: normalized to DD-MM-YYYY
+    - issued_date: normalized to DD-MM-YYYY
+    """
+    return (
+        str(name or "").strip().lower(),
+        str(email or "").strip().lower(),
+        str(domain or "").strip().lower(),
+        _normalize_cert_date(start_date),
+        _normalize_cert_date(end_date),
+        _normalize_cert_date(issued_date),
+    )
+
+
+def is_same_certificate_identity(rec1, rec2):
+    """
+    Check if two certificate records represent the exact same issuance identity across all 6 fields.
+    """
+    if not rec1 or not rec2:
+        return False
+    id1 = normalize_certificate_identity(
+        rec1.get("student_name"),
+        rec1.get("student_email"),
+        rec1.get("internship_domain") or rec1.get("domain"),
+        rec1.get("start_date"),
+        rec1.get("end_date"),
+        rec1.get("issued_date"),
+    )
+    id2 = normalize_certificate_identity(
+        rec2.get("student_name"),
+        rec2.get("student_email"),
+        rec2.get("internship_domain") or rec2.get("domain"),
+        rec2.get("start_date"),
+        rec2.get("end_date"),
+        rec2.get("issued_date"),
+    )
+    return id1 == id2
+
+
+def find_active_certificate(email, domain, start_date, end_date, student_name=None, issued_date=None, supabase_client=None):
+    """
+    Lookup an existing active certificate matching the complete candidate identity:
     - normalized email (case-insensitive, trimmed)
     - normalized domain (case-insensitive, trimmed)
     - exact start_date (matching normalized date)
     - exact end_date (matching normalized date)
+    - normalized student_name (case-insensitive, trimmed, when provided)
+    - exact issued_date (matching normalized date, when provided)
     - certificate_status != 'revoked'
-    Candidate name is NOT part of the identity.
     Returns the most recent matching certificate record dict, or None.
     """
     if not email or not domain:
@@ -1917,6 +1978,8 @@ def find_active_certificate(email, domain, start_date, end_date, supabase_client
     domain_clean = str(domain).strip().lower()
     start_norm = _normalize_cert_date(start_date)
     end_norm = _normalize_cert_date(end_date)
+    name_clean = str(student_name).strip().lower() if student_name is not None else None
+    issued_norm = _normalize_cert_date(issued_date) if issued_date is not None else None
 
     if not email_clean or not domain_clean or not start_norm or not end_norm:
         return None
@@ -1973,8 +2036,20 @@ def find_active_certificate(email, domain, start_date, end_date, supabase_client
         rec_start_norm = _normalize_cert_date(rec.get("start_date"))
         rec_end_norm = _normalize_cert_date(rec.get("end_date"))
 
-        if rec_start_norm == start_norm and rec_end_norm == end_norm:
-            return rec
+        if rec_start_norm != start_norm or rec_end_norm != end_norm:
+            continue
+
+        if name_clean is not None:
+            rec_name = str(rec.get("student_name") or "").strip().lower()
+            if rec_name != name_clean:
+                continue
+
+        if issued_norm is not None:
+            rec_issued_norm = _normalize_cert_date(rec.get("issued_date"))
+            if rec_issued_norm != issued_norm:
+                continue
+
+        return rec
 
     return None
 
@@ -2057,21 +2132,34 @@ def find_existing_certificates_batch(candidate_rows, supabase_client=None):
         except Exception as exc:
             print("LOCAL DB FIND EXISTING CERTIFICATES ERROR:", repr(exc))
 
-    # Build lookup map for fast O(1) matching using exact 4-tuple identity key
+    # Build lookup map for fast O(1) matching using complete 6-tuple identity key and 4-tuple fallback
     lookup = {}
     for cert in existing_records:
         email_clean = str(cert.get("student_email") or "").strip().lower()
         domain_clean = str(cert.get("internship_domain") or cert.get("domain") or "").strip().lower()
         start_clean = str(cert.get("start_date") or "").strip()
         end_clean = str(cert.get("end_date") or "").strip()
-
-        key_full = (email_clean, domain_clean, start_clean, end_clean)
-        lookup[key_full] = cert
+        name_clean = str(cert.get("student_name") or "").strip().lower()
+        issued_clean = str(cert.get("issued_date") or "").strip()
 
         start_norm = _normalize_cert_date(start_clean)
         end_norm = _normalize_cert_date(end_clean)
+        issued_norm = _normalize_cert_date(issued_clean)
+
+        # Complete 6-tuple identity keys
+        key_6 = (name_clean, email_clean, domain_clean, start_norm, end_norm, issued_norm)
+        lookup[key_6] = cert
+        if start_clean != start_norm or end_clean != end_norm or issued_clean != issued_norm:
+            lookup[(name_clean, email_clean, domain_clean, start_clean, end_clean, issued_clean)] = cert
+
+        # 4-tuple keys for backwards compatibility with tests and callers that don't pass name/issued
+        key_4 = (email_clean, domain_clean, start_clean, end_clean)
+        if key_4 not in lookup:
+            lookup[key_4] = cert
         if start_norm and end_norm:
-            lookup[(email_clean, domain_clean, start_norm, end_norm)] = cert
+            key_4_norm = (email_clean, domain_clean, start_norm, end_norm)
+            if key_4_norm not in lookup:
+                lookup[key_4_norm] = cert
 
     return lookup
 
@@ -2293,12 +2381,28 @@ def find_existing_certificate_emails_batch(candidate_rows_or_emails, supabase_cl
             print("LOCAL DB FIND EXISTING CERT BATCH ERROR:", repr(exc))
 
     # 3. Build lookup map with normalized email keys (trimmed & lowercased)
+    # If candidate items are full record dictionaries (with domain / dates),
+    # only flag duplicates where the complete 6-tuple issuance identity matches an already-sent record.
+    has_full_records = any(isinstance(item, dict) and (item.get("domain") or item.get("internship_domain")) for item in candidate_rows_or_emails)
     lookup = {}
-    for r in existing_records:
-        row_email = str(r.get("student_email") or "").strip().lower()
-        if row_email and row_email in clean_emails_set:
-            if row_email not in lookup or int(r.get("send_count") or 0) > int(lookup[row_email].get("send_count") or 0):
-                lookup[row_email] = r
+    if has_full_records:
+        for item in candidate_rows_or_emails:
+            if not isinstance(item, dict):
+                continue
+            item_email = str(item.get("student_email") or item.get("email") or "").strip().lower()
+            if not item_email:
+                continue
+            for r in existing_records:
+                row_email = str(r.get("student_email") or "").strip().lower()
+                if row_email == item_email and is_same_certificate_identity(item, r):
+                    lookup[item_email] = r
+                    break
+    else:
+        for r in existing_records:
+            row_email = str(r.get("student_email") or "").strip().lower()
+            if row_email and row_email in clean_emails_set:
+                if row_email not in lookup or int(r.get("send_count") or 0) > int(lookup[row_email].get("send_count") or 0):
+                    lookup[row_email] = r
 
     return lookup
 def get_certificate_by_id(cert_id, supabase_client=None, return_error_detail=False):

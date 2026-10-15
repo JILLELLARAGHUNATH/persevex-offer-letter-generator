@@ -13,6 +13,8 @@ from database.repository import (
     get_certificate_by_id,
     find_active_certificate,
     _normalize_cert_date,
+    normalize_certificate_identity,
+    is_same_certificate_identity,
     save_bulk_job_record,
 )
 import certificate_service
@@ -198,14 +200,24 @@ def validate_bulk_records(parsed_rows):
             if parsed_d:
                 clean_issued = parsed_d
 
+        # An in-file duplicate occurs when the exact same issuance identity appears multiple times.
+        # Different issuances for the same email (e.g. different courses/domains, dates, or names) are valid distinct records.
+        cand_key = (
+            name.lower(),
+            email.lower(),
+            domain.lower(),
+            _normalize_cert_date(clean_start or raw_start),
+            _normalize_cert_date(clean_end or raw_end),
+            _normalize_cert_date(clean_issued or raw_issued),
+        )
         is_duplicate = False
-        if email:
-            if email in seen_emails:
+        if email and is_valid_email(email):
+            if cand_key in seen_emails:
                 is_duplicate = True
                 duplicate_count += 1
-                errors.append("Duplicate email in uploaded file.")
+                errors.append("Duplicate certificate record in uploaded file.")
             else:
-                seen_emails.add(email)
+                seen_emails.add(cand_key)
 
         is_valid = len(errors) == 0
         if is_valid:
@@ -335,7 +347,7 @@ def _disambiguate_certificate_filename(student_name, cert_id, batch_used_filenam
 def generate_bulk_certificates(
     valid_rows,
     output_dir,
-    base_url="https://persevex.vercel.app",
+    base_url=None,
     supabase_client=None,
     job_id=None,
     issue_date=None,
@@ -348,6 +360,7 @@ def generate_bulk_certificates(
     - Bulk saves new records in a single database transaction/request
     - Applies selected batch issue_date (or today's date) across all generated certificates
     """
+    resolved_base_url = (base_url or certificate_service.get_public_base_url()).rstrip("/")
     results = []
     already_exists_count = 0
     newly_generated_count = 0
@@ -374,13 +387,28 @@ def generate_bulk_certificates(
     # Count rows needing new certificate IDs and precompute in one batch query
     new_rows_count = 0
     for item in valid_rows:
+        row_s_name = str(item.get("student_name") or "").strip().lower()
         student_email = str(item.get("student_email") or "").strip().lower()
         domain = str(item.get("domain") or "").strip().lower()
         start_date = str(item.get("start_date") or "").strip()
         end_date = str(item.get("end_date") or "").strip()
-        existing = existing_lookup.get((student_email, domain, start_date, end_date))
-        if not existing and start_date and end_date:
-            existing = existing_lookup.get((student_email, domain, _normalize_cert_date(start_date), _normalize_cert_date(end_date)))
+        start_norm = _normalize_cert_date(start_date)
+        end_norm = _normalize_cert_date(end_date)
+        if clean_batch_issue_date:
+            item_issued = clean_batch_issue_date
+        else:
+            parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
+            item_issued = parsed_row_date or datetime.now().strftime("%d-%m-%Y")
+        issued_norm = _normalize_cert_date(item_issued)
+
+        existing = existing_lookup.get((row_s_name, student_email, domain, start_norm, end_norm, issued_norm))
+        if not existing:
+            cand_4 = existing_lookup.get((student_email, domain, start_norm, end_norm)) or existing_lookup.get((student_email, domain, start_date, end_date))
+            if cand_4:
+                cand_name = str(cand_4.get("student_name") or "").strip().lower()
+                cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
+                if (not cand_name or cand_name == row_s_name) and (not cand_issued or cand_issued == issued_norm):
+                    existing = cand_4
         if not (existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked"):
             new_rows_count += 1
 
@@ -414,11 +442,20 @@ def generate_bulk_certificates(
 
             email_clean = student_email.lower()
             domain_clean = domain.lower()
+            name_clean = student_name.lower()
+            start_norm = _normalize_cert_date(start_date)
+            end_norm = _normalize_cert_date(end_date)
+            issued_norm = _normalize_cert_date(issued_date)
 
-            # Check if this certificate already exists in DB
-            existing = existing_lookup.get((email_clean, domain_clean, start_date, end_date))
-            if not existing and start_date and end_date:
-                existing = existing_lookup.get((email_clean, domain_clean, _normalize_cert_date(start_date), _normalize_cert_date(end_date)))
+            # Check if this certificate already exists in DB by complete normalized 6-tuple identity
+            existing = existing_lookup.get((name_clean, email_clean, domain_clean, start_norm, end_norm, issued_norm))
+            if not existing:
+                cand_4 = existing_lookup.get((email_clean, domain_clean, start_norm, end_norm)) or existing_lookup.get((email_clean, domain_clean, start_date, end_date))
+                if cand_4:
+                    cand_name = str(cand_4.get("student_name") or "").strip().lower()
+                    cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
+                    if (not cand_name or cand_name == name_clean) and (not cand_issued or cand_issued == issued_norm):
+                        existing = cand_4
 
             if existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked":
                 # RESUME CASE: Certificate already exists in DB!
@@ -441,7 +478,7 @@ def generate_bulk_certificates(
                                 "certificate_id": cert_id,
                             },
                             output_dir,
-                            base_url=base_url,
+                            base_url=resolved_base_url,
                             custom_filename=filename,
                         )
                     except Exception as render_exc:
@@ -483,7 +520,7 @@ def generate_bulk_certificates(
                 filename = certificate_service.generate_certificate_pdf(
                     cert_data,
                     output_dir,
-                    base_url=base_url,
+                    base_url=resolved_base_url,
                     custom_filename=filename,
                 )
 
@@ -641,11 +678,21 @@ def generate_bulk_certificates(
 
 
 
-def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, delay_seconds=0.4, skip_duplicate_emails=None, send_again_all=False, job_id=None):
+def send_bulk_certificate_emails(
+    certificate_items,
+    output_dir,
+    batch_size=5,
+    delay_seconds=0.4,
+    skip_duplicate_emails=None,
+    send_again_all=False,
+    job_id=None,
+    base_url=None,
+):
     """
     Send emails in safe, controlled batches with live progress tracking and failure visibility.
     Supports skipping historical duplicates and guarantees that the same email is never sent twice in one batch.
     """
+    resolved_base_url = (base_url or certificate_service.get_public_base_url()).rstrip("/")
     total = len(certificate_items)
     successful_count = 0
     failed_count = 0
@@ -679,40 +726,6 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             seen_batch_filenames.add(filename)
         norm_email = student_email.lower()
 
-        # In-batch duplicate guard: Never send the same email twice in one bulk operation
-        if norm_email in seen_batch_emails:
-            skipped_count += 1
-            if job_id:
-                bulk_job_manager.update_progress(job_id, processed_inc=1)
-            results.append({
-                "certificate_id": cert_id,
-                "student_email": student_email,
-                "student_name": student_name,
-                "domain": domain,
-                "filename": filename,
-                "status": "skipped_batch_duplicate",
-                "error": None
-            })
-            continue
-
-        # Historical duplicate skip guard (when "Send Only to New" is chosen)
-        if norm_email in skip_set:
-            skipped_count += 1
-            if job_id:
-                bulk_job_manager.update_progress(job_id, processed_inc=1)
-            results.append({
-                "certificate_id": cert_id,
-                "student_email": student_email,
-                "student_name": student_name,
-                "domain": domain,
-                "filename": filename,
-                "status": "skipped_historical_duplicate",
-                "error": None
-            })
-            continue
-
-        seen_batch_emails.add(norm_email)
-
         # Determine the target database record for THIS certificate specifically
         item_cert_id = str(item.get("certificate_id") or "").strip()
         this_cert_rec = None
@@ -723,11 +736,16 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             except Exception:
                 this_cert_rec = None
 
-        # Fallback 1: match candidate by exact identity tuple (email, domain, start_date, end_date)
+        # Fallback 1: match candidate by exact 6-tuple identity
         if not this_cert_rec and domain and item.get("start_date") and item.get("end_date"):
             try:
                 this_cert_rec = find_active_certificate(
-                    student_email, domain, item.get("start_date"), item.get("end_date")
+                    student_email,
+                    domain,
+                    item.get("start_date"),
+                    item.get("end_date"),
+                    student_name=student_name,
+                    issued_date=item.get("issued_date"),
                 )
             except Exception:
                 this_cert_rec = None
@@ -743,8 +761,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
 
         if not this_cert_rec and prev_rec:
             prev_cid = str(prev_rec.get("certificate_id") or "").strip()
-            prev_domain = str(prev_rec.get("internship_domain") or prev_rec.get("domain") or "").strip().lower()
-            if (item_cert_id and prev_cid == item_cert_id) or (not item_cert_id and (not domain or domain.lower() == prev_domain)):
+            if (item_cert_id and prev_cid == item_cert_id) or is_same_certificate_identity(item, prev_rec):
                 this_cert_rec = prev_rec
 
         if this_cert_rec:
@@ -761,6 +778,49 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             prev_send_count = 0
             send_count = 1
 
+        # In-batch duplicate guard: Never send the exact same certificate issuance twice in one bulk operation
+        batch_item_key = cert_id if cert_id else (
+            student_name.lower(),
+            norm_email,
+            domain.lower(),
+            _normalize_cert_date(item.get("start_date")),
+            _normalize_cert_date(item.get("end_date")),
+            _normalize_cert_date(item.get("issued_date")),
+        )
+        if batch_item_key in seen_batch_emails:
+            skipped_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, processed_inc=1)
+            results.append({
+                "certificate_id": cert_id,
+                "student_email": student_email,
+                "student_name": student_name,
+                "domain": domain,
+                "filename": filename,
+                "status": "skipped_batch_duplicate",
+                "error": None
+            })
+            continue
+
+        # Historical duplicate skip guard (when "Send Only to New" is chosen):
+        # Only skip if this exact issuance was already sent
+        if is_resend and not send_again_all and (norm_email in skip_set or str(cert_id).lower() in skip_set):
+            skipped_count += 1
+            if job_id:
+                bulk_job_manager.update_progress(job_id, processed_inc=1)
+            results.append({
+                "certificate_id": cert_id,
+                "student_email": student_email,
+                "student_name": student_name,
+                "domain": domain,
+                "filename": filename,
+                "status": "skipped_historical_duplicate",
+                "error": None
+            })
+            continue
+
+        seen_batch_emails.add(batch_item_key)
+
         email_data = {
             "student_email": student_email,
             "student_name": student_name,
@@ -776,6 +836,7 @@ def send_bulk_certificate_emails(certificate_items, output_dir, batch_size=5, de
             filename = certificate_service.generate_certificate_pdf(
                 data=email_data,
                 output_dir=Path(output_dir),
+                base_url=resolved_base_url,
                 template_version=email_data.get("template_version", "v1"),
                 custom_filename=filename,
             )

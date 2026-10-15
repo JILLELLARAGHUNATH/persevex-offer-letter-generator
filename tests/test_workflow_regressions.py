@@ -3263,5 +3263,956 @@ class BulkCertificateTestMatrixGapTests(unittest.TestCase):
         self.assertIsInstance(res["error"], str)
 
 
+
+class SingleCertificateIdReuseTests(unittest.TestCase):
+    """
+    Regression tests for the Single Certificate ID-reuse defect.
+
+    Root cause (now fixed): generate_certificate() used
+    get_previous_sent_certificate_by_email() to reuse a certificate_id
+    solely because the email matched, causing the draft preview to load the
+    wrong historical record instead of the current form values.
+
+    These tests confirm:
+    1. Existing email + genuinely new course  → fresh ID
+    2. Existing email + new internship dates  → fresh ID
+    3. Same exact issuance (active match)     → existing ID is reused (idempotent)
+    4. Intentional resend                     → original ID and details are preserved
+    5. Permanent QR verification              → loads saved record, unaffected by params
+    6. Bulk regression                        → bulk workflow still passes
+    """
+
+    def _make_client(self):
+        application.app.config["TESTING"] = True
+        application.app.config["SECRET_KEY"] = "test-only"
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _generate_payload(
+        name="Alice Example",
+        email="alice@example.invalid",
+        domain="Machine Learning",
+        start="2026-01-01",
+        end="2026-03-31",
+        issued="2026-04-01",
+    ):
+        return {
+            "student_name": name,
+            "student_email": email,
+            "domain": domain,
+            "start_date": start,
+            "end_date": end,
+            "issued_date": issued,
+        }
+
+    # ------------------------------------------------------------------
+    # Case 1: existing email, genuinely new course → fresh ID
+    # ------------------------------------------------------------------
+
+    def test_existing_email_new_course_gets_fresh_id(self):
+        """
+        When the same email is submitted for a different course,
+        generate_certificate() must NOT reuse the old certificate_id.
+        A fresh ID is generated; the response carries that fresh ID and
+        the preview URL is built with current form values.
+        """
+        old_cert_id = "PXL-CERT-2025-OLDCOURSE"
+        fresh_id = "PXL-CERT-2026-FRESH001"
+
+        old_record = {
+            "certificate_id": old_cert_id,
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",  # <-- different course
+            "start_date": "01-01-2025",
+            "end_date": "31-03-2025",
+            "issued_date": "01-04-2025",
+            "email_status": "sent",
+            "certificate_status": "active",
+        }
+
+        client = self._make_client()
+        payload = self._generate_payload(domain="Machine Learning")
+
+        with patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(repository, "get_previous_sent_certificate_by_email", return_value=old_record), \
+             patch.object(certificate_service, "generate_certificate_id", return_value=fresh_id), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"), f"Expected success=True, got: {data}")
+        self.assertEqual(
+            data["certificate_id"], fresh_id,
+            f"Expected fresh ID {fresh_id!r}, got {data.get('certificate_id')!r} (old ID was reused)"
+        )
+        self.assertNotEqual(
+            data["certificate_id"], old_cert_id,
+            "Old certificate_id must NOT be reused for a different course"
+        )
+        # The preview URL must be built with the new domain, not the old one
+        self.assertIn(fresh_id, data["url"])
+
+    # ------------------------------------------------------------------
+    # Case 2: existing email, new internship dates → fresh ID
+    # ------------------------------------------------------------------
+
+    def test_existing_email_new_dates_gets_fresh_id(self):
+        """
+        Submitting the same email with different start/end dates must produce
+        a fresh certificate_id — date changes define a genuinely new issuance.
+        """
+        old_cert_id = "PXL-CERT-2025-OLDDATES"
+        fresh_id = "PXL-CERT-2026-FRESH002"
+
+        old_record = {
+            "certificate_id": old_cert_id,
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2025",
+            "end_date": "31-03-2025",  # <-- old dates
+            "issued_date": "01-04-2025",
+            "email_status": "sent",
+            "certificate_status": "active",
+        }
+
+        client = self._make_client()
+        # Same domain as before but different dates (2026 instead of 2025)
+        payload = self._generate_payload(
+            domain="Machine Learning",
+            start="2026-01-01",
+            end="2026-03-31",
+        )
+
+        with patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(repository, "get_previous_sent_certificate_by_email", return_value=old_record), \
+             patch.object(certificate_service, "generate_certificate_id", return_value=fresh_id), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertEqual(
+            data["certificate_id"], fresh_id,
+            f"Expected fresh ID for new dates, got {data.get('certificate_id')!r}"
+        )
+        self.assertNotEqual(data["certificate_id"], old_cert_id)
+
+    # ------------------------------------------------------------------
+    # Case 3: same exact issuance (find_active_certificate match) → reuse
+    # ------------------------------------------------------------------
+
+    def test_same_exact_issuance_reuses_existing_id(self):
+        """
+        When find_active_certificate returns a non-revoked match for the
+        exact (email, domain, start_date, end_date) tuple, the endpoint
+        must return that existing certificate_id (idempotent behaviour).
+        """
+        existing_id = "PXL-CERT-2026-EXISTING"
+
+        active_cert = {
+            "certificate_id": existing_id,
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "email_status": "sent",
+            "certificate_status": "active",
+            "pdf_filename": "Alice_Example_Certificate.pdf",
+        }
+
+        client = self._make_client()
+        payload = self._generate_payload()  # defaults match active_cert
+
+        with patch.object(repository, "find_active_certificate", return_value=active_cert), \
+             patch.object(certificate_service, "generate_certificate_id") as mock_gen:
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data["certificate_id"], existing_id)
+        # generate_certificate_id must NOT have been called — we returned early
+        mock_gen.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Case 4: intentional resend preserves original ID and details
+    # ------------------------------------------------------------------
+
+    def test_intentional_resend_preserves_original_certificate_id(self):
+        """
+        When the user explicitly confirms a resend (send_again=True in
+        /api/certificate/send-email), the route must use the certificate_id
+        from the most-recent sent record for that email, not generate a new
+        one. The original student_name and course must be preserved.
+        """
+        original_cert_id = "PXL-CERT-2025-ORIGINAL"
+
+        previous_sent = {
+            "id": 42,
+            "certificate_id": original_cert_id,
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+
+        saved_records = []
+
+        def capture_save(record, existing_id=None):
+            saved_records.append(dict(record))
+            return True
+
+        client = self._make_client()
+
+        with patch.object(repository, "get_previous_sent_certificate_by_email", return_value=previous_sent), \
+             patch.object(repository, "save_certificate_record", side_effect=capture_save), \
+             patch.object(repository, "get_certificate_by_id", return_value=previous_sent), \
+             patch.object(certificate_service, "generate_certificate_id") as mock_gen, \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"), \
+             patch.object(certificate_service, "send_certificate_email", return_value=None):
+            response = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": original_cert_id,
+                "send_again": True,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data.get("success"), f"Resend failed: {data}")
+        # The saved record must carry the ORIGINAL certificate_id
+        self.assertTrue(len(saved_records) > 0)
+        self.assertEqual(saved_records[-1]["certificate_id"], original_cert_id)
+        # generate_certificate_id must NOT have been called
+        mock_gen.assert_not_called()
+        # send_count must have incremented
+        self.assertEqual(saved_records[-1]["send_count"], 2)
+
+    # ------------------------------------------------------------------
+    # Case 5: permanent QR verification ignores draft query parameters
+    # ------------------------------------------------------------------
+
+    def test_permanent_verify_preview_uses_db_record_not_query_params(self):
+        """
+        The permanent /verify/<certificate_id>/preview endpoint must load
+        the saved database record and ignore untrusted query parameters when
+        a database record exists for that certificate_id.
+        Verifies the fix doesn't inadvertently change this behaviour.
+        """
+        cert_id = "PXL-CERT-2026-QR001"
+
+        saved_record = {
+            "certificate_id": cert_id,
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+            "template_version": "v1",
+        }
+
+        captured_data = {}
+
+        def fake_generate_pdf_bytes(data, base_url, template_version="v1"):
+            captured_data.update(data)
+            return b"%PDF-1.4 stub", "Certificate.pdf"
+
+        client = self._make_client()
+
+        with patch.object(certificate_service, "db_get_certificate_by_id", return_value=saved_record), \
+             patch.object(certificate_service, "generate_certificate_pdf_bytes",
+                          side_effect=fake_generate_pdf_bytes):
+            # Provide query params that differ from the saved record
+            response = client.get(
+                f"/verify/{cert_id}/preview"
+                f"?name=Malicious+Override&domain=Hacking&start=01-06-2020&end=31-12-2020"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        # The PDF was rendered using the saved DB details, NOT the attacker's query params
+        self.assertEqual(captured_data.get("student_name"), "Alice Example",
+                         "preview must use saved DB student_name, not query param")
+        self.assertEqual(captured_data.get("domain"), "Machine Learning",
+                         "preview must use saved DB domain, not query param")
+        self.assertEqual(captured_data.get("start_date"), "01-01-2026",
+                         "preview must use saved DB start_date, not query param")
+
+    # ------------------------------------------------------------------
+    # Case 6: Bulk workflow unaffected (smoke test)
+    # ------------------------------------------------------------------
+
+    def test_bulk_workflow_unaffected_by_single_cert_fix(self):
+        """
+        The Bulk certificate generation must continue to work correctly
+        after the Single Certificate ID-reuse fix. This is a smoke test
+        confirming the two code-paths remain independent.
+        """
+        items = [
+            {
+                "student_name": "Bulk Student A",
+                "student_email": "bulk_a@example.invalid",
+                "domain": "Cloud",
+                "start_date": "01-01-2026",
+                "end_date": "28-02-2026",
+                "row_index": 1,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "bulk_save_certificate_records",
+                               return_value={"success": True, "durable": True,
+                                             "supabase_persisted": True, "sqlite_persisted": True}):
+                result = bulk_certificate_service.generate_bulk_certificates(
+                    valid_rows=items,
+                    output_dir=td,
+                    issue_date="15-03-2026",
+                )
+        self.assertEqual(result["newly_generated_count"], 1)
+        self.assertEqual(result["failed_count"], 0)
+        self.assertTrue(result["results"][0]["success"])
+
+    # ------------------------------------------------------------------
+    # Case 7: Same email but different name → fresh ID (Single)
+    # ------------------------------------------------------------------
+
+    def test_single_same_email_different_name_gets_fresh_id(self):
+        """When student name differs, generate_certificate must assign a fresh ID."""
+        active_cert = {
+            "certificate_id": "PXL-CERT-NAME-01",
+            "student_name": "Alice Example",
+            "student_email": "student@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+        }
+        client = self._make_client()
+        payload = self._generate_payload(name="Bob Example", email="student@example.invalid")
+
+        with patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(certificate_service, "generate_certificate_id", return_value="PXL-CERT-NAME-02"), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Bob_Example_Certificate.pdf"):
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["certificate_id"], "PXL-CERT-NAME-02")
+        self.assertEqual(data["data"]["student_name"], "Bob Example")
+
+    # ------------------------------------------------------------------
+    # Case 8: Same email but different issued date → fresh ID (Single)
+    # ------------------------------------------------------------------
+
+    def test_single_same_email_different_issued_date_gets_fresh_id(self):
+        """When issued date differs, generate_certificate must assign a fresh ID."""
+        client = self._make_client()
+        payload = self._generate_payload(issued="2026-05-01")
+
+        with patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(certificate_service, "generate_certificate_id", return_value="PXL-CERT-ISSUE-NEW"), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["certificate_id"], "PXL-CERT-ISSUE-NEW")
+
+    # ------------------------------------------------------------------
+    # Case 9: Different email → fresh ID (Single)
+    # ------------------------------------------------------------------
+
+    def test_single_different_email_gets_fresh_id(self):
+        """When email differs, generate_certificate must assign a fresh ID."""
+        client = self._make_client()
+        payload = self._generate_payload(email="other@example.invalid")
+
+        with patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(certificate_service, "generate_certificate_id", return_value="PXL-CERT-EMAIL-NEW"), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+            response = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["certificate_id"], "PXL-CERT-EMAIL-NEW")
+
+    # ------------------------------------------------------------------
+    # Case 10: Single send-email duplicate detection only flags identical issuance
+    # ------------------------------------------------------------------
+
+    def test_single_send_email_duplicate_detection_only_flags_identical_issuance(self):
+        """
+        In /api/certificate/send-email:
+        - When a student has a sent certificate for Course A, sending a new issuance for Course B
+          must NOT trigger 409 duplicate, must NOT overwrite Course A, and must save its own record.
+        - Sending the same Course B certificate again with send_again=False triggers 409 duplicate.
+        - Confirming send_again=True increments Course B's send_count without affecting Course A.
+        """
+        course_a_record = {
+            "id": 1,
+            "certificate_id": "PXL-CERT-COURSE-A",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "01-01-2025",
+            "end_date": "31-03-2025",
+            "issued_date": "01-04-2025",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+
+        saved_records = []
+
+        def capture_save(record, existing_id=None):
+            saved_records.append(dict(record))
+            return True
+
+        client = self._make_client()
+
+        # Step 1: Send Course B (Machine Learning) for Alice — must succeed directly without 409
+        with patch.object(repository, "get_previous_sent_certificate_by_email", return_value=course_a_record), \
+             patch.object(repository, "get_certificate_by_id", return_value=None), \
+             patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(repository, "save_certificate_record", side_effect=capture_save), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_ML.pdf"), \
+             patch.object(certificate_service, "send_certificate_email", return_value=None):
+            response = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": "PXL-CERT-COURSE-B",
+                "send_again": False,
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(len(saved_records) > 0)
+        ml_saved = saved_records[-1]
+        self.assertEqual(ml_saved["certificate_id"], "PXL-CERT-COURSE-B")
+        self.assertEqual(ml_saved["internship_domain"], "Machine Learning")
+        self.assertEqual(ml_saved["send_count"], 1)
+
+        # Step 2: Sending Course B again with send_again=False triggers 409 duplicate
+        course_b_record = dict(ml_saved)
+        course_b_record["email_status"] = "sent"
+
+        with patch.object(repository, "get_certificate_by_id", return_value=course_b_record), \
+             patch.object(repository, "find_active_certificate", return_value=course_b_record):
+            response2 = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": "PXL-CERT-COURSE-B",
+                "send_again": False,
+            })
+
+        self.assertEqual(response2.status_code, 409)
+        self.assertTrue(response2.get_json()["duplicate"])
+
+        # Step 3: Confirming resend (send_again=True) increments send_count to 2
+        with patch.object(repository, "get_certificate_by_id", return_value=course_b_record), \
+             patch.object(repository, "find_active_certificate", return_value=course_b_record), \
+             patch.object(repository, "save_certificate_record", side_effect=capture_save), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_ML.pdf"), \
+             patch.object(certificate_service, "send_certificate_email", return_value=None):
+            response3 = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": "PXL-CERT-COURSE-B",
+                "send_again": True,
+            })
+
+        self.assertEqual(response3.status_code, 200)
+        ml_resent = saved_records[-1]
+        self.assertEqual(ml_resent["certificate_id"], "PXL-CERT-COURSE-B")
+        self.assertEqual(ml_resent["send_count"], 2)
+
+    # ------------------------------------------------------------------
+    # Case 11: Failed email and retry updates record without duplicates
+    # ------------------------------------------------------------------
+
+    def test_single_failed_email_and_retry_updates_record_without_duplicates(self):
+        """Failed send saves record as failed; subsequent retry updates it to sent with send_count=1."""
+        client = self._make_client()
+        saved_records = []
+
+        def capture_save(record, existing_id=None):
+            saved_records.append(dict(record))
+            return True
+
+        # First attempt: SMTP fails
+        with patch.object(repository, "get_certificate_by_id", return_value=None), \
+             patch.object(repository, "find_active_certificate", return_value=None), \
+             patch.object(repository, "save_certificate_record", side_effect=capture_save), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_ML.pdf"), \
+             patch.object(certificate_service, "send_certificate_email", side_effect=Exception("SMTP Connection Timeout")):
+            response = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": "PXL-CERT-RETRY-01",
+                "send_again": False,
+            })
+
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(len(saved_records) > 0)
+        self.assertEqual(saved_records[-1]["email_status"], "failed")
+
+        # Second attempt (retry): SMTP succeeds
+        failed_record = dict(saved_records[-1])
+        with patch.object(repository, "get_certificate_by_id", return_value=failed_record), \
+             patch.object(repository, "find_active_certificate", return_value=failed_record), \
+             patch.object(repository, "save_certificate_record", side_effect=capture_save), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_ML.pdf"), \
+             patch.object(certificate_service, "send_certificate_email", return_value=None):
+            response2 = client.post("/api/certificate/send-email", json={
+                "student_name": "Alice Example",
+                "student_email": "alice@example.invalid",
+                "domain": "Machine Learning",
+                "start_date": "01-01-2026",
+                "end_date": "31-03-2026",
+                "issued_date": "01-04-2026",
+                "certificate_id": "PXL-CERT-RETRY-01",
+                "send_again": False,
+            })
+
+        self.assertEqual(response2.status_code, 200)
+        self.assertEqual(saved_records[-1]["certificate_id"], "PXL-CERT-RETRY-01")
+        self.assertEqual(saved_records[-1]["email_status"], "sent")
+        self.assertEqual(saved_records[-1]["send_count"], 1)
+
+    # ------------------------------------------------------------------
+    # Case 12: Bulk exact same details reuses existing ID
+    # ------------------------------------------------------------------
+
+    def test_bulk_exact_same_details_reuses_existing_id(self):
+        """Bulk certificate generation reuses existing ID when all 6 identity fields match."""
+        existing_cert = {
+            "certificate_id": "PXL-CERT-BULK-EXIST",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+        }
+        lookup = {
+            ("alice example", "alice@example.invalid", "machine learning", "01-01-2026", "31-03-2026", "01-04-2026"): existing_cert
+        }
+        items = [{
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "row_index": 1,
+        }]
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "find_existing_certificates_batch", return_value=lookup), \
+                 patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+                result = bulk_certificate_service.generate_bulk_certificates(valid_rows=items, output_dir=td)
+
+        self.assertEqual(result["already_exists_count"], 1)
+        self.assertEqual(result["newly_generated_count"], 0)
+        self.assertEqual(result["results"][0]["certificate_id"], "PXL-CERT-BULK-EXIST")
+
+    # ------------------------------------------------------------------
+    # Case 13: Bulk same email with different fields gets fresh ID
+    # ------------------------------------------------------------------
+
+    def test_bulk_same_email_different_fields_get_fresh_ids(self):
+        """Bulk certificate generation creates separate fresh IDs when name, domain, or dates differ."""
+        existing_cert = {
+            "certificate_id": "PXL-CERT-BULK-EXIST",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+        }
+        lookup = {
+            ("alice example", "alice@example.invalid", "machine learning", "01-01-2026", "31-03-2026", "01-04-2026"): existing_cert
+        }
+
+        diff_cases = [
+            # Different student name
+            {"student_name": "Bob Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026", "row_index": 1},
+            # Different domain
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Data Science", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026", "row_index": 2},
+            # Different start date
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "15-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026", "row_index": 3},
+            # Different end date
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "15-04-2026", "issued_date": "01-04-2026", "row_index": 4},
+            # Different issued date
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "15-05-2026", "row_index": 5},
+            # Different email
+            {"student_name": "Alice Example", "student_email": "different@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026", "row_index": 6},
+        ]
+
+        for case in diff_cases:
+            with tempfile.TemporaryDirectory() as td:
+                with patch.object(bulk_certificate_service, "find_existing_certificates_batch", return_value=lookup), \
+                     patch.object(certificate_service, "generate_bulk_certificate_ids", return_value=["PXL-CERT-NEW-ID"]), \
+                     patch.object(certificate_service, "generate_certificate_pdf", return_value="Cert.pdf"), \
+                     patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value={"success": True}):
+                    result = bulk_certificate_service.generate_bulk_certificates(valid_rows=[case], output_dir=td)
+
+            self.assertEqual(result["newly_generated_count"], 1, f"Failed for case: {case}")
+            self.assertEqual(result["already_exists_count"], 0, f"Failed for case: {case}")
+            self.assertNotEqual(result["results"][0]["certificate_id"], "PXL-CERT-BULK-EXIST")
+
+    # ------------------------------------------------------------------
+    # Case 14: Two different issuances for same email in one bulk upload
+    # ------------------------------------------------------------------
+
+    def test_bulk_two_different_issuances_same_email_in_one_upload_remain_distinct(self):
+        """
+        When the same email appears multiple times with different certificate details:
+        - validate_bulk_records marks both as valid (not in-file duplicates)
+        - generate_bulk_certificates creates 2 distinct certificate IDs
+        - send_bulk_certificate_emails dispatches both without skipping either
+        """
+        rows = [
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026", "row_index": 1},
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Web Development", "start_date": "01-04-2026", "end_date": "30-06-2026", "issued_date": "01-07-2026", "row_index": 2},
+        ]
+
+        # 1. Validation
+        v_res = bulk_certificate_service.validate_bulk_records(rows)
+        self.assertEqual(v_res["valid_records_count"], 2)
+        self.assertEqual(v_res["duplicate_records_count"], 0)
+
+        # 2. Generation
+        gen_ids = ["PXL-CERT-A1", "PXL-CERT-A2"]
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(bulk_certificate_service, "find_existing_certificates_batch", return_value={}), \
+                 patch.object(certificate_service, "generate_bulk_certificate_ids", return_value=gen_ids), \
+                 patch.object(certificate_service, "generate_certificate_pdf", side_effect=["ML.pdf", "WD.pdf"]), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value={"success": True}):
+                g_res = bulk_certificate_service.generate_bulk_certificates(valid_rows=rows, output_dir=td)
+
+        self.assertEqual(g_res["newly_generated_count"], 2)
+        cid1 = g_res["results"][0]["certificate_id"]
+        cid2 = g_res["results"][1]["certificate_id"]
+        self.assertNotEqual(cid1, cid2)
+
+        # 3. Dispatch: both items are sent to alice@example.invalid without being skipped
+        items_to_send = [
+            {"certificate_id": cid1, "student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "filename": "ML.pdf"},
+            {"certificate_id": cid2, "student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Web Development", "filename": "WD.pdf"},
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            with patch("certificate_service.generate_certificate_pdf", side_effect=["ML.pdf", "WD.pdf"]), \
+                 patch("certificate_service.send_certificate_email", return_value=None), \
+                 patch.object(bulk_certificate_service, "get_certificate_by_id", return_value=None), \
+                 patch.object(bulk_certificate_service, "find_active_certificate", return_value=None), \
+                 patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+                 patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+                s_res = bulk_certificate_service.send_bulk_certificate_emails(certificate_items=items_to_send, output_dir=td)
+
+        self.assertEqual(s_res["successful_count"], 2)
+        self.assertEqual(s_res["skipped_count"], 0)
+
+    # ------------------------------------------------------------------
+    # Case 15: Duplicate-check endpoint and Send Only to New coherence
+    # ------------------------------------------------------------------
+
+    def test_bulk_duplicate_check_and_send_only_to_new_coherence(self):
+        """
+        When checking duplicates with full candidate records:
+        - Only records matching an already-sent issuance are flagged
+        - A new course for an existing recipient is not flagged
+        - When send_again_all=False, only the duplicate item is skipped; the new course is sent
+        """
+        client = self._make_client()
+        sent_record = {
+            "certificate_id": "PXL-CERT-OLD-SENT",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "01-01-2025",
+            "end_date": "31-03-2025",
+            "issued_date": "01-04-2025",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+
+        # Step 1: Duplicate check
+        candidate_records = [
+            # Identical to sent record -> duplicate
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Data Science", "start_date": "01-01-2025", "end_date": "31-03-2025", "issued_date": "01-04-2025"},
+            # Different course -> new issuance
+            {"student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "start_date": "01-01-2026", "end_date": "31-03-2026", "issued_date": "01-04-2026"},
+        ]
+
+        with patch("database.repository.get_supabase_client", return_value=None), \
+             patch("database.repository.sqlite3.connect") as mock_conn:
+            # Mock DB to return sent_record
+            conn_inst = MagicMock()
+            cursor_inst = MagicMock()
+            cursor_inst.fetchall.return_value = [sent_record]
+            conn_inst.cursor.return_value = cursor_inst
+            mock_conn.return_value = conn_inst
+
+            dup_map = repository.find_existing_certificate_emails_batch(candidate_records)
+
+        self.assertIn("alice@example.invalid", dup_map)
+
+        # Step 2: Send batch with skip_duplicate_emails containing the duplicate certificate ID
+        items = [
+            {"certificate_id": "PXL-CERT-OLD-SENT", "student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Data Science", "filename": "DS.pdf"},
+            {"certificate_id": "PXL-CERT-NEW-ML", "student_name": "Alice Example", "student_email": "alice@example.invalid", "domain": "Machine Learning", "filename": "ML.pdf"},
+        ]
+
+        def get_cert(cid):
+            if cid == "PXL-CERT-OLD-SENT":
+                return sent_record
+            return None
+
+        with tempfile.TemporaryDirectory() as td:
+            with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+                 patch("certificate_service.send_certificate_email", return_value=None), \
+                 patch.object(bulk_certificate_service, "get_certificate_by_id", side_effect=get_cert), \
+                 patch.object(bulk_certificate_service, "find_active_certificate", return_value=None), \
+                 patch.object(bulk_certificate_service, "save_certificate_record", return_value=True), \
+                 patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+                res = bulk_certificate_service.send_bulk_certificate_emails(
+                    certificate_items=items,
+                    output_dir=td,
+                    skip_duplicate_emails=["pxl-cert-old-sent"],
+                    send_again_all=False,
+                )
+
+        self.assertEqual(res["skipped_count"], 1)
+        self.assertEqual(res["successful_count"], 1)
+        self.assertEqual(res["results"][0]["status"], "skipped_historical_duplicate")
+        self.assertEqual(res["results"][1]["status"], "sent")
+
+    # ------------------------------------------------------------------
+    # Case 16: Old QR verification integrity after second issuance
+    # ------------------------------------------------------------------
+
+    def test_old_qr_integrity_after_new_issuance_generated_and_sent(self):
+        """Permanent QR verification for an old certificate ID continues to show original details."""
+        old_cert = {
+            "certificate_id": "PXL-CERT-ORIG-2025",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "01-01-2025",
+            "end_date": "31-03-2025",
+            "issued_date": "01-04-2025",
+            "certificate_status": "active",
+            "template_version": "v1",
+        }
+        new_cert = {
+            "certificate_id": "PXL-CERT-NEW-2026",
+            "student_name": "Alice Example",
+            "student_email": "alice@example.invalid",
+            "internship_domain": "Machine Learning",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+            "template_version": "v1",
+        }
+
+        def mock_get_cert(cid, sb=None):
+            if cid == "PXL-CERT-ORIG-2025":
+                return old_cert
+            if cid == "PXL-CERT-NEW-2026":
+                return new_cert
+            return None
+
+        captured_renders = {}
+
+        def mock_generate_pdf_bytes(data, base_url, template_version="v1"):
+            captured_renders[data["certificate_id"]] = dict(data)
+            return b"%PDF-1.4 stub", "cert.pdf"
+
+        client = self._make_client()
+        with patch.object(certificate_service, "db_get_certificate_by_id", side_effect=mock_get_cert), \
+             patch.object(certificate_service, "generate_certificate_pdf_bytes", side_effect=mock_generate_pdf_bytes):
+            resp_old = client.get("/verify/PXL-CERT-ORIG-2025/preview?name=Tampered&domain=Tampered")
+            resp_new = client.get("/verify/PXL-CERT-NEW-2026/preview")
+
+        self.assertEqual(resp_old.status_code, 200)
+        self.assertEqual(resp_new.status_code, 200)
+        # Old verification retains original Data Science domain, NOT tampered and NOT Machine Learning
+        self.assertEqual(captured_renders["PXL-CERT-ORIG-2025"]["domain"], "Data Science")
+        self.assertEqual(captured_renders["PXL-CERT-ORIG-2025"]["start_date"], "01-01-2025")
+        # New verification has its own Machine Learning domain
+        self.assertEqual(captured_renders["PXL-CERT-NEW-2026"]["domain"], "Machine Learning")
+        self.assertEqual(captured_renders["PXL-CERT-NEW-2026"]["start_date"], "01-01-2026")
+
+
+class CertificateQrVerificationUrlTests(unittest.TestCase):
+    """
+    Regression and verification tests for Certificate QR verification URL generation,
+    environment configuration handling, local vs production routing, and /verify endpoints.
+    """
+
+    def setUp(self):
+        self._orig_env = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._orig_env)
+
+    def test_get_public_base_url_explicit_env(self):
+        os.environ["PUBLIC_BASE_URL"] = "https://canonical.persevex.com/ "
+        base_url = certificate_service.get_public_base_url()
+        self.assertEqual(base_url, "https://canonical.persevex.com")
+
+        # BASE_URL fallback
+        os.environ.pop("PUBLIC_BASE_URL")
+        os.environ["BASE_URL"] = "https://base.persevex.com///"
+        self.assertEqual(certificate_service.get_public_base_url(), "https://base.persevex.com")
+
+    def test_get_public_base_url_vercel_env(self):
+        os.environ.pop("PUBLIC_BASE_URL", None)
+        os.environ.pop("BASE_URL", None)
+        os.environ["VERCEL_URL"] = "persevex-app.vercel.app"
+        base_url = certificate_service.get_public_base_url()
+        self.assertEqual(base_url, "https://persevex-app.vercel.app")
+
+    def test_get_public_base_url_local_request(self):
+        os.environ.pop("PUBLIC_BASE_URL", None)
+        os.environ.pop("BASE_URL", None)
+        os.environ.pop("VERCEL_URL", None)
+
+        mock_req = MagicMock()
+        mock_req.host = "localhost:5000"
+        mock_req.host_url = "http://localhost:5000/"
+        base_url = certificate_service.get_public_base_url(mock_req)
+        self.assertEqual(base_url, "http://localhost:5000")
+
+        mock_req_127 = MagicMock()
+        mock_req_127.host = "127.0.0.1:5000"
+        mock_req_127.host_url = "http://127.0.0.1:5000/"
+        base_url_127 = certificate_service.get_public_base_url(mock_req_127)
+        self.assertEqual(base_url_127, "http://127.0.0.1:5000")
+
+    def test_get_public_base_url_default_fallback_not_broken_domain(self):
+        os.environ.pop("PUBLIC_BASE_URL", None)
+        os.environ.pop("BASE_URL", None)
+        os.environ.pop("VERCEL_URL", None)
+
+        base_url = certificate_service.get_public_base_url()
+        # Must be local fallback, NEVER the outdated static landing page https://persevex.vercel.app
+        self.assertEqual(base_url, "http://127.0.0.1:5000")
+        self.assertNotIn("persevex.vercel.app", base_url)
+
+    def test_get_verification_url_structure(self):
+        url = certificate_service.get_verification_url("PER-2026-78901", base_url="https://verify.persevex.com")
+        self.assertEqual(url, "https://verify.persevex.com/verify/PER-2026-78901")
+
+    def test_generate_pdf_qr_uses_canonical_base_url(self):
+        os.environ["PUBLIC_BASE_URL"] = "https://canonical.persevex.com"
+        cert_data = {
+            "student_name": "QR Student",
+            "student_email": "qr@example.invalid",
+            "domain": "Web Development",
+            "start_date": "01-01-2026",
+            "end_date": "31-01-2026",
+            "issued_date": "01-02-2026",
+            "certificate_id": "PER-2026-QR001",
+        }
+        with patch.object(certificate_service, "get_verification_url", wraps=certificate_service.get_verification_url) as mock_get_vurl:
+            pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(cert_data)
+            self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+            mock_get_vurl.assert_called_with("PER-2026-QR001", base_url="https://canonical.persevex.com")
+
+    def test_verify_route_known_certificate_returns_200(self):
+        known_cert = {
+            "id": 888,
+            "certificate_id": "PER-2026-KNOWN888",
+            "student_name": "Known Student",
+            "student_email": "known@example.invalid",
+            "internship_domain": "Cloud Computing",
+            "start_date": "01-01-2026",
+            "end_date": "31-03-2026",
+            "issued_date": "01-04-2026",
+            "certificate_status": "active",
+        }
+        with patch.object(certificate_service, "db_get_certificate_by_id", return_value=(known_cert, None)):
+            with application.app.test_client() as client:
+                resp = client.get("/verify/PER-2026-KNOWN888")
+                self.assertEqual(resp.status_code, 200)
+                html = resp.get_data(as_text=True)
+                self.assertIn("Known Student", html)
+                self.assertIn("Cloud Computing", html)
+
+    def test_verify_query_parameter_redirects_to_canonical_route(self):
+        with application.app.test_client() as client:
+            resp1 = client.get("/verify?certificate_id=PER-2026-REDIRECT1")
+            self.assertEqual(resp1.status_code, 302)
+            self.assertEqual(resp1.headers["Location"], "/verify/PER-2026-REDIRECT1")
+
+            resp2 = client.get("/verify/?id=PER-2026-REDIRECT2")
+            self.assertEqual(resp2.status_code, 302)
+            self.assertEqual(resp2.headers["Location"], "/verify/PER-2026-REDIRECT2")
+
+            resp_empty = client.get("/verify")
+            self.assertEqual(resp_empty.status_code, 404)
+
+    def test_bulk_generation_and_send_uses_resolved_base_url(self):
+        os.environ["PUBLIC_BASE_URL"] = "https://canonical.persevex.com"
+        captured_base_urls = []
+
+        def mock_gen_pdf(data, output_dir=None, base_url=None, **kw):
+            captured_base_urls.append(base_url)
+            return "cert.pdf"
+
+        valid_rows = [
+            {"student_name": "Bulk User", "student_email": "buser@example.invalid", "domain": "Web", "start_date": "01-01-2026", "end_date": "31-01-2026", "row_index": 2}
+        ]
+
+        with patch("certificate_service.generate_certificate_pdf", side_effect=mock_gen_pdf), \
+             patch.object(bulk_certificate_service, "find_existing_certificates_batch", return_value={}), \
+             patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+            bulk_certificate_service.generate_bulk_certificates(valid_rows, output_dir="/tmp/test_out")
+
+        self.assertIn("https://canonical.persevex.com", captured_base_urls)
+
+
 if __name__ == '__main__':
     unittest.main()

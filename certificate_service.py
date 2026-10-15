@@ -147,13 +147,18 @@ def get_lan_ip():
 
 def get_public_base_url(request=None):
     """
-    ONE centralized resolver for the public base URL of the application.
+    ONE centralized resolver for the public base URL of the certificate verification portal.
     Priority:
-    1. PUBLIC_BASE_URL (or BASE_URL) environment variable (e.g. https://your-production-domain.vercel.app)
-    2. If running on a cloud / public deployment domain, dynamically uses request.host_url
-    3. If running locally without PUBLIC_BASE_URL:
-       - Uses local host_url (or LAN IP for local WiFi device testing)
-    4. Fallback to http://127.0.0.1:5000
+    1. PUBLIC_BASE_URL (or BASE_URL) environment variable:
+       Explicit canonical public URL (e.g. https://your-canonical-domain.com or production Vercel domain).
+    2. Incoming public cloud request (if host is not localhost/private IP):
+       Uses request.host_url (e.g. https://your-deployment.vercel.app).
+    3. Production cloud environment detection (e.g. VERCEL_URL):
+       If running on Vercel with VERCEL_URL, uses https://{VERCEL_URL}.
+    4. Local development host from request:
+       Uses request.host_url (e.g. http://localhost:5000 or http://127.0.0.1:5000).
+    5. Local testing fallback:
+       http://127.0.0.1:5000
     """
     env_base = (
         os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
@@ -175,31 +180,32 @@ def get_public_base_url(request=None):
             ):
                 return request.host_url.rstrip("/")
 
-            # Local development host
-            if "127.0.0.1" in host or "localhost" in host:
-                lan_ip = get_lan_ip()
-                port = request.environ.get("SERVER_PORT", "5000")
-                if lan_ip and lan_ip != "127.0.0.1":
-                    return f"http://{lan_ip}:{port}"
+            # Local development host: preserve local request origin (e.g. http://localhost:5000)
             return request.host_url.rstrip("/")
         except Exception:
             pass
 
-    return "https://persevex.vercel.app"
+    # Check VERCEL_URL environment variable if deployed on Vercel
+    vercel_url = os.getenv("VERCEL_URL", "").strip().rstrip("/")
+    if vercel_url:
+        return f"https://{vercel_url}"
+
+    # Default local testing fallback (never encode external third-party domain)
+    return "http://127.0.0.1:5000"
 
 
 # Alias for backward compatibility if called as get_base_url
 get_base_url = get_public_base_url
 
 
-def get_verification_url(certificate_id, request=None):
+def get_verification_url(certificate_id, request=None, base_url=None):
     """
     ONE centralized function for generating the public verification URL.
     Returns: {PUBLIC_BASE_URL}/verify/{certificate_id}
     """
-    base_url = get_public_base_url(request)
+    resolved_base = (base_url or get_public_base_url(request)).rstrip("/")
     cert_id = str(certificate_id).strip()
-    return f"{base_url}/verify/{cert_id}"
+    return f"{resolved_base}/verify/{cert_id}"
 
 
 def get_certificate_thumbnail_url(certificate_id, request=None):
@@ -470,7 +476,7 @@ def generate_certificate_pdf_bytes(data, base_url=None, template_version="v1"):
     )
 
     # 5. Dynamic Scannable QR Code linking to verification page
-    verify_url = f"{resolved_base_url}/verify/{cert_id}"
+    verify_url = get_verification_url(cert_id, base_url=resolved_base_url)
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -571,7 +577,7 @@ def generate_certificate_pdf(data, output_dir=None, base_url=None, template_vers
 # ============================================================
 # SEND CERTIFICATE EMAIL VIA SMTP
 # ============================================================
-def send_certificate_email(data, pdf_path=None, filename=None, pdf_bytes=None):
+def send_certificate_email(data, pdf_path=None, filename=None, pdf_bytes=None, base_url=None):
     """
     Sends the generated Certificate PDF to the student via SMTP,
     saves the email to the IMAP Sent folder, and returns status.
@@ -590,7 +596,7 @@ def send_certificate_email(data, pdf_path=None, filename=None, pdf_bytes=None):
             pdf_bytes = pdf_path.read_bytes()
         else:
             # Self-heal / generate dynamically in memory
-            pdf_bytes, auto_filename = generate_certificate_pdf_bytes(data)
+            pdf_bytes, auto_filename = generate_certificate_pdf_bytes(data, base_url=base_url)
             if not filename:
                 filename = auto_filename
 
