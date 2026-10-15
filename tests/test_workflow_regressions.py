@@ -4213,6 +4213,300 @@ class CertificateQrVerificationUrlTests(unittest.TestCase):
 
         self.assertIn("https://canonical.persevex.com", captured_base_urls)
 
+    # ------------------------------------------------------------------
+    # Bulk Send-Count Targeting & Shared-Email Identity Disambiguation
+    # ------------------------------------------------------------------
+
+    def _authenticated_client(self):
+        client = application.app.test_client()
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
+        return client
+
+    def test_bulk_send_distinct_students_sharing_email_increments_respective_counts(self):
+        """Two distinct students sharing email and course dates get send_count=1 on their respective records, neither incremented twice."""
+        client = self._authenticated_client()
+        rec_sample1 = {
+            "id": 101,
+            "certificate_id": "PEX-DS-001",
+            "student_name": "Sample1",
+            "student_email": "shared@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "15-10-2026",
+            "end_date": "15-11-2026",
+            "issued_date": "15-10-2026",
+            "email_status": "pending",
+            "send_count": 0,
+        }
+        rec_sample2 = {
+            "id": 102,
+            "certificate_id": "PEX-DS-002",
+            "student_name": "Sample2",
+            "student_email": "shared@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "15-10-2026",
+            "end_date": "15-11-2026",
+            "issued_date": "15-10-2026",
+            "email_status": "pending",
+            "send_count": 0,
+        }
+        items = [
+            {"certificate_id": "PEX-DS-001", "student_name": "Sample1", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026", "filename": "s1.pdf"},
+            {"certificate_id": "PEX-DS-002", "student_name": "Sample2", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026", "filename": "s2.pdf"},
+        ]
+
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", side_effect=lambda cid: rec_sample1 if cid == "PEX-DS-001" else (rec_sample2 if cid == "PEX-DS-002" else None)), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda rec, existing_id=None: saved_records.append((dict(rec), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            # Dispatch Sample1
+            r1 = client.post("/api/certificate/bulk/send-email", json={"items": [items[0]]})
+            self.assertEqual(r1.status_code, 200)
+            # Dispatch Sample2
+            r2 = client.post("/api/certificate/bulk/send-email", json={"items": [items[1]]})
+            self.assertEqual(r2.status_code, 200)
+
+        self.assertEqual(len(saved_records), 2)
+        rec1, id1 = saved_records[0]
+        rec2, id2 = saved_records[1]
+
+        self.assertEqual(rec1["id"], 101)
+        self.assertEqual(rec1["certificate_id"], "PEX-DS-001")
+        self.assertEqual(rec1["student_name"], "Sample1")
+        self.assertEqual(rec1["send_count"], 1)
+
+        self.assertEqual(rec2["id"], 102)
+        self.assertEqual(rec2["certificate_id"], "PEX-DS-002")
+        self.assertEqual(rec2["student_name"], "Sample2")
+        self.assertEqual(rec2["send_count"], 1)
+
+    def test_bulk_resend_increments_only_own_issuance_send_count(self):
+        """Resending a certificate increments only its own send_count without affecting any other record sharing the email."""
+        client = self._authenticated_client()
+        rec_sample1 = {
+            "id": 101,
+            "certificate_id": "PEX-DS-001",
+            "student_name": "Sample1",
+            "student_email": "shared@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "15-10-2026",
+            "end_date": "15-11-2026",
+            "issued_date": "15-10-2026",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        item_resend = {
+            "certificate_id": "PEX-DS-001",
+            "student_name": "Sample1",
+            "student_email": "shared@example.invalid",
+            "domain": "Data Science",
+            "start_date": "15-10-2026",
+            "end_date": "15-11-2026",
+            "issued_date": "15-10-2026",
+            "filename": "s1.pdf",
+        }
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", return_value=rec_sample1), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda rec, existing_id=None: saved_records.append((dict(rec), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            r = client.post("/api/certificate/bulk/send-email", json={"items": [item_resend], "send_again_all": True})
+            self.assertEqual(r.status_code, 200)
+
+        self.assertEqual(len(saved_records), 1)
+        rec, eid = saved_records[0]
+        self.assertEqual(eid, 101)
+        self.assertEqual(rec["certificate_id"], "PEX-DS-001")
+        self.assertEqual(rec["send_count"], 2)
+
+    def test_bulk_send_shared_email_different_domains_targets_correct_records(self):
+        """Two certificates sharing email but with different domains each update only their respective records."""
+        client = self._authenticated_client()
+        rec_ds = {
+            "id": 201,
+            "certificate_id": "PEX-DS-100",
+            "student_name": "Alex",
+            "student_email": "alex@example.invalid",
+            "internship_domain": "Data Science",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        rec_cs = {
+            "id": 202,
+            "certificate_id": "PEX-CS-200",
+            "student_name": "Alex",
+            "student_email": "alex@example.invalid",
+            "internship_domain": "Cyber Security",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", side_effect=lambda cid: rec_ds if cid == "PEX-DS-100" else (rec_cs if cid == "PEX-CS-200" else None)), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda rec, existing_id=None: saved_records.append((dict(rec), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            r = client.post("/api/certificate/bulk/send-email", json={
+                "items": [{"certificate_id": "PEX-CS-200", "student_name": "Alex", "student_email": "alex@example.invalid", "domain": "Cyber Security", "filename": "cs.pdf"}],
+                "send_again_all": True
+            })
+            self.assertEqual(r.status_code, 200)
+
+        self.assertEqual(len(saved_records), 1)
+        rec, eid = saved_records[0]
+        self.assertEqual(eid, 202)
+        self.assertEqual(rec["certificate_id"], "PEX-CS-200")
+        self.assertEqual(rec["send_count"], 2)
+
+    def test_bulk_send_shared_email_different_dates_targets_correct_records(self):
+        """Two certificates sharing email and domain but with different start/end dates each update their own record."""
+        client = self._authenticated_client()
+        rec_cohort1 = {
+            "id": 301,
+            "certificate_id": "PEX-COHORT-1",
+            "student_name": "Alex",
+            "student_email": "alex@example.invalid",
+            "internship_domain": "Web Development",
+            "start_date": "01-01-2026",
+            "end_date": "01-02-2026",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        rec_cohort2 = {
+            "id": 302,
+            "certificate_id": "PEX-COHORT-2",
+            "student_name": "Alex",
+            "student_email": "alex@example.invalid",
+            "internship_domain": "Web Development",
+            "start_date": "01-06-2026",
+            "end_date": "01-07-2026",
+            "email_status": "pending",
+            "send_count": 0,
+        }
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", side_effect=lambda cid: rec_cohort1 if cid == "PEX-COHORT-1" else (rec_cohort2 if cid == "PEX-COHORT-2" else None)), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda rec, existing_id=None: saved_records.append((dict(rec), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            r = client.post("/api/certificate/bulk/send-email", json={
+                "items": [{"certificate_id": "PEX-COHORT-2", "student_name": "Alex", "student_email": "alex@example.invalid", "domain": "Web Development", "start_date": "01-06-2026", "end_date": "01-07-2026", "filename": "c2.pdf"}],
+            })
+            self.assertEqual(r.status_code, 200)
+
+        self.assertEqual(len(saved_records), 1)
+        rec, eid = saved_records[0]
+        self.assertEqual(rec["id"], 302)
+        self.assertEqual(rec["certificate_id"], "PEX-COHORT-2")
+        self.assertEqual(rec["send_count"], 1)
+
+    def test_bulk_send_in_batch_duplicate_skipped_without_double_increment(self):
+        """A duplicate item within the same batch is skipped as duplicate and not incremented twice."""
+        client = self._authenticated_client()
+        rec = {
+            "id": 401,
+            "certificate_id": "PEX-DUP-1",
+            "student_name": "Sam",
+            "student_email": "sam@example.invalid",
+            "internship_domain": "Data Science",
+            "email_status": "pending",
+            "send_count": 0,
+        }
+        items = [
+            {"certificate_id": "PEX-DUP-1", "student_name": "Sam", "student_email": "sam@example.invalid", "domain": "Data Science", "filename": "s.pdf"},
+            {"certificate_id": "PEX-DUP-1", "student_name": "Sam", "student_email": "sam@example.invalid", "domain": "Data Science", "filename": "s.pdf"},
+        ]
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", return_value=rec), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda r, existing_id=None: saved_records.append((dict(r), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            r = client.post("/api/certificate/bulk/send-email", json={"items": items})
+            self.assertEqual(r.status_code, 200)
+            data = r.get_json()
+
+        self.assertEqual(data["successful_count"], 1)
+        self.assertEqual(data["skipped_count"], 1)
+        self.assertEqual(len(saved_records), 1)
+        self.assertEqual(saved_records[0][0]["send_count"], 1)
+
+    def test_bulk_check_duplicates_does_not_conflate_shared_email_different_students(self):
+        """Duplicate check endpoint returns duplicate_certificate_ids and composite duplicate_map entries without conflating different students sharing an email."""
+        client = self._authenticated_client()
+        sent_record = {
+            "id": 501,
+            "certificate_id": "PEX-SENT-01",
+            "student_name": "Sample1",
+            "student_email": "shared@example.invalid",
+            "internship_domain": "Data Science",
+            "start_date": "15-10-2026",
+            "end_date": "15-11-2026",
+            "issued_date": "15-10-2026",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        candidate_records = [
+            {"student_name": "Sample1", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Sample2", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+        ]
+        with patch.object(repository, "get_supabase_client", return_value=None), \
+             patch("sqlite3.connect") as mock_conn:
+            conn_inst = MagicMock()
+            cursor_inst = MagicMock()
+            cursor_inst.fetchall.return_value = [sent_record]
+            conn_inst.cursor.return_value = cursor_inst
+            mock_conn.return_value = conn_inst
+
+            resp = client.post("/api/certificate/bulk-check-duplicates", json={"records": candidate_records})
+            self.assertEqual(resp.status_code, 200)
+            res_data = resp.get_json()
+
+        self.assertTrue(res_data["success"])
+        self.assertIn("PEX-SENT-01", res_data.get("duplicate_certificate_ids", []))
+        dup_map = res_data.get("duplicate_map", {})
+        self.assertIn("shared@example.invalid#sample1", dup_map)
+        self.assertNotIn("shared@example.invalid#sample2", dup_map)
+
+    def test_bulk_send_ambiguous_identity_fails_safely_without_hijacking(self):
+        """When certificate_id belongs to a conflicting student name, item fails safely with failed_identity_ambiguity and does not mutate the record."""
+        client = self._authenticated_client()
+        alice_record = {
+            "id": 601,
+            "certificate_id": "PEX-ALICE-100",
+            "student_name": "Alice Wonderland",
+            "student_email": "shared@example.invalid",
+            "internship_domain": "Data Science",
+            "email_status": "sent",
+            "send_count": 1,
+        }
+        item_imposter = {
+            "certificate_id": "PEX-ALICE-100",
+            "student_name": "Bob Builder",
+            "student_email": "shared@example.invalid",
+            "domain": "Data Science",
+            "filename": "bob.pdf",
+        }
+        saved_records = []
+        with patch("certificate_service.generate_certificate_pdf", return_value="cert.pdf"), \
+             patch("certificate_service.send_certificate_email", return_value=True), \
+             patch.object(bulk_certificate_service, "get_certificate_by_id", return_value=alice_record), \
+             patch.object(bulk_certificate_service, "save_certificate_record", side_effect=lambda r, existing_id=None: saved_records.append((dict(r), existing_id)) or None), \
+             patch.object(bulk_certificate_service, "save_bulk_job_record", return_value=None):
+            r = client.post("/api/certificate/bulk/send-email", json={"items": [item_imposter]})
+            self.assertEqual(r.status_code, 200)
+            data = r.get_json()
+
+        self.assertEqual(data["failed_count"], 1)
+        self.assertEqual(data["successful_count"], 0)
+        self.assertEqual(len(saved_records), 0)
+        failed_res = data["results"][0]
+        self.assertEqual(failed_res["status"], "failed_identity_ambiguity")
+        self.assertIn("Ambiguous issuance identity", failed_res["error"])
+
 
 if __name__ == '__main__':
     unittest.main()

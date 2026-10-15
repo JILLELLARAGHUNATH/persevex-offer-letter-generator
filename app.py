@@ -6186,13 +6186,20 @@ def certificate_bulk_check_duplicates():
             })
 
         duplicate_map = repository.find_existing_certificate_emails_batch(records)
-        duplicate_emails = list(duplicate_map.keys())
+        duplicate_emails = [k for k in duplicate_map.keys() if "@" in str(k) and "#" not in str(k)]
+        duplicate_certificate_ids = []
+        for k, rec in duplicate_map.items():
+            if isinstance(rec, dict):
+                cid = str(rec.get("certificate_id") or "").strip()
+                if cid and cid not in duplicate_certificate_ids:
+                    duplicate_certificate_ids.append(cid)
 
         return jsonify({
             "success": True,
             "duplicate_count": len(duplicate_emails),
             "duplicates": duplicate_emails,
             "duplicate_emails": duplicate_emails,
+            "duplicate_certificate_ids": duplicate_certificate_ids,
             "duplicate_map": duplicate_map
         })
     except Exception as exc:
@@ -6324,6 +6331,8 @@ def bulk_certificate_send_email():
         data = request.get_json(force=True) or {}
         items = data.get("items") or []
         skip_duplicate_emails = data.get("skip_duplicate_emails") or []
+        skip_duplicate_ids = data.get("skip_duplicate_ids") or []
+        combined_skip = list(skip_duplicate_emails) + [cid for cid in skip_duplicate_ids if cid and cid not in skip_duplicate_emails]
         send_again_all = bool(data.get("send_again_all", False))
         job_id = (data.get("job_id") or "").strip() or None
 
@@ -6339,7 +6348,7 @@ def bulk_certificate_send_email():
             output_dir=GENERATED_DIR,
             batch_size=5,
             delay_seconds=0.4,
-            skip_duplicate_emails=skip_duplicate_emails,
+            skip_duplicate_emails=combined_skip,
             send_again_all=send_again_all,
             job_id=job_id,
             base_url=base_url,

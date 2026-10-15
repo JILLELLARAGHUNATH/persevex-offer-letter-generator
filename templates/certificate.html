@@ -833,6 +833,44 @@ let currentFailedGenerationItems = [];
 let currentFailedEmailItems = [];
 let pendingBulkDuplicates = [];
 let pendingBulkAllItems = [];
+let pendingBulkDuplicateIds = [];
+let pendingBulkDuplicateMap = {};
+
+function isItemBulkDuplicate(item) {
+    if (!item) return false;
+    const itemCid = String(item.certificate_id || '').trim().toUpperCase();
+    if (itemCid && pendingBulkDuplicateIds && pendingBulkDuplicateIds.length > 0) {
+        const idSet = new Set(pendingBulkDuplicateIds.map(id => String(id).trim().toUpperCase()));
+        if (idSet.has(itemCid)) return true;
+    }
+    const email = String(item.student_email || '').trim().toLowerCase();
+    const name = String(item.student_name || '').trim().toLowerCase();
+    if (!email) return false;
+
+    if (pendingBulkDuplicateMap && pendingBulkDuplicateMap[`${email}#${name}`]) {
+        return true;
+    }
+    if (itemCid && pendingBulkDuplicateMap && pendingBulkDuplicateMap[itemCid]) {
+        return true;
+    }
+
+    const dupEmailSet = new Set((pendingBulkDuplicates || []).map(e => String(e).trim().toLowerCase()));
+    if (dupEmailSet.has(email)) {
+        if (!pendingBulkDuplicateMap || Object.keys(pendingBulkDuplicateMap).length === 0) {
+            return true;
+        }
+        const mapped = pendingBulkDuplicateMap[email];
+        if (mapped && typeof mapped === 'object') {
+            const mappedName = String(mapped.student_name || '').trim().toLowerCase();
+            if (!mappedName || !name || mappedName === name) {
+                return true;
+            }
+            return false;
+        }
+        return true;
+    }
+    return false;
+}
 
 // Mode Switcher Handler
 function switchCertificateMode(mode) {
@@ -1187,13 +1225,15 @@ function handleCertBulkDuplicateBackdropClick(event) {
 
 function handleCertBulkSendOnlyNew() {
     closeCertBulkDuplicateModal();
-    const dupSet = new Set(pendingBulkDuplicates.map(e => String(e).trim().toLowerCase()));
-    const newItems = pendingBulkAllItems.filter(item => !dupSet.has(String(item.student_email).trim().toLowerCase()));
+    const newItems = pendingBulkAllItems.filter(item => !isItemBulkDuplicate(item));
     if (newItems.length === 0) {
         showToast('No new certificate recipients in this batch.', 'info');
         return;
     }
-    executeBulkEmailDispatch(newItems, { skip_duplicate_emails: pendingBulkDuplicates });
+    executeBulkEmailDispatch(newItems, {
+        skip_duplicate_emails: pendingBulkDuplicates,
+        skip_duplicate_ids: pendingBulkDuplicateIds
+    });
 }
 
 function handleCertBulkSendAgainAll() {
@@ -2031,12 +2071,14 @@ async function initiateBulkEmailDispatch() {
         if (checkData.success && duplicatesFound && duplicatesFound.length > 0) {
             pendingBulkDuplicates = duplicatesFound;
             pendingBulkAllItems = currentGeneratedBulkItems;
+            pendingBulkDuplicateIds = Array.isArray(checkData.duplicate_certificate_ids) ? checkData.duplicate_certificate_ids : [];
+            pendingBulkDuplicateMap = checkData.duplicate_map || {};
 
-            const dupSet = new Set(pendingBulkDuplicates.map(e => String(e).trim().toLowerCase()));
-            const newCount = currentGeneratedBulkItems.filter(item => !dupSet.has(String(item.student_email).trim().toLowerCase())).length;
+            const duplicateItems = currentGeneratedBulkItems.filter(item => isItemBulkDuplicate(item));
+            const newCount = currentGeneratedBulkItems.length - duplicateItems.length;
 
             const countEl = document.getElementById('certBulkDuplicateCountText');
-            if (countEl) countEl.textContent = pendingBulkDuplicates.length;
+            if (countEl) countEl.textContent = duplicateItems.length;
             const newCountEl = document.getElementById('certBulkNewCount');
             if (newCountEl) newCountEl.textContent = newCount;
             const totalCountEl = document.getElementById('certBulkTotalCount');
@@ -2044,7 +2086,7 @@ async function initiateBulkEmailDispatch() {
 
             const listEl = document.getElementById('certBulkDuplicateList');
             if (listEl) {
-                listEl.innerHTML = pendingBulkDuplicates.map(e => `<div>• <strong>${escapeHtml(e)}</strong></div>`).join('');
+                listEl.innerHTML = duplicateItems.map(item => `<div>• <strong>${escapeHtml(item.student_name || item.student_email)}</strong> (${escapeHtml(item.student_email)})</div>`).join('');
             }
 
             openCertBulkDuplicateModal();
@@ -2173,6 +2215,7 @@ async function executeBulkEmailDispatch(targetItems = null, options = {}) {
                 body: JSON.stringify({
                     items: [item],
                     skip_duplicate_emails: options && Array.isArray(options.skip_duplicate_emails) ? options.skip_duplicate_emails : [],
+                    skip_duplicate_ids: options && Array.isArray(options.skip_duplicate_ids) ? options.skip_duplicate_ids : [],
                     send_again_all: !!(options && options.send_again_all),
                     job_id: _sendJobId
                 })

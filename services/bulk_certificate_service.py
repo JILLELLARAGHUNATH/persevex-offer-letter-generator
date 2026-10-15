@@ -407,7 +407,7 @@ def generate_bulk_certificates(
             if cand_4:
                 cand_name = str(cand_4.get("student_name") or "").strip().lower()
                 cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
-                if (not cand_name or cand_name == row_s_name) and (not cand_issued or cand_issued == issued_norm):
+                if cand_name and row_s_name and cand_name == row_s_name and (not cand_issued or cand_issued == issued_norm):
                     existing = cand_4
         if not (existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked"):
             new_rows_count += 1
@@ -454,7 +454,7 @@ def generate_bulk_certificates(
                 if cand_4:
                     cand_name = str(cand_4.get("student_name") or "").strip().lower()
                     cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
-                    if (not cand_name or cand_name == name_clean) and (not cand_issued or cand_issued == issued_norm):
+                    if cand_name and name_clean and cand_name == name_clean and (not cand_issued or cand_issued == issued_norm):
                         existing = cand_4
 
             if existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked":
@@ -725,21 +725,36 @@ def send_bulk_certificate_emails(
         else:
             seen_batch_filenames.add(filename)
         norm_email = student_email.lower()
+        cand_name = str(student_name or "").strip().lower()
 
-        # Determine the target database record for THIS certificate specifically
+        # Determine the target database record for THIS certificate specifically.
+        # Strict Rule: Must resolve using certificate_id or exact match of all 6 normalized identity fields.
+        # Never use an email-only lookup to select a record for updating send_count.
         item_cert_id = str(item.get("certificate_id") or "").strip()
         this_cert_rec = None
 
         if item_cert_id:
             try:
-                this_cert_rec = get_certificate_by_id(item_cert_id)
+                candidate_rec = get_certificate_by_id(item_cert_id)
             except Exception:
-                this_cert_rec = None
+                candidate_rec = None
+
+            if candidate_rec:
+                rec_email = str(candidate_rec.get("student_email") or "").strip().lower()
+                rec_name = str(candidate_rec.get("student_name") or "").strip().lower()
+                # Verify identity consistency: email must match, and name must match if present
+                if rec_email and rec_email != norm_email:
+                    candidate_rec = None
+                elif rec_name and cand_name and rec_name != cand_name:
+                    # Identity conflict: certificate ID is registered to a different student name!
+                    candidate_rec = None
+                else:
+                    this_cert_rec = candidate_rec
 
         # Fallback 1: match candidate by exact 6-tuple identity
         if not this_cert_rec and domain and item.get("start_date") and item.get("end_date"):
             try:
-                this_cert_rec = find_active_certificate(
+                active_match = find_active_certificate(
                     student_email,
                     domain,
                     item.get("start_date"),
@@ -747,22 +762,59 @@ def send_bulk_certificate_emails(
                     student_name=student_name,
                     issued_date=item.get("issued_date"),
                 )
+                if active_match:
+                    rec_name = str(active_match.get("student_name") or "").strip().lower()
+                    if not cand_name or not rec_name or rec_name == cand_name:
+                        this_cert_rec = active_match
             except Exception:
                 this_cert_rec = None
 
-        # Fallback 2: get_previous_sent_certificate_by_email ONLY IF it refers to THIS certificate
-        # (Preserves backwards compatibility with tests that mock get_previous_sent_certificate_by_email,
-        # while preventing overwriting a different course or historical issuance of the same student)
-        prev_rec = None
-        try:
-            prev_rec = get_previous_sent_certificate_by_email(student_email)
-        except Exception:
+        # Fallback 2: backwards compatibility for test mocks only if identity strictly matches
+        # (Must match student_name AND certificate_id / 6-tuple; never match by email alone)
+        if not this_cert_rec:
             prev_rec = None
+            try:
+                prev_rec = get_previous_sent_certificate_by_email(student_email)
+            except Exception:
+                prev_rec = None
 
-        if not this_cert_rec and prev_rec:
-            prev_cid = str(prev_rec.get("certificate_id") or "").strip()
-            if (item_cert_id and prev_cid == item_cert_id) or is_same_certificate_identity(item, prev_rec):
-                this_cert_rec = prev_rec
+            if prev_rec:
+                prev_cid = str(prev_rec.get("certificate_id") or "").strip()
+                prev_name = str(prev_rec.get("student_name") or "").strip().lower()
+                cid_matches = bool(item_cert_id and prev_cid == item_cert_id)
+                name_matches = bool(cand_name and prev_name and cand_name == prev_name)
+                if (cid_matches and name_matches) or (name_matches and is_same_certificate_identity(item, prev_rec)):
+                    this_cert_rec = prev_rec
+
+        # Ambiguity / safety guard: If item_cert_id was supplied but belongs to a different student
+        if item_cert_id and not this_cert_rec:
+            try:
+                conflicting_rec = get_certificate_by_id(item_cert_id)
+            except Exception:
+                conflicting_rec = None
+            if conflicting_rec:
+                conf_name = str(conflicting_rec.get("student_name") or "").strip()
+                conf_email = str(conflicting_rec.get("student_email") or "").strip().lower()
+                if (conf_name and cand_name and conf_name.lower() != cand_name) or (conf_email and conf_email != norm_email):
+                    failed_count += 1
+                    err_msg = f"Ambiguous issuance identity: certificate ID {item_cert_id} belongs to '{conf_name}' ({conf_email}), cannot update for '{student_name}'."
+                    results.append({
+                        "certificate_id": item_cert_id,
+                        "student_email": student_email,
+                        "student_name": student_name,
+                        "domain": domain,
+                        "filename": filename,
+                        "status": "failed_identity_ambiguity",
+                        "error": err_msg
+                    })
+                    failed_items.append({
+                        "certificate_id": item_cert_id,
+                        "student_name": student_name,
+                        "student_email": student_email,
+                        "domain": domain,
+                        "error": err_msg
+                    })
+                    continue
 
         if this_cert_rec:
             cert_id = str(this_cert_rec.get("certificate_id") or item_cert_id or cert_id).strip()
@@ -779,14 +831,14 @@ def send_bulk_certificate_emails(
             send_count = 1
 
         # In-batch duplicate guard: Never send the exact same certificate issuance twice in one bulk operation
-        batch_item_key = cert_id if cert_id else (
+        batch_item_key = (
             student_name.lower(),
             norm_email,
             domain.lower(),
             _normalize_cert_date(item.get("start_date")),
             _normalize_cert_date(item.get("end_date")),
             _normalize_cert_date(item.get("issued_date")),
-        )
+        ) if not cert_id else (str(cert_id).strip().upper(), student_name.lower())
         if batch_item_key in seen_batch_emails:
             skipped_count += 1
             if job_id:
@@ -804,20 +856,33 @@ def send_bulk_certificate_emails(
 
         # Historical duplicate skip guard (when "Send Only to New" is chosen):
         # Only skip if this exact issuance was already sent
-        if is_resend and not send_again_all and (norm_email in skip_set or str(cert_id).lower() in skip_set):
-            skipped_count += 1
-            if job_id:
-                bulk_job_manager.update_progress(job_id, processed_inc=1)
-            results.append({
-                "certificate_id": cert_id,
-                "student_email": student_email,
-                "student_name": student_name,
-                "domain": domain,
-                "filename": filename,
-                "status": "skipped_historical_duplicate",
-                "error": None
-            })
-            continue
+        if is_resend and not send_again_all:
+            should_skip = False
+            if str(cert_id).lower() in skip_set:
+                should_skip = True
+            elif norm_email in skip_set:
+                # If skipping by email, ensure we only skip if THIS student identity was previously sent
+                if this_cert_rec:
+                    rec_name = str(this_cert_rec.get("student_name") or "").strip().lower()
+                    if not cand_name or not rec_name or rec_name == cand_name:
+                        should_skip = True
+                elif not cand_name:
+                    should_skip = True
+
+            if should_skip:
+                skipped_count += 1
+                if job_id:
+                    bulk_job_manager.update_progress(job_id, processed_inc=1)
+                results.append({
+                    "certificate_id": cert_id,
+                    "student_email": student_email,
+                    "student_name": student_name,
+                    "domain": domain,
+                    "filename": filename,
+                    "status": "skipped_historical_duplicate",
+                    "error": None
+                })
+                continue
 
         seen_batch_emails.add(batch_item_key)
 

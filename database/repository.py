@@ -2156,10 +2156,15 @@ def find_existing_certificates_batch(candidate_rows, supabase_client=None):
         key_4 = (email_clean, domain_clean, start_clean, end_clean)
         if key_4 not in lookup:
             lookup[key_4] = cert
+        elif lookup[key_4] is not None and str(lookup[key_4].get("student_name") or "").strip().lower() != name_clean:
+            lookup[key_4] = None
+
         if start_norm and end_norm:
             key_4_norm = (email_clean, domain_clean, start_norm, end_norm)
             if key_4_norm not in lookup:
                 lookup[key_4_norm] = cert
+            elif lookup[key_4_norm] is not None and str(lookup[key_4_norm].get("student_name") or "").strip().lower() != name_clean:
+                lookup[key_4_norm] = None
 
     return lookup
 
@@ -2392,10 +2397,20 @@ def find_existing_certificate_emails_batch(candidate_rows_or_emails, supabase_cl
             item_email = str(item.get("student_email") or item.get("email") or "").strip().lower()
             if not item_email:
                 continue
+            cand_name = str(item.get("student_name") or "").strip().lower()
             for r in existing_records:
                 row_email = str(r.get("student_email") or "").strip().lower()
                 if row_email == item_email and is_same_certificate_identity(item, r):
-                    lookup[item_email] = r
+                    if item_email not in lookup:
+                        lookup[item_email] = r
+                    if cand_name:
+                        lookup[f"{item_email}#{cand_name}"] = r
+                    item_cid = str(item.get("certificate_id") or "").strip()
+                    if item_cid:
+                        lookup[item_cid] = r
+                    r_cid = str(r.get("certificate_id") or "").strip()
+                    if r_cid:
+                        lookup[r_cid] = r
                     break
     else:
         for r in existing_records:
