@@ -48,7 +48,7 @@ The application overlays dynamic recipient details onto master PDF templates usi
 - **Email & IMAP**: Python `smtplib` (SSL/TLS), `email.message`, `imaplib` (Sent folder sync)
 - **Frontend**: Semantic HTML5, Vanilla CSS (CSS Grid, Flexbox, Fluid Clamp Typography), Vanilla JavaScript (Fetch API, asynchronous polling)
 - **Deployment**: Vercel Serverless Functions (`@vercel/python`)
-- **Testing**: Pytest 9.x
+- **Testing**: Pytest 9.x, Unittest
 
 ---
 
@@ -93,6 +93,7 @@ The application overlays dynamic recipient details onto master PDF templates usi
 | `/campus-ambassador/single` | `GET` | Single CA Offer Letter generator |
 | `/campus-ambassador/bulk` | `GET` | Bulk CA Offer Letter spreadsheet processor |
 | `/certificate` | `GET` | Internship Certificate generator & bulk processor |
+| `/certificate/history` | `GET` | Certificate-specific issuance history dashboard |
 | `/ca-certificate` | `GET` | Single CA Certificate generator |
 | `/ca-certificate/bulk` | `GET` | Bulk CA Certificate asynchronous processor |
 | `/history` | `GET` | Unified history, audit logs, and export dashboard |
@@ -108,44 +109,56 @@ The application overlays dynamic recipient details onto master PDF templates usi
 
 ```text
 persevex-offer-letter-generator/
-├── app.py                     # Main Flask application and route controllers
-├── certificate_service.py     # PDF drawing, QR generation, and email dispatch
-├── environment_config.py      # Environment resolution (dev vs. prod vs. serverless)
-├── requirements.txt           # Production Python dependencies
-├── vercel.json                # Vercel serverless deployment specification
-├── pytest.ini                 # Pytest configuration (targets tests/ directory)
+├── app.py                         # Main Flask application and route controllers
+├── certificate_service.py         # PDF drawing, QR generation, and email dispatch
+├── environment_config.py          # Environment resolution (dev vs. prod vs. serverless)
+├── requirements.txt               # Production Python dependencies
+├── vercel.json                    # Vercel serverless deployment specification
+├── pytest.ini                     # Pytest configuration (targets tests/ directory)
+├── schema_certificate.sql         # Certificate table schema definition
 ├── api/
-│   └── index.py               # Vercel serverless entry point
+│   └── index.py                   # Vercel serverless entry point
 ├── database/
-│   ├── config.py              # Database configuration and connection credentials
-│   ├── models.py              # Data structures and schemas
-│   └── repository.py          # Unified data access layer (Supabase + SQLite fallback)
+│   ├── config.py                  # Database configuration and connection credentials
+│   ├── models.py                  # Data structures and schemas
+│   └── repository.py              # Unified data access layer (Supabase + SQLite fallback)
 ├── services/
-│   ├── bulk_job_manager.py    # In-memory bulk job coordinator and cancellation handler
+│   ├── bulk_job_manager.py        # In-memory bulk job coordinator and cancellation handler
 │   ├── bulk_offer_letter_service.py # Bulk processing for internship offer letters
-│   ├── bulk_certificate_service.py  # Bulk processing for internship certificates
-│   ├── ca_bulk_service.py     # Bulk processing for CA offer letters
-│   └── ca_certificate_service.py    # Bulk processing for CA certificates
-├── pdf_templates/             # Master PDF templates
+│   ├── bulk_certificate_service.py # Bulk processing for internship certificates
+│   ├── ca_bulk_service.py         # Bulk processing for CA offer letters
+│   └── ca_certificate_service.py  # Bulk processing for CA certificates
+├── storage/                       # Storage abstraction layer
+│   ├── base.py                    # Base storage interface
+│   ├── local_storage.py           # Local filesystem storage implementation
+│   └── s3_storage.py              # AWS S3 storage implementation with local fallback
+├── pdf_templates/                 # Master PDF templates and backgrounds
 │   ├── with_hours.pdf
 │   ├── without_hours.pdf
+│   ├── campus_ambassador_template.pdf
+│   ├── campus_ambassador_certificate.pdf
 │   ├── certificate_template.pdf
-│   └── campus_ambassador_certificate.pdf
-├── templates/                 # Jinja2 HTML templates
-│   ├── index.html             # Offer letter page
-│   ├── campus_ambassador.html # Single CA letter page
+│   └── certificate_clean_bg.png
+├── templates/                     # Jinja2 HTML templates
+│   ├── index.html                 # Offer letter page
+│   ├── campus_ambassador_menu.html # CA workflow menu page
+│   ├── campus_ambassador.html     # Single CA letter page
 │   ├── campus_ambassador_bulk.html # Bulk CA letter page
-│   ├── certificate.html       # Internship certificate page
-│   ├── ca_certificate.html    # Single CA certificate page
-│   ├── ca_certificate_bulk.html # Bulk CA certificate page
-│   ├── history.html           # Unified history page
-│   └── verify.html            # Public certificate verification page
-├── static/                    # CSS, images, and fonts
-│   ├── style.css              # Main responsive styling
-│   ├── persevex-icon.png      # Brand assets
-│   └── fonts/                 # Embedded TTF fonts
-├── migrations/                # SQL schema migrations for Supabase (PostgreSQL)
-└── tests/                     # Automated regression test suite
+│   ├── certificate.html           # Internship certificate page
+│   ├── certificate_history.html   # Certificate-specific history page
+│   ├── ca_certificate.html        # Single CA certificate page
+│   ├── ca_certificate_bulk.html   # Bulk CA certificate page
+│   ├── history.html               # Unified history page
+│   ├── login.html                 # Admin login page
+│   └── verify.html                # Public certificate verification page
+├── static/                        # CSS, images, and fonts
+│   ├── style.css                  # Main responsive styling
+│   ├── persevex-icon.png          # Brand assets
+│   ├── untitled-design.png        # Verification portal brand logo
+│   ├── certificate_clean_bg.png   # Certificate background template
+│   └── fonts/                     # Embedded TTF fonts (NotoSans, OpenSans)
+├── migrations/                    # SQL schema migrations for Supabase (PostgreSQL)
+└── tests/                         # Automated regression test suite
     ├── test_workflow_regressions.py
     └── test_history_synchronization.py
 ```
@@ -155,7 +168,7 @@ persevex-offer-letter-generator/
 ## Setup & Local Development
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.12+ (Python 3.8+ supported)
 - Git
 
 ### 1. Clone the repository
@@ -166,9 +179,11 @@ cd persevex-offer-letter-generator
 
 ### 2. Set up virtual environment
 ```powershell
-python -m venv venv
-.\venv\Scripts\activate
+python -m venv .venv
+.\.venv\Scripts\activate
 ```
+
+*(On macOS/Linux, activate with `source .venv/bin/activate`)*
 
 ### 3. Install dependencies
 ```powershell
@@ -185,10 +200,12 @@ PERSEVEX_LOGIN_USERNAME=your-admin-username
 PERSEVEX_LOGIN_PASSWORD=your-admin-password
 
 # Email / SMTP Configuration
-SENDER_EMAIL=your-email@persevex.com
+SENDER_EMAIL=your-email@example.com
 SENDER_PASSWORD=your-email-password
 
-# Database (Supabase) - Optional for local dev (falls back to local SQLite)
+# Database (Supabase)
+# Required at application startup. For local development with SQLite fallback,
+# you can use placeholder credentials or your actual development Supabase project.
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=your-supabase-service-role-or-anon-key
 ```
@@ -211,20 +228,27 @@ Open your browser at `http://127.0.0.1:5000`.
 | `PERSEVEX_LOGIN_PASSWORD` | For Login | Admin password for session authentication. |
 | `SENDER_EMAIL` | For Email | SMTP username / sender address. |
 | `SENDER_PASSWORD` | For Email | SMTP password or app password. |
-| `SUPABASE_URL` | Optional | Supabase project API URL. If omitted, local SQLite is used. |
-| `SUPABASE_KEY` | Optional | Supabase service or anon API key. |
+| `SUPABASE_URL` | Yes | Supabase project API URL (validated at application startup). |
+| `SUPABASE_KEY` | Yes | Supabase service or anon API key. |
 | `PERSEVEX_SQLITE_DB_PATH` | Optional | Custom path for SQLite database file (defaults to `certificates_local.db`). |
+| `STORAGE_TYPE` | Optional | File storage type: `local` (default) or `s3`. |
 
 ---
 
 ## Running Tests
 
-The test suite covers workflow regressions, delivery safety, cancellation, duplicate isolation, and history synchronization.
+The test suite covers workflow regressions, delivery safety, cancellation, duplicate isolation, and history synchronization (158 automated tests).
 
 Run all tests using the project virtual environment:
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest -v
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Or with an activated virtual environment:
+
+```powershell
+python -m pytest -v
 ```
 
 `pytest.ini` automatically directs discovery to the `tests/` directory.
@@ -251,3 +275,19 @@ The application is configured for deployment as a Vercel Serverless Function via
 - **Filesystem**: Serverless runtimes have read-only filesystems (with temporary `/tmp` storage). All file writing operations gracefully fallback to `/tmp` or memory (`io.BytesIO`).
 - **Database**: Production deployment requires configuring `SUPABASE_URL` and `SUPABASE_KEY` in Vercel environment variables to maintain persistence across serverless invocations.
 - **Environment**: Set `PERSEVEX_ENV=production` in the Vercel dashboard.
+
+---
+
+## Troubleshooting
+
+### Missing Supabase Credentials at Startup
+- **Symptom**: `ValueError: SUPABASE_URL and SUPABASE_KEY must be configured.`
+- **Resolution**: Ensure `.env.development` or `.env` contains `SUPABASE_URL` and `SUPABASE_KEY`. If testing locally without a live Supabase project, provide placeholder URLs (e.g. `https://test-project.supabase.co` and a dummy key); the repository will automatically route database operations to the local SQLite fallback.
+
+### Read-Only Filesystem Errors
+- **Symptom**: `sqlite3.OperationalError: attempt to write a readonly database` when deployed to serverless hosts.
+- **Resolution**: On Vercel, the local project directory is read-only. Ensure `SUPABASE_URL` and `SUPABASE_KEY` are configured so all persistent records are written to Supabase rather than disk.
+
+### Email Delivery Timeouts
+- **Symptom**: `SMTP_SSL` timeouts during bulk email operations.
+- **Resolution**: Verify that the outbound SMTP port (465) is open in your local network firewall and that `SENDER_EMAIL` and `SENDER_PASSWORD` are valid. The application tracks failed dispatches with idempotency safeguards, allowing failed batches to be retried safely without duplicating successfully sent emails.

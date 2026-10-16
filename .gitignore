@@ -1,50 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
 .venv/
 venv/
-__pycache__/
-*.pyc
-.env
-.env.*
-generated/*
-!generated/.gitkeep
-venv/
-.venv/
-__pycache__/
-*.pyc
-.env
+env/
+ENV/
+
+# Testing and caches
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Environment variables / secrets
 .env
 .env.*
 
-# Python
-__pycache__/
-*.py[cod]
-
-# Virtual environments
-venv/
-env/
-.venv/
-
 # Flask
 instance/
 
-# Generated files
+# Databases and logs
 *.log
 *.db
 
-# IDE settings
+# Storage and generated output
+generated/*
+!generated/.gitkeep
+storage/generated/*
+!storage/generated/.gitkeep
+generated_certificates/
+ca_pdf_visual_tests/
+scratch/
+
+# IDE and OS files
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
-
-generated_certificates/
-scratch/
-ca_pdf_visual_tests/
-.env
-.env.*
 
 # Local Antigravity / GSD development tooling
 /.agent/
