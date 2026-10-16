@@ -46,13 +46,31 @@
          ============================================================ -->
     <header class="verify-portal-header" role="banner">
         <div class="verify-brand-container">
-            <div class="verify-logo-wrapper">
-                <img
-                    src="{{ url_for('static', filename='untitled-design.png') }}"
-                    alt="Persevex Education Consultancy LLP Logo"
-                    class="verify-portal-logo"
-                    loading="eager"
-                >
+            <div class="verify-header-logos-row">
+                <div class="verify-partner-logo-box verify-logo-left">
+                    <img
+                        src="{{ url_for('static', filename='startup-india-logo.png') }}"
+                        alt="Startup India Logo"
+                        class="verify-partner-logo startup-india-logo"
+                        loading="eager"
+                    >
+                </div>
+                <div class="verify-logo-wrapper">
+                    <img
+                        src="{{ url_for('static', filename='untitled-design.png') }}"
+                        alt="Persevex Education Consultancy LLP Logo"
+                        class="verify-portal-logo"
+                        loading="eager"
+                    >
+                </div>
+                <div class="verify-partner-logo-box verify-logo-right">
+                    <img
+                        src="{{ url_for('static', filename='msme-logo.png') }}"
+                        alt="Ministry of MSME Logo"
+                        class="verify-partner-logo msme-logo"
+                        loading="eager"
+                    >
+                </div>
             </div>
             <div class="verify-portal-title-block">
                 <span class="verify-portal-sub">PERSEVEX CERTIFICATE PORTAL</span>

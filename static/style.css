@@ -3903,7 +3903,49 @@ button:disabled,
     width: 100%;
 }
 
+.verify-header-logos-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 24px;
+    box-sizing: border-box;
+}
+
+.verify-partner-logo-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.verify-partner-logo-box.verify-logo-left {
+    justify-content: flex-start;
+}
+
+.verify-partner-logo-box.verify-logo-right {
+    justify-content: flex-end;
+}
+
+.verify-partner-logo {
+    display: block;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+.startup-india-logo {
+    max-height: 40px;
+    max-width: 160px;
+}
+
+.msme-logo {
+    max-height: 46px;
+    max-width: 135px;
+}
+
 .verify-logo-wrapper {
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -5348,6 +5390,24 @@ button:disabled,
 
     .verify-app-container {
         width: 100%;
+    }
+
+    .verify-portal-header {
+        padding: 20px 16px !important;
+    }
+
+    .verify-header-logos-row {
+        gap: 8px;
+    }
+
+    .startup-india-logo {
+        max-height: 22px;
+        max-width: 65px;
+    }
+
+    .msme-logo {
+        max-height: 24px;
+        max-width: 55px;
     }
 
     .verify-card,
