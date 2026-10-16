@@ -839,38 +839,40 @@ let pendingBulkDuplicateMap = {};
 function isItemBulkDuplicate(item) {
     if (!item) return false;
     const itemCid = String(item.certificate_id || '').trim().toUpperCase();
+    const email = String(item.student_email || '').trim().toLowerCase();
+    const name = String(item.student_name || '').trim().toLowerCase();
+
+    // 1. Certificate-ID exact match (highest priority).
     if (itemCid && pendingBulkDuplicateIds && pendingBulkDuplicateIds.length > 0) {
         const idSet = new Set(pendingBulkDuplicateIds.map(id => String(id).trim().toUpperCase()));
         if (idSet.has(itemCid)) return true;
     }
-    const email = String(item.student_email || '').trim().toLowerCase();
-    const name = String(item.student_name || '').trim().toLowerCase();
-    if (!email) return false;
-
-    if (pendingBulkDuplicateMap && pendingBulkDuplicateMap[`${email}#${name}`]) {
-        return true;
-    }
+    // Certificate-ID in the map itself.
     if (itemCid && pendingBulkDuplicateMap && pendingBulkDuplicateMap[itemCid]) {
         return true;
     }
 
-    const dupEmailSet = new Set((pendingBulkDuplicates || []).map(e => String(e).trim().toLowerCase()));
-    if (dupEmailSet.has(email)) {
-        if (!pendingBulkDuplicateMap || Object.keys(pendingBulkDuplicateMap).length === 0) {
-            return true;
-        }
-        const mapped = pendingBulkDuplicateMap[email];
-        if (mapped && typeof mapped === 'object') {
-            const mappedName = String(mapped.student_name || '').trim().toLowerCase();
-            if (!mappedName || !name || mappedName === name) {
-                return true;
-            }
-            return false;
-        }
+    if (!email) return false;
+
+    // 2. Composite email#name key — the primary discriminator in the full-records path.
+    //    Distinguishes different students sharing the same email address.
+    if (pendingBulkDuplicateMap && pendingBulkDuplicateMap[`${email}#${name}`]) {
         return true;
     }
+
+    // 3. Bare-email fallback — only used when the backend returned email-only (non-full-records) results,
+    //    i.e. when pendingBulkDuplicateMap has no composite keys.  In the full-records path the map
+    //    contains only composite + ID keys, so this block is intentionally skipped.
+    const hasCompositeKeys = pendingBulkDuplicateMap &&
+        Object.keys(pendingBulkDuplicateMap).some(k => k.includes('#'));
+    if (!hasCompositeKeys) {
+        const dupEmailSet = new Set((pendingBulkDuplicates || []).map(e => String(e).trim().toLowerCase()));
+        if (dupEmailSet.has(email)) return true;
+    }
+
     return false;
 }
+
 
 // Mode Switcher Handler
 function switchCertificateMode(mode) {
@@ -2056,52 +2058,8 @@ async function initiateBulkEmailDispatch() {
         sendBtn.style.opacity = '0.6';
     }
 
-    try {
-        const checkRes = await fetch('/api/certificate/bulk-check-duplicates', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emails: checkEmails, records: currentGeneratedBulkItems })
-        });
-        const checkData = await checkRes.json();
-
-        const duplicatesFound = (Array.isArray(checkData.duplicate_emails) && checkData.duplicate_emails.length > 0)
-            ? checkData.duplicate_emails
-            : (Array.isArray(checkData.duplicates) && checkData.duplicates.length > 0 ? checkData.duplicates : null);
-
-        if (checkData.success && duplicatesFound && duplicatesFound.length > 0) {
-            pendingBulkDuplicates = duplicatesFound;
-            pendingBulkAllItems = currentGeneratedBulkItems;
-            pendingBulkDuplicateIds = Array.isArray(checkData.duplicate_certificate_ids) ? checkData.duplicate_certificate_ids : [];
-            pendingBulkDuplicateMap = checkData.duplicate_map || {};
-
-            const duplicateItems = currentGeneratedBulkItems.filter(item => isItemBulkDuplicate(item));
-            const newCount = currentGeneratedBulkItems.length - duplicateItems.length;
-
-            const countEl = document.getElementById('certBulkDuplicateCountText');
-            if (countEl) countEl.textContent = duplicateItems.length;
-            const newCountEl = document.getElementById('certBulkNewCount');
-            if (newCountEl) newCountEl.textContent = newCount;
-            const totalCountEl = document.getElementById('certBulkTotalCount');
-            if (totalCountEl) totalCountEl.textContent = currentGeneratedBulkItems.length;
-
-            const listEl = document.getElementById('certBulkDuplicateList');
-            if (listEl) {
-                listEl.innerHTML = duplicateItems.map(item => `<div>• <strong>${escapeHtml(item.student_name || item.student_email)}</strong> (${escapeHtml(item.student_email)})</div>`).join('');
-            }
-
-            openCertBulkDuplicateModal();
-            return;
-        }
-    } catch (err) {
-        console.warn('Duplicate check error, proceeding with normal dispatch:', err);
-    } finally {
-        if (sendBtn) {
-            sendBtn.disabled = false;
-            sendBtn.style.opacity = '1';
-        }
-    }
-
-    // No duplicates found -> send directly
+    // Every time certificates are generated, they represent new issuances and are dispatched
+    // directly without intercepting with the prior-issued popup modal.
     executeBulkEmailDispatch();
 }
 

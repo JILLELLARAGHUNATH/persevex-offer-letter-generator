@@ -3412,13 +3412,13 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
     # Case 3: same exact issuance (find_active_certificate match) → reuse
     # ------------------------------------------------------------------
 
-    def test_same_exact_issuance_reuses_existing_id(self):
+    def test_same_exact_issuance_creates_fresh_id(self):
         """
-        When find_active_certificate returns a non-revoked match for the
-        exact (email, domain, start_date, end_date) tuple, the endpoint
-        must return that existing certificate_id (idempotent behaviour).
+        Every time a certificate is generated, the endpoint must always create a new record
+        and a new unique certificate ID, even if matching details exist in history.
         """
         existing_id = "PXL-CERT-2026-EXISTING"
+        fresh_id = "PXL-CERT-2026-NEW-FRESH"
 
         active_cert = {
             "certificate_id": existing_id,
@@ -3437,15 +3437,16 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
         payload = self._generate_payload()  # defaults match active_cert
 
         with patch.object(repository, "find_active_certificate", return_value=active_cert), \
-             patch.object(certificate_service, "generate_certificate_id") as mock_gen:
+             patch.object(certificate_service, "generate_certificate_id", return_value=fresh_id) as mock_gen, \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
             response = client.post("/api/certificate/generate", json=payload)
 
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertTrue(data.get("success"))
-        self.assertEqual(data["certificate_id"], existing_id)
-        # generate_certificate_id must NOT have been called — we returned early
-        mock_gen.assert_not_called()
+        self.assertEqual(data["certificate_id"], fresh_id)
+        self.assertNotEqual(data["certificate_id"], existing_id)
+        mock_gen.assert_called_once()
 
     # ------------------------------------------------------------------
     # Case 4: intentional resend preserves original ID and details
@@ -3819,8 +3820,8 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
     # Case 12: Bulk exact same details reuses existing ID
     # ------------------------------------------------------------------
 
-    def test_bulk_exact_same_details_reuses_existing_id(self):
-        """Bulk certificate generation reuses existing ID when all 6 identity fields match."""
+    def test_bulk_exact_same_details_creates_fresh_id(self):
+        """Bulk certificate generation creates a new unique ID for every valid row, even if exact details exist in history."""
         existing_cert = {
             "certificate_id": "PXL-CERT-BULK-EXIST",
             "student_name": "Alice Example",
@@ -3843,14 +3844,17 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
             "issued_date": "01-04-2026",
             "row_index": 1,
         }]
+        fresh_id = "PXL-CERT-BULK-FRESH-123"
         with tempfile.TemporaryDirectory() as td:
             with patch.object(bulk_certificate_service, "find_existing_certificates_batch", return_value=lookup), \
+                 patch.object(certificate_service, "generate_bulk_certificate_ids", return_value=[fresh_id]), \
                  patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
                 result = bulk_certificate_service.generate_bulk_certificates(valid_rows=items, output_dir=td)
 
-        self.assertEqual(result["already_exists_count"], 1)
-        self.assertEqual(result["newly_generated_count"], 0)
-        self.assertEqual(result["results"][0]["certificate_id"], "PXL-CERT-BULK-EXIST")
+        self.assertEqual(result["already_exists_count"], 0)
+        self.assertEqual(result["newly_generated_count"], 1)
+        self.assertEqual(result["results"][0]["certificate_id"], fresh_id)
+        self.assertNotEqual(result["results"][0]["certificate_id"], "PXL-CERT-BULK-EXIST")
 
     # ------------------------------------------------------------------
     # Case 13: Bulk same email with different fields gets fresh ID
@@ -3994,7 +3998,7 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
 
             dup_map = repository.find_existing_certificate_emails_batch(candidate_records)
 
-        self.assertIn("alice@example.invalid", dup_map)
+        self.assertIn("alice@example.invalid#alice example", dup_map)
 
         # Step 2: Send batch with skip_duplicate_emails containing the duplicate certificate ID
         items = [
@@ -4083,6 +4087,215 @@ class SingleCertificateIdReuseTests(unittest.TestCase):
         self.assertEqual(captured_renders["PXL-CERT-NEW-2026"]["domain"], "Machine Learning")
         self.assertEqual(captured_renders["PXL-CERT-NEW-2026"]["start_date"], "01-01-2026")
 
+    # ------------------------------------------------------------------
+    # Case 17: 8-row upload duplicate-popup regression
+    # ------------------------------------------------------------------
+
+    def test_eight_row_upload_duplicate_popup_correct_count(self):
+        """
+        Regression for the reported bug: re-uploading an Excel file with 8 rows (1 in-file
+        duplicate, 7 valid unique issuances) after sending them produced an incorrect popup
+        saying "5 recipients have previously received a certificate", listing Sample1 twice,
+        and offering "Send Only to New (2)" instead of "Send Only to New (0)".
+
+        Root causes fixed:
+        1. repository.find_existing_certificate_emails_batch emitted a bare email key that
+           collapsed distinct students sharing an email, causing Sample2 to be missed and
+           mis-classified as new.
+        2. app.py computed duplicate_count from bare email keys (0 after fix), so the count
+           must now come from composite email#name keys.
+        3. certificate.html used a bare-email fallback that mis-classified Sample2.
+
+        After the fix:
+        - duplicate_count == 7 (all 7 valid sent issuances are flagged)
+        - duplicate_emails has 7 entries (one per candidate issuance, email repeated for shared-email students)
+        - composite keys "email#name" are present for Sample1 and Sample2 separately
+        - no bare email key is emitted for the shared-email students
+        - "Send Only to New" count == 0 (all 7 valid issuances were already sent)
+        """
+        client = self._make_client()
+
+        # Shared dates/domain for students sharing the same email address.
+        SHARED_DATES = {"start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"}
+        DOMAIN = "Data Science"
+
+        # Simulate 7 previously-sent certificate records (one for each unique issuance).
+        # Sample1 and Sample2 share the email "shared@example.invalid".
+        sent_records = [
+            {"certificate_id": "PEX-01", "student_name": "Alice",   "student_email": "alice@example.invalid",  "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            {"certificate_id": "PEX-02", "student_name": "Bob",     "student_email": "bob@example.invalid",    "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            {"certificate_id": "PEX-03", "student_name": "Charlie", "student_email": "charlie@example.invalid","internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            {"certificate_id": "PEX-04", "student_name": "Diana",   "student_email": "diana@example.invalid",  "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            {"certificate_id": "PEX-05", "student_name": "Eve",     "student_email": "eve@example.invalid",    "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            # Sample1 and Sample2 share "shared@example.invalid":
+            {"certificate_id": "PEX-06", "student_name": "Sample1", "student_email": "shared@example.invalid", "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+            {"certificate_id": "PEX-07", "student_name": "Sample2", "student_email": "shared@example.invalid", "internship_domain": DOMAIN, **SHARED_DATES, "email_status": "sent", "send_count": 1},
+        ]
+
+        # The 8-row candidate batch mirrors the re-uploaded file:
+        #   rows 1-7 are the 7 valid unique issuances (identical to what was sent)
+        #   row 8 is a duplicate of row 1 (in-file duplicate, already excluded by validate step
+        #          — NOT passed to the check-duplicates endpoint)
+        # The check-duplicates endpoint only sees the 7 valid rows.
+        candidate_records = [
+            {"student_name": "Alice",   "student_email": "alice@example.invalid",   "domain": DOMAIN, **SHARED_DATES},
+            {"student_name": "Bob",     "student_email": "bob@example.invalid",     "domain": DOMAIN, **SHARED_DATES},
+            {"student_name": "Charlie", "student_email": "charlie@example.invalid", "domain": DOMAIN, **SHARED_DATES},
+            {"student_name": "Diana",   "student_email": "diana@example.invalid",   "domain": DOMAIN, **SHARED_DATES},
+            {"student_name": "Eve",     "student_email": "eve@example.invalid",     "domain": DOMAIN, **SHARED_DATES},
+            # Both Sample1 and Sample2 must be independently flagged:
+            {"student_name": "Sample1", "student_email": "shared@example.invalid",  "domain": DOMAIN, **SHARED_DATES},
+            {"student_name": "Sample2", "student_email": "shared@example.invalid",  "domain": DOMAIN, **SHARED_DATES},
+        ]
+
+        # --- Unit-level: verify repository.find_existing_certificate_emails_batch ---
+        with patch("database.repository.get_supabase_client", return_value=None), \
+             patch("database.repository.sqlite3.connect") as mock_conn:
+            conn_inst = MagicMock()
+            cursor_inst = MagicMock()
+            cursor_inst.fetchall.return_value = sent_records
+            conn_inst.cursor.return_value = cursor_inst
+            mock_conn.return_value = conn_inst
+
+            dup_map = repository.find_existing_certificate_emails_batch(candidate_records)
+
+        # All 7 candidate issuances must be in the map.
+        self.assertIn("alice@example.invalid#alice", dup_map)
+        self.assertIn("bob@example.invalid#bob", dup_map)
+        self.assertIn("charlie@example.invalid#charlie", dup_map)
+        self.assertIn("diana@example.invalid#diana", dup_map)
+        self.assertIn("eve@example.invalid#eve", dup_map)
+        self.assertIn("shared@example.invalid#sample1", dup_map)
+        self.assertIn("shared@example.invalid#sample2", dup_map)
+
+        # Bare email key must NOT be present for the shared-email students
+        # (it would collapse Sample1 and Sample2 into the same entry).
+        self.assertNotIn("shared@example.invalid", dup_map)
+
+        # Sample1 and Sample2 must map to their own records, not the same one.
+        self.assertEqual(dup_map["shared@example.invalid#sample1"]["certificate_id"], "PEX-06")
+        self.assertEqual(dup_map["shared@example.invalid#sample2"]["certificate_id"], "PEX-07")
+
+        # --- Integration-level: verify the HTTP endpoint ---
+        with patch.object(repository, "find_existing_certificate_emails_batch", return_value=dup_map):
+            resp = client.post(
+                "/api/certificate/bulk-check-duplicates",
+                json={"records": candidate_records},
+            )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+
+        self.assertTrue(data["success"])
+
+        # duplicate_count must equal 7 — all 7 valid candidate issuances were previously sent.
+        self.assertEqual(data["duplicate_count"], 7,
+                         f"Expected 7 duplicates, got {data['duplicate_count']}. "
+                         f"duplicate_emails={data.get('duplicate_emails')}")
+
+        # duplicate_emails list must have 7 entries.
+        self.assertEqual(len(data["duplicate_emails"]), 7)
+
+        # Both Sample1 and Sample2's email must appear in duplicate_emails.
+        email_list = [e.lower() for e in data["duplicate_emails"]]
+        shared_count = email_list.count("shared@example.invalid")
+        self.assertEqual(shared_count, 2,
+                         f"Expected 'shared@example.invalid' twice in duplicate_emails, got {shared_count}. "
+                         f"Full list: {data['duplicate_emails']}")
+
+        # The composite duplicate_map must contain both Sample1 and Sample2 composite keys.
+        dup_map_resp = data.get("duplicate_map", {})
+        self.assertIn("shared@example.invalid#sample1", dup_map_resp)
+        self.assertIn("shared@example.invalid#sample2", dup_map_resp)
+        self.assertNotIn("shared@example.invalid", dup_map_resp,
+                         "Bare email key must not be present for shared-email students")
+
+        # duplicate_certificate_ids must contain all 7 sent certificate IDs.
+        dup_cids = data.get("duplicate_certificate_ids", [])
+        for cid in ["PEX-01", "PEX-02", "PEX-03", "PEX-04", "PEX-05", "PEX-06", "PEX-07"]:
+            self.assertIn(cid, dup_cids,
+                          f"Expected certificate ID {cid} in duplicate_certificate_ids, got {dup_cids}")
+
+    # ------------------------------------------------------------------
+    # Case 18: Approved Certificate Generation Behavior Tests
+    # ------------------------------------------------------------------
+
+    def test_single_generate_same_fields_twice_creates_different_ids(self):
+        """Generating the same six certificate fields twice creates two records with different IDs."""
+        client = self._make_client()
+        payload = self._generate_payload()
+        first_id = "PXL-CERT-FIRST-ID"
+        second_id = "PXL-CERT-SECOND-ID"
+
+        with patch.object(certificate_service, "generate_certificate_id", side_effect=[first_id, second_id]), \
+             patch.object(certificate_service, "generate_certificate_pdf", return_value="Alice_Example_Certificate.pdf"):
+            r1 = client.post("/api/certificate/generate", json=payload)
+            r2 = client.post("/api/certificate/generate", json=payload)
+
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(r2.status_code, 200)
+        data1 = r1.get_json()
+        data2 = r2.get_json()
+        self.assertEqual(data1["certificate_id"], first_id)
+        self.assertEqual(data2["certificate_id"], second_id)
+        self.assertNotEqual(data1["certificate_id"], data2["certificate_id"])
+
+    def test_bulk_eight_row_upload_and_reupload_generates_fresh_issuances(self):
+        """
+        An upload with 8 rows (1 duplicate row, 7 valid rows) creates 7 new issuances.
+        Uploading that same file again creates another 7 new issuances with new IDs.
+        """
+        # 8 rows where row 8 is an in-file duplicate of row 1
+        raw_rows = [
+            {"student_name": "Alice", "student_email": "alice@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Bob", "student_email": "bob@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Charlie", "student_email": "charlie@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Diana", "student_email": "diana@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Eve", "student_email": "eve@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Sample1", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            {"student_name": "Sample2", "student_email": "shared@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+            # In-file duplicate of row 1:
+            {"student_name": "Alice", "student_email": "alice@example.invalid", "domain": "Data Science", "start_date": "15-10-2026", "end_date": "15-11-2026", "issued_date": "15-10-2026"},
+        ]
+
+        # Step 1: Validate rows
+        validation = bulk_certificate_service.validate_bulk_records(raw_rows)
+        self.assertEqual(validation["total_records"], 8)
+        self.assertEqual(validation["valid_records_count"], 7)
+        self.assertEqual(validation["duplicate_records_count"], 1)
+
+        valid_rows = [r for r in validation["rows"] if r["is_valid"]]
+        self.assertEqual(len(valid_rows), 7)
+
+        batch1_ids = [f"PEX-BATCH1-{i}" for i in range(1, 8)]
+        batch2_ids = [f"PEX-BATCH2-{i}" for i in range(1, 8)]
+
+        # Step 2: First generation
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(certificate_service, "generate_bulk_certificate_ids", return_value=list(batch1_ids)), \
+                 patch.object(certificate_service, "generate_certificate_pdf", return_value="cert.pdf"), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+                result1 = bulk_certificate_service.generate_bulk_certificates(valid_rows, output_dir=td)
+
+        self.assertEqual(result1["newly_generated_count"], 7)
+        self.assertEqual(result1["already_exists_count"], 0)
+        cids1 = [r["certificate_id"] for r in result1["results"]]
+        self.assertEqual(cids1, batch1_ids)
+
+        # Step 3: Second generation (same valid rows re-uploaded)
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(certificate_service, "generate_bulk_certificate_ids", return_value=list(batch2_ids)), \
+                 patch.object(certificate_service, "generate_certificate_pdf", return_value="cert.pdf"), \
+                 patch.object(bulk_certificate_service, "bulk_save_certificate_records", return_value=True):
+                result2 = bulk_certificate_service.generate_bulk_certificates(valid_rows, output_dir=td)
+
+        self.assertEqual(result2["newly_generated_count"], 7)
+        self.assertEqual(result2["already_exists_count"], 0)
+        cids2 = [r["certificate_id"] for r in result2["results"]]
+        self.assertEqual(cids2, batch2_ids)
+
+        # Confirm all IDs in batch 2 are different from batch 1
+        self.assertTrue(set(cids1).isdisjoint(set(cids2)))
 
 class CertificateQrVerificationUrlTests(unittest.TestCase):
     """

@@ -5889,54 +5889,8 @@ def certificate_generate():
         formatted_end = certificate_service.format_display_date(end_date)
         formatted_issued = certificate_service.format_display_date(issued_date)
 
-        # Idempotent lookup: Check for existing active certificate with exact complete candidate identity
-        existing_cert = repository.find_active_certificate(
-            email=student_email,
-            domain=domain,
-            start_date=formatted_start,
-            end_date=formatted_end,
-            student_name=student_name,
-            issued_date=formatted_issued,
-        )
-
-        if existing_cert and str(existing_cert.get("certificate_status") or "").lower() != "revoked":
-            cert_id = str(existing_cert.get("certificate_id") or "").strip()
-            student_name_safe = certificate_service.safe_filename(existing_cert.get("student_name") or student_name)
-            filename = str(existing_cert.get("pdf_filename") or f"{student_name_safe}_Certificate.pdf").strip()
-            preview_params = urllib.parse.urlencode({
-                "name": existing_cert.get("student_name") or student_name,
-                "email": student_email,
-                "domain": existing_cert.get("internship_domain") or domain,
-                "start": existing_cert.get("start_date") or formatted_start,
-                "end": existing_cert.get("end_date") or formatted_end,
-                "issued": existing_cert.get("issued_date") or formatted_issued,
-            })
-            preview_url = f"/verify/{cert_id}/preview?{preview_params}"
-            download_url = f"/verify/{cert_id}/download?{preview_params}"
-
-            return jsonify({
-                "success": True,
-                "filename": filename,
-                "url": preview_url,
-                "download_url": download_url,
-                "certificate_id": cert_id,
-                "data": {
-                    "student_name": existing_cert.get("student_name") or student_name,
-                    "student_email": student_email,
-                    "domain": existing_cert.get("internship_domain") or domain,
-                    "start_date": existing_cert.get("start_date") or formatted_start,
-                    "end_date": existing_cert.get("end_date") or formatted_end,
-                    "issued_date": existing_cert.get("issued_date") or formatted_issued,
-                    "certificate_id": cert_id,
-                }
-            })
-
-        # 2. No exact active certificate found: always generate a fresh certificate ID.
-        # The previous fallback that reused a sent certificate_id based solely on email has
-        # been removed. Reusing the old ID caused the draft preview to load the historical
-        # database record (wrong student/course details) instead of the current form values.
-        # Intentional resend is handled exclusively in /api/certificate/send-email where the
-        # user has explicitly confirmed the action.
+        # Every time a certificate is generated, always create a new record and a new unique certificate ID.
+        # Historical active-certificate lookup and ID reuse are intentionally removed.
         cert_id = certificate_service.generate_certificate_id(supabase)
 
         data["certificate_id"] = cert_id
@@ -6186,7 +6140,29 @@ def certificate_bulk_check_duplicates():
             })
 
         duplicate_map = repository.find_existing_certificate_emails_batch(records)
-        duplicate_emails = [k for k in duplicate_map.keys() if "@" in str(k) and "#" not in str(k)]
+
+        # Composite keys have the form  "email@domain#studentname".
+        # Bare email keys (no #) are only present in the email-only (non-full-records) fallback path.
+        # Count distinct candidate issuances that matched an existing sent record.
+        composite_keys = [k for k in duplicate_map.keys() if "#" in str(k) and "@" in str(k)]
+        bare_email_keys = [k for k in duplicate_map.keys() if "@" in str(k) and "#" not in str(k)]
+
+        # Build the list of duplicate emails for the frontend.  In the full-records path all
+        # matches are keyed by composite "email#name", so extract the email portion; deduplicate
+        # while preserving the per-student semantics (count = candidates matched, not unique emails).
+        if composite_keys:
+            # Full-records path: one composite key per matched candidate.
+            seen_composites = set()
+            duplicate_emails = []
+            for ck in composite_keys:
+                if ck not in seen_composites:
+                    seen_composites.add(ck)
+                    email_part = ck.split("#")[0]
+                    duplicate_emails.append(email_part)
+        else:
+            # Email-only fallback path: bare email keys.
+            duplicate_emails = list(bare_email_keys)
+
         duplicate_certificate_ids = []
         for k, rec in duplicate_map.items():
             if isinstance(rec, dict):
@@ -6194,9 +6170,12 @@ def certificate_bulk_check_duplicates():
                 if cid and cid not in duplicate_certificate_ids:
                     duplicate_certificate_ids.append(cid)
 
+        # duplicate_count = number of distinct candidate issuances recognised as previously sent.
+        duplicate_count = len(composite_keys) if composite_keys else len(bare_email_keys)
+
         return jsonify({
             "success": True,
-            "duplicate_count": len(duplicate_emails),
+            "duplicate_count": duplicate_count,
             "duplicates": duplicate_emails,
             "duplicate_emails": duplicate_emails,
             "duplicate_certificate_ids": duplicate_certificate_ids,

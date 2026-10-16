@@ -2385,9 +2385,14 @@ def find_existing_certificate_emails_batch(candidate_rows_or_emails, supabase_cl
         except Exception as exc:
             print("LOCAL DB FIND EXISTING CERT BATCH ERROR:", repr(exc))
 
-    # 3. Build lookup map with normalized email keys (trimmed & lowercased)
+    # 3. Build lookup map with normalized keys.
     # If candidate items are full record dictionaries (with domain / dates),
     # only flag duplicates where the complete 6-tuple issuance identity matches an already-sent record.
+    # Keys emitted (full-records path):
+    #   - composite  f"{email}#{name}"   — one per matched candidate item
+    #   - certificate IDs                — item's own ID and the matched DB record's ID
+    # The bare `email` key is intentionally NOT emitted in the full-records path so that
+    # distinct students sharing an email address are never collapsed to a single lookup entry.
     has_full_records = any(isinstance(item, dict) and (item.get("domain") or item.get("internship_domain")) for item in candidate_rows_or_emails)
     lookup = {}
     if has_full_records:
@@ -2401,10 +2406,10 @@ def find_existing_certificate_emails_batch(candidate_rows_or_emails, supabase_cl
             for r in existing_records:
                 row_email = str(r.get("student_email") or "").strip().lower()
                 if row_email == item_email and is_same_certificate_identity(item, r):
-                    if item_email not in lookup:
-                        lookup[item_email] = r
+                    # Composite key: distinguishes different students sharing the same email.
                     if cand_name:
                         lookup[f"{item_email}#{cand_name}"] = r
+                    # Certificate ID keys allow direct lookup by ID from the frontend.
                     item_cid = str(item.get("certificate_id") or "").strip()
                     if item_cid:
                         lookup[item_cid] = r

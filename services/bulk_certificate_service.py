@@ -377,41 +377,9 @@ def generate_bulk_certificates(
             raise ValueError(f"Invalid Issue Date: {issue_err}")
         clean_batch_issue_date = parsed_issue
 
-    # 1. Batch lookup to detect existing certificates
-    try:
-        existing_lookup = find_existing_certificates_batch(valid_rows, supabase_client=supabase_client)
-    except Exception as exc:
-        print("EXISTING CERTIFICATES BATCH LOOKUP ERROR:", repr(exc))
-        existing_lookup = {}
-
-    # Count rows needing new certificate IDs and precompute in one batch query
-    new_rows_count = 0
-    for item in valid_rows:
-        row_s_name = str(item.get("student_name") or "").strip().lower()
-        student_email = str(item.get("student_email") or "").strip().lower()
-        domain = str(item.get("domain") or "").strip().lower()
-        start_date = str(item.get("start_date") or "").strip()
-        end_date = str(item.get("end_date") or "").strip()
-        start_norm = _normalize_cert_date(start_date)
-        end_norm = _normalize_cert_date(end_date)
-        if clean_batch_issue_date:
-            item_issued = clean_batch_issue_date
-        else:
-            parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
-            item_issued = parsed_row_date or datetime.now().strftime("%d-%m-%Y")
-        issued_norm = _normalize_cert_date(item_issued)
-
-        existing = existing_lookup.get((row_s_name, student_email, domain, start_norm, end_norm, issued_norm))
-        if not existing:
-            cand_4 = existing_lookup.get((student_email, domain, start_norm, end_norm)) or existing_lookup.get((student_email, domain, start_date, end_date))
-            if cand_4:
-                cand_name = str(cand_4.get("student_name") or "").strip().lower()
-                cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
-                if cand_name and row_s_name and cand_name == row_s_name and (not cand_issued or cand_issued == issued_norm):
-                    existing = cand_4
-        if not (existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked"):
-            new_rows_count += 1
-
+    # Every valid uploaded row creates a new record and a new unique certificate ID,
+    # even if matching details exist in history.
+    new_rows_count = len(valid_rows)
     precomputed_ids = []
     if new_rows_count > 0:
         precomputed_ids = certificate_service.generate_bulk_certificate_ids(new_rows_count, supabase_client=supabase_client)
@@ -440,112 +408,51 @@ def generate_bulk_certificates(
                 parsed_row_date, _ = parse_and_validate_date(item.get("issued_date"))
                 issued_date = parsed_row_date or datetime.now().strftime("%d-%m-%Y")
 
-            email_clean = student_email.lower()
-            domain_clean = domain.lower()
-            name_clean = student_name.lower()
-            start_norm = _normalize_cert_date(start_date)
-            end_norm = _normalize_cert_date(end_date)
-            issued_norm = _normalize_cert_date(issued_date)
+            # NEW CERTIFICATE GENERATION: Always mint fresh unique certificate ID
+            cert_id = precomputed_ids.pop(0) if precomputed_ids else certificate_service.generate_certificate_id(supabase_client)
 
-            # Check if this certificate already exists in DB by complete normalized 6-tuple identity
-            existing = existing_lookup.get((name_clean, email_clean, domain_clean, start_norm, end_norm, issued_norm))
-            if not existing:
-                cand_4 = existing_lookup.get((email_clean, domain_clean, start_norm, end_norm)) or existing_lookup.get((email_clean, domain_clean, start_date, end_date))
-                if cand_4:
-                    cand_name = str(cand_4.get("student_name") or "").strip().lower()
-                    cand_issued = _normalize_cert_date(cand_4.get("issued_date"))
-                    if cand_name and name_clean and cand_name == name_clean and (not cand_issued or cand_issued == issued_norm):
-                        existing = cand_4
+            # Prevent filename collision for identical student names across batches, requests, and disks
+            filename = _disambiguate_certificate_filename(student_name, cert_id, batch_used_filenames, output_dir=output_dir)
 
-            if existing and existing.get("certificate_id") and str(existing.get("certificate_status") or "").lower() != "revoked":
-                # RESUME CASE: Certificate already exists in DB!
-                cert_id = str(existing.get("certificate_id")).strip()
-                filename = str(existing.get("pdf_filename") or f"{cert_id}.pdf").strip()
-                batch_used_filenames.add(filename)
+            cert_data = {
+                "student_name": student_name,
+                "student_email": student_email,
+                "domain": domain,
+                "start_date": start_date,
+                "end_date": end_date,
+                "issued_date": issued_date,
+                "certificate_id": cert_id,
+            }
 
-                # Ensure physical PDF exists locally for instant preview / download / email
-                target_pdf = Path(output_dir) / filename
-                if not target_pdf.exists():
-                    try:
-                        filename = certificate_service.generate_certificate_pdf(
-                            {
-                                "student_name": existing.get("student_name") or student_name,
-                                "student_email": existing.get("student_email") or student_email,
-                                "domain": existing.get("internship_domain") or domain,
-                                "start_date": existing.get("start_date") or start_date,
-                                "end_date": existing.get("end_date") or end_date,
-                                "issued_date": existing.get("issued_date") or issued_date,
-                                "certificate_id": cert_id,
-                            },
-                            output_dir,
-                            base_url=resolved_base_url,
-                            custom_filename=filename,
-                        )
-                    except Exception as render_exc:
-                        print(f"WARNING: Re-rendering existing certificate {cert_id} PDF failed:", repr(render_exc))
+            filename = certificate_service.generate_certificate_pdf(
+                cert_data,
+                output_dir,
+                base_url=resolved_base_url,
+                custom_filename=filename,
+            )
 
-                already_exists_count += 1
-                results.append({
-                    "row_index": row_idx,
-                    "certificate_id": cert_id,
-                    "student_name": existing.get("student_name") or student_name,
-                    "student_email": student_email,
-                    "domain": existing.get("internship_domain") or domain,
-                    "start_date": existing.get("start_date") or start_date,
-                    "end_date": existing.get("end_date") or end_date,
-                    "issued_date": existing.get("issued_date") or issued_date,
-                    "filename": filename,
-                    "url": f"/generated/{filename}",
-                    "success": True,
-                    "status": "already_exists",
-                    "error": None
-                })
-            else:
-                # NEW CERTIFICATE GENERATION CASE
-                cert_id = precomputed_ids.pop(0) if precomputed_ids else certificate_service.generate_certificate_id(supabase_client)
+            record = {
+                "certificate_id": cert_id,
+                "student_name": student_name,
+                "student_email": student_email,
+                "internship_domain": domain,
+                "start_date": start_date,
+                "end_date": end_date,
+                "issued_date": issued_date,
+                "email_status": "pending",
+                "pdf_filename": filename,
+                "send_count": 0,
+                "certificate_status": "active",
+            }
+            records_to_save.append(record)
 
-                # Prevent filename collision for identical student names across batches, requests, and disks
-                filename = _disambiguate_certificate_filename(student_name, cert_id, batch_used_filenames, output_dir=output_dir)
-
-                cert_data = {
-                    "student_name": student_name,
-                    "student_email": student_email,
-                    "domain": domain,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "issued_date": issued_date,
-                    "certificate_id": cert_id,
-                }
-
-                filename = certificate_service.generate_certificate_pdf(
-                    cert_data,
-                    output_dir,
-                    base_url=resolved_base_url,
-                    custom_filename=filename,
-                )
-
-                record = {
-                    "certificate_id": cert_id,
-                    "student_name": student_name,
-                    "student_email": student_email,
-                    "internship_domain": domain,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "issued_date": issued_date,
-                    "email_status": "pending",
-                    "pdf_filename": filename,
-                    "send_count": 0,
-                    "certificate_status": "active",
-                }
-                records_to_save.append(record)
-
-                newly_generated_count += 1
-                results.append({
-                    "row_index": row_idx,
-                    "certificate_id": cert_id,
-                    "student_name": student_name,
-                    "student_email": student_email,
-                    "domain": domain,
+            newly_generated_count += 1
+            results.append({
+                "row_index": row_idx,
+                "certificate_id": cert_id,
+                "student_name": student_name,
+                "student_email": student_email,
+                "domain": domain,
                     "start_date": start_date,
                     "end_date": end_date,
                     "issued_date": issued_date,
