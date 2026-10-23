@@ -5408,6 +5408,15 @@ def ca_certificate_send_email():
             "history_saved": persistence["saved"],
             "history_status": persistence["status"],
         }), http_status
+
+    # Save to IMAP Sent folder
+    try:
+        with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+            imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+            imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+    except Exception as imap_err:
+        print("WARNING: Could not save CA certificate email to IMAP Sent folder:", repr(imap_err))
+
     try:
         persistence = repository.finish_ca_certificate_single_email(
             existing_id,
@@ -5654,6 +5663,14 @@ def ca_certificate_bulk_send_job(job_id):
                 if bjm_job_id:
                     bulk_job_manager.update_progress(bjm_job_id, failed_inc=1, current_item_name=participant_name)
                 continue
+
+            # Save to IMAP Sent folder
+            try:
+                with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+                    imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+                    imap.append(IMAP_SENT_FOLDER, "\\Seen", None, message.as_bytes())
+            except Exception as imap_err:
+                print("WARNING: Could not save bulk CA certificate email to IMAP Sent folder:", repr(imap_err))
 
             try:
                 persistence = repository.save_ca_certificate_record({

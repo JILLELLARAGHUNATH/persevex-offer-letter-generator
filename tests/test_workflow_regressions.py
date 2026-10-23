@@ -4721,5 +4721,213 @@ class CertificateQrVerificationUrlTests(unittest.TestCase):
         self.assertIn("Ambiguous issuance identity", failed_res["error"])
 
 
+class CACertificateSentFolderTests(unittest.TestCase):
+    def setUp(self):
+        self.client = application.app.test_client()
+        with self.client.session_transaction() as session:
+            session["authenticated"] = True
+        self.payload = {
+            "participant_name": "Sent Folder Candidate",
+            "participant_email": "candidate@example.invalid",
+            "program_date": "2026-09-26",
+            "document_id": "CA-CERT-" + "f" * 32,
+        }
+
+    def _mock_single_claim(self):
+        return {
+            "claimed": True,
+            "record_id": 999,
+            "document_id": self.payload["document_id"],
+            "email_status": "sending",
+            "send_count": 1,
+        }
+
+    def test_single_ca_certificate_appends_to_imap_sent_folder_on_smtp_success(self):
+        smtp = MagicMock()
+        imap = MagicMock()
+        imap_cls = MagicMock(return_value=imap)
+        imap.__enter__.return_value = imap
+        smtp.__enter__.return_value = smtp
+
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=self._mock_single_claim()), \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_and_local"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            response = self.client.post("/api/ca-certificate/send-email", json=self.payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertEqual(smtp.send_message.call_count, 1)
+        imap_cls.assert_called_once_with("imap.secureserver.net", 993)
+        imap.login.assert_called_once_with("support@persevex.com", "mock_pass")
+        imap.append.assert_called_once()
+        args = imap.append.call_args[0]
+        self.assertEqual(args[0], "Sent")
+        self.assertEqual(args[1], "\\Seen")
+        self.assertIn(b"Subject: Campus Ambassador Certificate", args[3])
+        imap.__enter__.assert_called_once()
+        imap.__exit__.assert_called_once()
+
+    def test_single_ca_certificate_no_imap_append_when_smtp_fails(self):
+        smtp = MagicMock()
+        smtp.send_message.side_effect = Exception("SMTP socket error")
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap_cls = MagicMock(return_value=imap)
+        imap.__enter__.return_value = imap
+
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=self._mock_single_claim()), \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_and_local"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            response = self.client.post("/api/ca-certificate/send-email", json=self.payload)
+
+        self.assertNotEqual(response.status_code, 200)
+        imap_cls.assert_not_called()
+        imap.append.assert_not_called()
+
+    def test_single_ca_certificate_imap_failure_does_not_fail_successful_smtp_send(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.append.side_effect = Exception("IMAP append quota exceeded")
+        imap_cls = MagicMock(return_value=imap)
+        imap.__enter__.return_value = imap
+
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=self._mock_single_claim()), \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_and_local"}), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            response = self.client.post("/api/ca-certificate/send-email", json=self.payload)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertTrue(data["email_delivered"])
+        imap.__exit__.assert_called_once()
+
+    def test_bulk_ca_certificate_appends_each_successful_send_and_imap_failure_does_not_stop_batch(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+
+        items = [
+            {"id": "item-1", "participant_name": "Alice", "participant_email": "alice@example.invalid", "program_date": "2026-09-26", "send_count": 0, "claim_token": "tok1"},
+        ]
+
+        imap = MagicMock()
+        imap.append.side_effect = Exception("IMAP socket error on item")
+        imap.__enter__.return_value = imap
+        imap_cls = MagicMock(return_value=imap)
+
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=items), \
+             patch.object(repository, "save_ca_certificate_record", return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job", return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            response = self.client.post("/api/ca-certificate/bulk/jobs/job-1/send", json={"batch_size": 1})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["sent"], 1)
+        self.assertEqual(data["failed"], 0)
+        self.assertEqual(smtp.send_message.call_count, 1)
+        imap.append.assert_called_once()
+        imap.__exit__.assert_called_once()
+
+
+    def test_bulk_ca_certificate_no_imap_append_when_smtp_fails(self):
+        smtp = MagicMock()
+        smtp.login.side_effect = Exception("Bulk SMTP connection failure")
+        smtp.__enter__.return_value = smtp
+
+        items = [
+            {"id": "item-fail", "participant_name": "Failed User", "participant_email": "fail@example.invalid", "program_date": "2026-09-26", "send_count": 0, "claim_token": "tok-fail"},
+        ]
+
+        imap = MagicMock()
+        imap_cls = MagicMock(return_value=imap)
+        imap.__enter__.return_value = imap
+
+        with patch.object(repository, "claim_ca_certificate_email_items", return_value=items), \
+             patch.object(repository, "save_ca_certificate_record", return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job", return_value={"status": "running"}), \
+             patch.object(repository, "get_ca_certificate_job_items", return_value=[]), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            response = self.client.post("/api/ca-certificate/bulk/jobs/job-1/send", json={"batch_size": 1})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["sent"], 0)
+        self.assertEqual(data["failed"], 1)
+        imap_cls.assert_not_called()
+        imap.append.assert_not_called()
+
+    def test_bulk_ca_certificate_two_items_proceed_when_first_item_imap_fails(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+
+        item1 = [{"id": "item-1", "participant_name": "Alice", "participant_email": "alice@example.invalid", "program_date": "2026-09-26", "send_count": 0, "claim_token": "tok1"}]
+        item2 = [{"id": "item-2", "participant_name": "Bob", "participant_email": "bob@example.invalid", "program_date": "2026-09-26", "send_count": 0, "claim_token": "tok2"}]
+
+        imap1 = MagicMock()
+        imap1.append.side_effect = Exception("IMAP timeout on item 1")
+        imap1.__enter__.return_value = imap1
+
+        imap2 = MagicMock()
+        imap2.__enter__.return_value = imap2
+
+        imap_cls = MagicMock(side_effect=[imap1, imap2])
+
+        with patch.object(repository, "claim_ca_certificate_email_items", side_effect=[item1, item2]), \
+             patch.object(repository, "save_ca_certificate_record", return_value={"supabase_saved": True}), \
+             patch.object(repository, "update_ca_certificate_job_item", return_value=True), \
+             patch.object(repository, "reconcile_ca_certificate_job", side_effect=[{"status": "running"}, {"status": "completed"}]), \
+             patch.object(repository, "get_ca_certificate_job_items", side_effect=[[item2[0]], []]), \
+             patch.object(application.ca_certificate_service, "generate_pdf_bytes", return_value=(b"%PDF ca", "26-09-2026")), \
+             patch.object(application, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(application, "SENDER_PASSWORD", "mock_pass"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", imap_cls):
+            res1 = self.client.post("/api/ca-certificate/bulk/jobs/job-1/send", json={"batch_size": 1})
+            res2 = self.client.post("/api/ca-certificate/bulk/jobs/job-1/send", json={"batch_size": 1})
+
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.get_json()["sent"], 1)
+        self.assertEqual(res1.get_json()["failed"], 0)
+
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.get_json()["sent"], 1)
+        self.assertEqual(res2.get_json()["failed"], 0)
+
+        self.assertEqual(smtp.send_message.call_count, 2)
+        imap1.append.assert_called_once()
+        imap2.append.assert_called_once()
+        imap1.__exit__.assert_called_once()
+        imap2.__exit__.assert_called_once()
+
+
 if __name__ == '__main__':
     unittest.main()
