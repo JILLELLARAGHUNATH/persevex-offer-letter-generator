@@ -688,16 +688,39 @@
 
                 <!-- STIPEND -->
                 <div class="form-group compact-field-group">
-                    <label for="stipend" class="sr-only">Stipend (Optional)</label>
+                    <label for="stipend_preset" class="sr-only">Stipend (Optional)</label>
+                    <div class="compact-field-container">
+                        <span class="compact-field-icon" aria-hidden="true" style="font-size: 14px; font-weight: 600; color: #64748b; line-height: 1;">&#8377;</span>
+                        <select id="stipend_preset" onchange="handleStipendPresetChange()">
+                            <option value="">None</option>
+                            <option value="10000">10k</option>
+                            <option value="12000">12k</option>
+                            <option value="15000">15k</option>
+                            <option value="18000">18k</option>
+                            <option value="__custom__">Custom Stipend</option>
+                        </select>
+                    </div>
+                    <!-- Hidden real stipend field – keeps existing id so all downstream JS stays unchanged -->
+                    <input
+                        id="stipend"
+                        type="hidden"
+                        value=""
+                        autocomplete="off"
+                    >
+                </div>
+                <!-- Custom stipend amount row – shown only when "Custom Stipend" is selected -->
+                <div class="form-group compact-field-group" id="stipend_custom_row" style="display:none;">
+                    <label for="stipend_custom" class="sr-only">Custom Stipend Amount</label>
                     <div class="compact-field-container">
                         <span class="compact-field-icon" aria-hidden="true" style="font-size: 14px; font-weight: 600; color: #64748b; line-height: 1;">&#8377;</span>
                         <input
-                            id="stipend"
+                            id="stipend_custom"
                             type="text"
                             inputmode="numeric"
-                            placeholder="Stipend (optional)"
+                            placeholder="Enter custom amount"
                             autocomplete="off"
                             spellcheck="false"
+                            oninput="document.getElementById('stipend').value = this.value.trim();"
                         >
                     </div>
                 </div>
@@ -1836,9 +1859,31 @@ form.addEventListener("change", function () {
 });
 
 /* ==========================================================
+   STIPEND PRESET DROPDOWN
+   ========================================================== */
+function handleStipendPresetChange() {
+    const preset = document.getElementById("stipend_preset");
+    const stipendInput = document.getElementById("stipend");
+    const customRow = document.getElementById("stipend_custom_row");
+    const customInput = document.getElementById("stipend_custom");
+
+    if (preset.value === "__custom__") {
+        // Show custom amount field; clear the hidden input until the user types
+        customRow.style.display = "";
+        stipendInput.value = customInput.value.trim();
+    } else {
+        // Hide custom amount field; write the mapped numeric value (or "")
+        customRow.style.display = "none";
+        customInput.value = "";
+        stipendInput.value = preset.value;  // "" for None, "10000" / "12000" / etc.
+    }
+}
+
+/* ==========================================================
    COLLECT FORM DATA
    ========================================================== */
 function collectFormData() {
+
     return {
         letter_type: letterType.value,
         student_name: document.getElementById("student_name").value.trim(),
