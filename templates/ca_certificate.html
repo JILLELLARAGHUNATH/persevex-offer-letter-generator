@@ -6,6 +6,39 @@
     <title>CA Certificate Generator | Persevex</title>
     <link rel="icon" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        /* CA Certificate — clean PDF preview (no toolbar, light background) */
+        #pdfPreview.pdf-preview-scroll {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #f8fafc;
+            padding: 16px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+        #pdfPreview.pdf-preview-scroll[hidden] { display: none !important; }
+        .pdf-page-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #pdfPreview.pdf-preview-scroll canvas {
+            max-width: 100%;
+            height: auto !important;
+            display: block;
+            background: #ffffff;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
 
@@ -152,7 +185,14 @@
             <div class="card-header"><h2><svg class="type-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>Certificate Preview</h2><span id="previewStatusBadge" class="section-tag">Awaiting Generation</span></div>
             <div class="preview-container cert-preview-container" id="previewContainer">
                 <div id="emptyPreview" class="preview-placeholder"><div class="placeholder-icon-ring"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg></div><p class="placeholder-title">No CA Certificate Generated Yet</p><p class="placeholder-desc">Fill out the participant details and click <strong>Generate CA Certificate</strong> to create the PDF preview.</p></div>
-                <iframe id="pdfPreview" class="pdf-preview-frame" title="CA Certificate PDF Preview" style="display:none"></iframe>
+                <!-- PDF LIVE PREVIEW (DIRECT DOCUMENT DISPLAY) -->
+                <div
+                    id="pdfPreview"
+                    class="pdf-preview-scroll"
+                    role="region"
+                    aria-label="Generated CA Certificate Document"
+                    style="display:none"
+                ></div>
             </div>
             <div class="preview-actions" id="previewActions">
                 <a id="downloadBtn" class="action-btn download-btn" download aria-disabled="true"><svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>Download PDF</span></a>
@@ -305,6 +345,161 @@ const caCertDuplicateEmail = document.getElementById('caCertDuplicateEmail');
 const confirmCACertResendBtn = document.getElementById('confirmCACertResendBtn');
 const cancelCACertResendBtn = document.getElementById('cancelCACertResendBtn');
 
+/* ==========================================================
+   CA CERTIFICATE PDF LIVE PREVIEW RENDERING (PDF.JS)
+   ========================================================== */
+if (window.pdfjsLib) {
+    try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    } catch (e) {
+        console.warn("Could not set PDF workerSrc:", e);
+    }
+}
+
+let currentPdfRenderTask = null;
+let currentRenderGeneration = 0;
+
+function clearPdfPreview() {
+    currentRenderGeneration++;
+    if (currentPdfRenderTask) {
+        try {
+            currentPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        currentPdfRenderTask = null;
+    }
+    if (preview) {
+        preview.innerHTML = "";
+    }
+}
+
+async function renderCACertPdfPreview(url) {
+    if (!preview) return;
+
+    currentRenderGeneration++;
+    const renderGen = currentRenderGeneration;
+
+    if (currentPdfRenderTask) {
+        try {
+            currentPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        currentPdfRenderTask = null;
+    }
+
+    preview.innerHTML = "";
+
+    if (!window.pdfjsLib) {
+        const fallbackIframe = document.createElement("iframe");
+        fallbackIframe.style.width = "100%";
+        fallbackIframe.style.height = "100%";
+        fallbackIframe.style.border = "none";
+        fallbackIframe.title = "Generated CA Certificate Preview";
+        fallbackIframe.src = url + "#toolbar=0&navpanes=0";
+        preview.appendChild(fallbackIframe);
+        return;
+    }
+
+    try {
+        const loadingTask = window.pdfjsLib.getDocument({
+            url: url,
+            cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/",
+            cMapPacked: true
+        });
+
+        const pdf = await loadingTask.promise;
+        if (renderGen !== currentRenderGeneration) return;
+
+        const availableWidth = Math.max((preview.clientWidth || 520) - 28, 320);
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            if (renderGen !== currentRenderGeneration) return;
+
+            const page = await pdf.getPage(pageNum);
+            if (renderGen !== currentRenderGeneration) return;
+
+            const unscaledViewport = page.getViewport({ scale: 1 });
+            const fitScale = availableWidth / unscaledViewport.width;
+            const outputScale = window.devicePixelRatio || 1;
+            const viewport = page.getViewport({ scale: fitScale });
+
+            const pageWrapper = document.createElement("div");
+            pageWrapper.className = "pdf-page-wrapper";
+
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = Math.floor(viewport.width) + "px";
+            canvas.style.height = Math.floor(viewport.height) + "px";
+
+            const transform = outputScale !== 1
+                ? [outputScale, 0, 0, outputScale, 0, 0]
+                : null;
+
+            const renderContext = {
+                canvasContext: context,
+                transform: transform,
+                viewport: viewport
+            };
+
+            const renderTask = page.render(renderContext);
+            currentPdfRenderTask = renderTask;
+
+            try {
+                await renderTask.promise;
+            } catch (renderErr) {
+                if (renderErr?.name === "RenderingCancelledException" || renderErr?.message === "Rendering cancelled" || renderGen !== currentRenderGeneration) {
+                    return;
+                }
+                throw renderErr;
+            } finally {
+                if (currentPdfRenderTask === renderTask) {
+                    currentPdfRenderTask = null;
+                }
+            }
+
+            if (renderGen !== currentRenderGeneration) return;
+
+            pageWrapper.appendChild(canvas);
+            preview.appendChild(pageWrapper);
+        }
+    } catch (err) {
+        if (renderGen !== currentRenderGeneration || err?.name === "RenderingCancelledException" || err?.message === "Rendering cancelled") {
+            return;
+        }
+        console.error("CA Certificate PDF preview error:", err);
+        preview.innerHTML = "";
+        const fallbackIframe = document.createElement("iframe");
+        fallbackIframe.style.width = "100%";
+        fallbackIframe.style.height = "100%";
+        fallbackIframe.style.border = "none";
+        fallbackIframe.title = "Generated CA Certificate Preview";
+        fallbackIframe.src = url + "#toolbar=0&navpanes=0";
+        preview.appendChild(fallbackIframe);
+    }
+}
+
+if (preview) {
+    Object.defineProperty(preview, "src", {
+        get() {
+            return preview.getAttribute("data-src") || "";
+        },
+        set(val) {
+            preview.setAttribute("data-src", val || "");
+            if (!val || val === "about:blank") {
+                clearPdfPreview();
+            } else {
+                renderCACertPdfPreview(val);
+            }
+        },
+        configurable: true
+    });
+}
+
 let generated = null;
 
 function showToast(text, type = "success") {
@@ -363,6 +558,7 @@ async function refreshHeaderStats() {
 
 function invalidate() {
     generated = null;
+    clearPdfPreview();
     preview.style.display = 'none';
     empty.style.display = 'flex';
     download.style.pointerEvents = 'none';

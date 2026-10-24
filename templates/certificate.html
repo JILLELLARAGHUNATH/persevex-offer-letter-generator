@@ -6,7 +6,31 @@
     <title>Persevex Certificate Generator</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
+        /* Certificate — clean PDF preview (no toolbar, light background) */
+        #pdfPreviewFrame.cert-pdf-preview-scroll {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #f8fafc;
+            padding: 16px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+        #pdfPreviewFrame.cert-pdf-preview-scroll canvas {
+            max-width: 100%;
+            height: auto !important;
+            display: block;
+            background: #ffffff;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+            border-radius: 4px;
+        }
         .btn-preview-eye {
             display: inline-flex;
             align-items: center;
@@ -368,12 +392,14 @@
                     </button>
                 </div>
 
-                <iframe
+                <!-- PDF LIVE PREVIEW (DIRECT DOCUMENT DISPLAY) -->
+                <div
                     id="pdfPreviewFrame"
-                    class="pdf-preview-frame"
+                    class="cert-pdf-preview-scroll"
+                    role="region"
+                    aria-label="Generated Certificate Document"
                     style="display: none;"
-                    title="Certificate PDF Preview"
-                ></iframe>
+                ></div>
             </div>
 
             <div class="preview-actions" id="previewActions" style="display: none;">
@@ -976,6 +1002,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (errorState) errorState.style.display = 'none';
             if (generatingState) generatingState.style.display = 'flex';
             if (iframe) iframe.style.display = 'none';
+            clearCertPdfPreview();
             if (previewActions) previewActions.style.display = 'none';
             badge.textContent = 'Generating...';
             badge.className = 'section-tag';
@@ -1006,33 +1033,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         setStepState(i, 'completed');
                     }
 
-                    // Gate iframe display until loaded to eliminate black flash
-                    let previewLoaded = false;
-                    const safetyTimeout = setTimeout(() => {
-                        if (!previewLoaded) {
-                            previewLoaded = true;
-                            if (generatingState) generatingState.style.display = 'none';
-                            if (iframe) iframe.style.display = 'block';
-                        }
-                    }, 7000);
+                    // Render via PDF.js (no iframe toolbar, clean light background)
+                    renderCertPdfPreview(previewUrl);
 
-                    iframe.onload = () => {
-                        if (!previewLoaded) {
-                            previewLoaded = true;
-                            clearTimeout(safetyTimeout);
-                            if (generatingState) generatingState.style.display = 'none';
-                            if (iframe) iframe.style.display = 'block';
-                        }
-                    };
-
-                    iframe.onerror = () => {
-                        clearTimeout(safetyTimeout);
-                        if (generatingState) generatingState.style.display = 'none';
-                        if (iframe) iframe.style.display = 'none';
-                        if (errorState) errorState.style.display = 'flex';
-                    };
-
-                    iframe.src = previewUrl;
+                    if (generatingState) generatingState.style.display = 'none';
+                    if (iframe) iframe.style.display = 'block';
 
                     if (previewActions) previewActions.style.display = 'flex';
                     badge.textContent = 'Ready';
@@ -1081,36 +1086,145 @@ function retryCertificatePreview() {
     const generatingState = document.getElementById('generatingState');
     const iframe = document.getElementById('pdfPreviewFrame');
     if (errorState) errorState.style.display = 'none';
-    if (generatingState) generatingState.style.display = 'flex';
-    if (iframe) iframe.style.display = 'none';
+    if (generatingState) generatingState.style.display = 'none';
+    if (iframe) iframe.style.display = 'block';
     resetGenerationSteps();
     for (let i = 1; i <= 5; i++) setStepState(i, 'completed');
-
-    let previewLoaded = false;
-    const safetyTimeout = setTimeout(() => {
-        if (!previewLoaded) {
-            previewLoaded = true;
-            if (generatingState) generatingState.style.display = 'none';
-            if (iframe) iframe.style.display = 'block';
-        }
-    }, 7000);
-
-    iframe.onload = () => {
-        if (!previewLoaded) {
-            previewLoaded = true;
-            clearTimeout(safetyTimeout);
-            if (generatingState) generatingState.style.display = 'none';
-            if (iframe) iframe.style.display = 'block';
-        }
-    };
-    iframe.onerror = () => {
-        clearTimeout(safetyTimeout);
-        if (generatingState) generatingState.style.display = 'none';
-        if (iframe) iframe.style.display = 'none';
-        if (errorState) errorState.style.display = 'flex';
-    };
     const cacheBust = (currentGeneratedCertificate.url.includes('?') ? '&' : '?') + 't=' + Date.now();
-    iframe.src = currentGeneratedCertificate.url + cacheBust;
+    renderCertPdfPreview(currentGeneratedCertificate.url + cacheBust);
+}
+
+/* ==========================================================
+   CERTIFICATE PDF LIVE PREVIEW RENDERING (PDF.JS)
+   ========================================================== */
+(function initCertPdfJs() {
+    if (window.pdfjsLib) {
+        try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        } catch (e) { console.warn("PDF.js workerSrc error:", e); }
+    }
+})();
+
+let _certPdfRenderTask = null;
+let _certRenderGeneration = 0;
+
+function clearCertPdfPreview() {
+    _certRenderGeneration++;
+    if (_certPdfRenderTask) {
+        try {
+            _certPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        _certPdfRenderTask = null;
+    }
+    const container = document.getElementById('pdfPreviewFrame');
+    if (container) {
+        container.innerHTML = "";
+    }
+}
+
+async function renderCertPdfPreview(url) {
+    const container = document.getElementById('pdfPreviewFrame');
+    const errorState = document.getElementById('previewErrorState');
+    if (!container) return;
+
+    _certRenderGeneration++;
+    const renderGen = _certRenderGeneration;
+
+    if (_certPdfRenderTask) {
+        try {
+            _certPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        _certPdfRenderTask = null;
+    }
+    container.innerHTML = "";
+
+    if (!window.pdfjsLib) {
+        const fb = document.createElement("iframe");
+        fb.style.cssText = "width:100%;height:100%;border:none;";
+        fb.title = "Certificate PDF Preview";
+        fb.src = url + "#toolbar=0&navpanes=0";
+        container.appendChild(fb);
+        return;
+    }
+
+    try {
+        const loadingTask = window.pdfjsLib.getDocument({
+            url: url,
+            cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/",
+            cMapPacked: true
+        });
+
+        const pdf = await loadingTask.promise;
+        if (renderGen !== _certRenderGeneration) return;
+
+        const availableWidth = Math.max((container.clientWidth || 520) - 28, 320);
+
+        for (let p = 1; p <= pdf.numPages; p++) {
+            if (renderGen !== _certRenderGeneration) return;
+            const page = await pdf.getPage(p);
+            if (renderGen !== _certRenderGeneration) return;
+
+            const vp0 = page.getViewport({ scale: 1 });
+            const scale = availableWidth / vp0.width;
+            const dpr = window.devicePixelRatio || 1;
+            const vp = page.getViewport({ scale });
+
+            const wrapper = document.createElement("div");
+            wrapper.style.cssText = "width:100%;display:flex;justify-content:center;";
+
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = Math.floor(vp.width * dpr);
+            canvas.height = Math.floor(vp.height * dpr);
+            canvas.style.width = Math.floor(vp.width) + "px";
+            canvas.style.height = Math.floor(vp.height) + "px";
+
+            const renderTask = page.render({
+                canvasContext: ctx,
+                transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+                viewport: vp
+            });
+            _certPdfRenderTask = renderTask;
+
+            try {
+                await renderTask.promise;
+            } catch (renderErr) {
+                if (renderErr?.name === "RenderingCancelledException" || renderErr?.message === "Rendering cancelled" || renderGen !== _certRenderGeneration) {
+                    return;
+                }
+                throw renderErr;
+            } finally {
+                if (_certPdfRenderTask === renderTask) {
+                    _certPdfRenderTask = null;
+                }
+            }
+
+            if (renderGen !== _certRenderGeneration) return;
+
+            wrapper.appendChild(canvas);
+            container.appendChild(wrapper);
+        }
+    } catch (err) {
+        if (renderGen !== _certRenderGeneration || err?.name === "RenderingCancelledException" || err?.message === "Rendering cancelled") {
+            return;
+        }
+        console.error("Certificate PDF preview error:", err);
+        container.innerHTML = "";
+        if (errorState) {
+            errorState.style.display = 'flex';
+            return;
+        }
+        const fb = document.createElement("iframe");
+        fb.style.cssText = "width:100%;height:100%;border:none;";
+        fb.title = "Certificate PDF Preview";
+        fb.src = url + "#toolbar=0&navpanes=0";
+        container.appendChild(fb);
+    }
 }
 
 async function sendSingleCertificateEmail(sendAgain = false) {

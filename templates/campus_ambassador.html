@@ -6,6 +6,33 @@
     <title>Campus Ambassador Offer Letter - Persevex</title>
     <link rel="icon" type="image/png" href="/static/persevex-icon.png">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        /* CA Letter — clean PDF preview (no toolbar, light background) */
+        #pdfPreview.pdf-preview-scroll {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #f8fafc;
+            padding: 16px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+        #pdfPreview.pdf-preview-scroll[hidden] { display: none !important; }
+        #pdfPreview.pdf-preview-scroll canvas {
+            max-width: 100%;
+            height: auto !important;
+            display: block;
+            background: #ffffff;
+            box-shadow: 0 4px 14px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
 
@@ -321,13 +348,14 @@
                     </div>
                 </div>
 
-                <!-- PDF IFRAME -->
-                <iframe
+                <!-- PDF LIVE PREVIEW (DIRECT DOCUMENT DISPLAY) -->
+                <div
                     id="pdfPreview"
-                    title="Campus Ambassador PDF Preview"
-                    loading="lazy"
+                    class="pdf-preview-scroll"
+                    role="region"
+                    aria-label="Generated CA Letter Document"
                     hidden
-                ></iframe>
+                ></div>
             </div>
 
             <div class="actions">
@@ -448,6 +476,140 @@ document.addEventListener("DOMContentLoaded", () => {
     const generatingPreview = document.getElementById("generatingPreview");
     const messageBox = document.getElementById("message");
     const toastContainer = document.getElementById("toastContainer");
+
+    /* ==========================================================
+       CA LETTER PDF LIVE PREVIEW RENDERING (PDF.JS)
+       ========================================================== */
+    if (window.pdfjsLib) {
+        try {
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        } catch (e) { console.warn("PDF.js workerSrc error:", e); }
+    }
+
+    let _caPdfRenderTask = null;
+    let _caRenderGeneration = 0;
+
+    function clearCAPdfPreview() {
+        _caRenderGeneration++;
+        if (_caPdfRenderTask) {
+            try {
+                _caPdfRenderTask.cancel();
+            } catch (e) {
+                // Ignore cancellation errors
+            }
+            _caPdfRenderTask = null;
+        }
+        if (pdfPreview) pdfPreview.innerHTML = "";
+    }
+
+    async function renderCAPdfPreview(url) {
+        if (!pdfPreview) return;
+
+        _caRenderGeneration++;
+        const renderGen = _caRenderGeneration;
+
+        if (_caPdfRenderTask) {
+            try {
+                _caPdfRenderTask.cancel();
+            } catch (e) {
+                // Ignore cancellation errors
+            }
+            _caPdfRenderTask = null;
+        }
+        pdfPreview.innerHTML = "";
+
+        if (!window.pdfjsLib) {
+            const fb = document.createElement("iframe");
+            fb.style.cssText = "width:100%;height:100%;border:none;";
+            fb.title = "Campus Ambassador PDF Preview";
+            fb.src = url + "#toolbar=0&navpanes=0";
+            pdfPreview.appendChild(fb);
+            return;
+        }
+
+        try {
+            const loadingTask = window.pdfjsLib.getDocument({
+                url: url,
+                cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/",
+                cMapPacked: true
+            });
+
+            const pdf = await loadingTask.promise;
+            if (renderGen !== _caRenderGeneration) return;
+
+            const availableWidth = Math.max((pdfPreview.clientWidth || 520) - 28, 320);
+
+            for (let p = 1; p <= pdf.numPages; p++) {
+                if (renderGen !== _caRenderGeneration) return;
+                const page = await pdf.getPage(p);
+                if (renderGen !== _caRenderGeneration) return;
+
+                const vp0 = page.getViewport({ scale: 1 });
+                const scale = availableWidth / vp0.width;
+                const dpr = window.devicePixelRatio || 1;
+                const vp = page.getViewport({ scale });
+
+                const wrapper = document.createElement("div");
+                wrapper.style.cssText = "width:100%;display:flex;justify-content:center;";
+
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                canvas.width = Math.floor(vp.width * dpr);
+                canvas.height = Math.floor(vp.height * dpr);
+                canvas.style.width = Math.floor(vp.width) + "px";
+                canvas.style.height = Math.floor(vp.height) + "px";
+
+                const renderTask = page.render({
+                    canvasContext: ctx,
+                    transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null,
+                    viewport: vp
+                });
+                _caPdfRenderTask = renderTask;
+
+                try {
+                    await renderTask.promise;
+                } catch (renderErr) {
+                    if (renderErr?.name === "RenderingCancelledException" || renderErr?.message === "Rendering cancelled" || renderGen !== _caRenderGeneration) {
+                        return;
+                    }
+                    throw renderErr;
+                } finally {
+                    if (_caPdfRenderTask === renderTask) {
+                        _caPdfRenderTask = null;
+                    }
+                }
+
+                if (renderGen !== _caRenderGeneration) return;
+
+                wrapper.appendChild(canvas);
+                pdfPreview.appendChild(wrapper);
+            }
+        } catch (err) {
+            if (renderGen !== _caRenderGeneration || err?.name === "RenderingCancelledException" || err?.message === "Rendering cancelled") {
+                return;
+            }
+            console.error("CA Letter PDF preview error:", err);
+            pdfPreview.innerHTML = "";
+            const fb = document.createElement("iframe");
+            fb.style.cssText = "width:100%;height:100%;border:none;";
+            fb.title = "Campus Ambassador PDF Preview";
+            fb.src = url + "#toolbar=0&navpanes=0";
+            pdfPreview.appendChild(fb);
+        }
+    }
+
+    if (pdfPreview) {
+        Object.defineProperty(pdfPreview, "src", {
+            get() { return pdfPreview.getAttribute("data-src") || ""; },
+            set(val) {
+                pdfPreview.setAttribute("data-src", val || "");
+                if (!val || val === "about:blank") { clearCAPdfPreview(); }
+                else { renderCAPdfPreview(val); }
+            },
+            configurable: true
+        });
+    }
 
     const caResendModal = document.getElementById("caResendModal");
     const caDuplicateEmail = document.getElementById("caDuplicateEmail");

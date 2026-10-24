@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         /* ==========================================================
            DOMAIN SEARCHABLE COMBOBOX
@@ -296,6 +297,44 @@
             .domain-dropdown-toggle {
                 transition: none !important;
             }
+        }
+
+        /* ==========================================================
+           PDF LIVE PREVIEW (DIRECT DOCUMENT VIEW WITHOUT TOOLBAR)
+           ========================================================== */
+        #pdfPreview.pdf-preview-scroll {
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #f8fafc;
+            padding: 16px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+
+        #pdfPreview.pdf-preview-scroll[hidden] {
+            display: none !important;
+        }
+
+        .pdf-page-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #pdfPreview.pdf-preview-scroll canvas {
+            max-width: 100%;
+            height: auto !important;
+            display: block;
+            background: #ffffff;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -952,13 +991,14 @@
                     </div>
                 </div>
 
-                <!-- PDF IFRAME -->
-                <iframe
+                <!-- PDF LIVE PREVIEW (DIRECT DOCUMENT DISPLAY) -->
+                <div
                     id="pdfPreview"
-                    title="Generated PDF Preview"
-                    loading="lazy"
+                    class="pdf-preview-scroll"
+                    role="region"
+                    aria-label="Generated Offer Letter Document"
                     hidden
-                ></iframe>
+                ></div>
             </div>
 
             <div class="actions">
@@ -1544,6 +1584,161 @@ const hoursPerWeek = document.getElementById("hours_per_week");
 const totalHours = document.getElementById("total_hours");
 const preview = document.getElementById("pdfPreview");
 const emptyPreview = document.getElementById("emptyPreview");
+
+/* ==========================================================
+   PDF LIVE PREVIEW RENDERING (PDF.JS)
+   ========================================================== */
+if (window.pdfjsLib) {
+    try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    } catch (e) {
+        console.warn("Could not set PDF workerSrc:", e);
+    }
+}
+
+let currentPdfRenderTask = null;
+let currentRenderGeneration = 0;
+
+function clearPdfPreview() {
+    currentRenderGeneration++;
+    if (currentPdfRenderTask) {
+        try {
+            currentPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        currentPdfRenderTask = null;
+    }
+    if (preview) {
+        preview.innerHTML = "";
+    }
+}
+
+async function renderPdfPreview(url) {
+    if (!preview) return;
+
+    currentRenderGeneration++;
+    const renderGen = currentRenderGeneration;
+
+    if (currentPdfRenderTask) {
+        try {
+            currentPdfRenderTask.cancel();
+        } catch (e) {
+            // Ignore cancellation errors
+        }
+        currentPdfRenderTask = null;
+    }
+
+    preview.innerHTML = "";
+
+    if (!window.pdfjsLib) {
+        const fallbackIframe = document.createElement("iframe");
+        fallbackIframe.style.width = "100%";
+        fallbackIframe.style.height = "100%";
+        fallbackIframe.style.border = "none";
+        fallbackIframe.title = "Generated PDF Preview";
+        fallbackIframe.src = url + "#toolbar=0&navpanes=0";
+        preview.appendChild(fallbackIframe);
+        return;
+    }
+
+    try {
+        const loadingTask = window.pdfjsLib.getDocument({
+            url: url,
+            cMapUrl: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/",
+            cMapPacked: true
+        });
+
+        const pdf = await loadingTask.promise;
+        if (renderGen !== currentRenderGeneration) return;
+
+        const availableWidth = Math.max((preview.clientWidth || 520) - 28, 320);
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+            if (renderGen !== currentRenderGeneration) return;
+
+            const page = await pdf.getPage(pageNum);
+            if (renderGen !== currentRenderGeneration) return;
+
+            const unscaledViewport = page.getViewport({ scale: 1 });
+            const fitScale = availableWidth / unscaledViewport.width;
+            const outputScale = window.devicePixelRatio || 1;
+            const viewport = page.getViewport({ scale: fitScale });
+
+            const pageWrapper = document.createElement("div");
+            pageWrapper.className = "pdf-page-wrapper";
+
+            const canvas = document.createElement("canvas");
+            const context = canvas.getContext("2d");
+
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = Math.floor(viewport.width) + "px";
+            canvas.style.height = Math.floor(viewport.height) + "px";
+
+            const transform = outputScale !== 1
+                ? [outputScale, 0, 0, outputScale, 0, 0]
+                : null;
+
+            const renderContext = {
+                canvasContext: context,
+                transform: transform,
+                viewport: viewport
+            };
+
+            const renderTask = page.render(renderContext);
+            currentPdfRenderTask = renderTask;
+
+            try {
+                await renderTask.promise;
+            } catch (renderErr) {
+                if (renderErr?.name === "RenderingCancelledException" || renderErr?.message === "Rendering cancelled" || renderGen !== currentRenderGeneration) {
+                    return;
+                }
+                throw renderErr;
+            } finally {
+                if (currentPdfRenderTask === renderTask) {
+                    currentPdfRenderTask = null;
+                }
+            }
+
+            if (renderGen !== currentRenderGeneration) return;
+
+            pageWrapper.appendChild(canvas);
+            preview.appendChild(pageWrapper);
+        }
+    } catch (err) {
+        if (renderGen !== currentRenderGeneration || err?.name === "RenderingCancelledException" || err?.message === "Rendering cancelled") {
+            return;
+        }
+        console.error("PDF preview render error:", err);
+        preview.innerHTML = "";
+        const fallbackIframe = document.createElement("iframe");
+        fallbackIframe.style.width = "100%";
+        fallbackIframe.style.height = "100%";
+        fallbackIframe.style.border = "none";
+        fallbackIframe.title = "Generated PDF Preview";
+        fallbackIframe.src = url + "#toolbar=0&navpanes=0";
+        preview.appendChild(fallbackIframe);
+    }
+}
+
+if (preview) {
+    Object.defineProperty(preview, "src", {
+        get() {
+            return preview.getAttribute("data-src") || "";
+        },
+        set(val) {
+            preview.setAttribute("data-src", val || "");
+            if (!val || val === "about:blank") {
+                clearPdfPreview();
+            } else {
+                renderPdfPreview(val);
+            }
+        },
+        configurable: true
+    });
+}
 const generatingPreview = document.getElementById("generatingPreview");
 const downloadBtn = document.getElementById("downloadBtn");
 const sendBtn = document.getElementById("sendBtn");
