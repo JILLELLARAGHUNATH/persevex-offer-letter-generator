@@ -266,13 +266,21 @@
                 grid-template-columns: 1fr 1fr;
                 gap: 8px;
             }
-            .two > * {
+            .three {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+            .two > *,
+            .three > * {
                 min-width: 0;
             }
         }
 
         /* Very narrow phones: collapse hours grid to single column */
         @media (max-width: 420px) {
+            .three {
+                grid-template-columns: 1fr !important;
+            }
             .hours-calc-grid {
                 grid-template-columns: 1fr !important;
                 gap: 6px;
@@ -621,23 +629,78 @@
                     </div>
                 </div>
 
-                <!-- DURATION -->
+                <!-- DURATION & BATCH SELECTION -->
                 <div class="form-group compact-field-group">
-                    <label for="duration" class="sr-only">Duration</label>
-                    <div class="compact-field-container">
-                        <span class="compact-field-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                        </span>
-                        <select id="duration" required placeholder="Select duration">
-                            <option value="2 months">2 months</option>
-                            <option value="3 months">3 months</option>
-                            <option value="4 months">4 months</option>
-                            <option value="5 months">5 months</option>
-                            <option value="6 months">6 months</option>
-                        </select>
+                    <div class="three">
+                        <div class="date-field-col">
+                            <label for="duration" class="sr-only">Duration</label>
+                            <div class="compact-field-container">
+                                <span class="compact-field-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                </span>
+                                <select id="duration" required placeholder="Select duration">
+                                    <option value="2 months">2 months</option>
+                                    <option value="3 months">3 months</option>
+                                    <option value="4 months">4 months</option>
+                                    <option value="5 months">5 months</option>
+                                    <option value="6 months">6 months</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="date-field-col">
+                            <label for="batch_month" class="sr-only">Batch Month</label>
+                            <div class="compact-field-container">
+                                <span class="compact-field-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                </span>
+                                <select id="batch_month" aria-label="Batch Month">
+                                    <option value="1" selected>January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="date-field-col">
+                            <label for="batch_year" class="sr-only">Batch Year</label>
+                            <div class="compact-field-container">
+                                <span class="compact-field-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                </span>
+                                <select id="batch_year" aria-label="Batch Year">
+                                    <option value="2024">2024</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2026" selected>2026</option>
+                                    <option value="2027">2027</option>
+                                    <option value="2028">2028</option>
+                                    <option value="2029">2029</option>
+                                    <option value="2030">2030</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1473,6 +1536,8 @@ const form = document.getElementById("letterForm");
 const typeButtons = document.querySelectorAll(".type-btn");
 const letterType = document.getElementById("letter_type");
 const duration = document.getElementById("duration");
+const batchMonth = document.getElementById("batch_month");
+const batchYear = document.getElementById("batch_year");
 const hoursSection = document.getElementById("hoursSection");
 const weeks = document.getElementById("weeks");
 const hoursPerWeek = document.getElementById("hours_per_week");
@@ -1776,12 +1841,59 @@ function updateHours() {
 }
 
 /* ==========================================================
-   DURATION CHANGE
+   BATCH-BASED AUTOMATIC DATE CALCULATION
+   ========================================================== */
+function updateCalculatedDates() {
+    const durationEl = document.getElementById("duration");
+    const batchMonthEl = document.getElementById("batch_month");
+    const batchYearEl = document.getElementById("batch_year");
+    const startDateInput = document.getElementById("start_date");
+    const endDateInput = document.getElementById("end_date");
+
+    if (!durationEl || !batchMonthEl || !batchYearEl || !startDateInput || !endDateInput) {
+        return;
+    }
+
+    const durationMonths = parseInt(durationEl.value, 10);
+    const startMonth = parseInt(batchMonthEl.value, 10);
+    const startYear = parseInt(batchYearEl.value, 10);
+
+    if (isNaN(durationMonths) || isNaN(startMonth) || isNaN(startYear)) {
+        return;
+    }
+
+    const startMonthStr = String(startMonth).padStart(2, "0");
+    startDateInput.value = `${startYear}-${startMonthStr}-05`;
+
+    const totalMonths = (startMonth - 1) + durationMonths;
+    const endYear = startYear + Math.floor(totalMonths / 12);
+    const endMonth = (totalMonths % 12) + 1;
+    const endMonthStr = String(endMonth).padStart(2, "0");
+    endDateInput.value = `${endYear}-${endMonthStr}-05`;
+}
+
+/* ==========================================================
+   DURATION & BATCH CHANGE
    ========================================================== */
 duration.addEventListener("change", function () {
+    updateCalculatedDates();
     updateHours();
     markFormChanged();
 });
+
+if (batchMonth) {
+    batchMonth.addEventListener("change", function () {
+        updateCalculatedDates();
+        markFormChanged();
+    });
+}
+
+if (batchYear) {
+    batchYear.addEventListener("change", function () {
+        updateCalculatedDates();
+        markFormChanged();
+    });
+}
 
 /* ==========================================================
    HOURS CHANGE
@@ -3749,6 +3861,7 @@ generated = false;
 formChanged = false;
 sendingEmail = false;
 updateHours();
+updateCalculatedDates();
 
 </script>
 
