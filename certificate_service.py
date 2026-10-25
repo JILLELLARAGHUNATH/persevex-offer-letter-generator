@@ -1,6 +1,7 @@
 import os
 import io
 import re
+import html
 import base64
 import secrets
 import string
@@ -612,87 +613,196 @@ def send_certificate_email(data, pdf_path=None, filename=None, pdf_bytes=None, b
     message["To"] = recipient
     message["Subject"] = f"Internship Completion Certificate - {student_name} | Persevex LLP"
 
+    escaped_student_name = html.escape(student_name)
+    escaped_domain = html.escape(domain)
+    current_year = datetime.now().year
+
     # Plain text version
     message.set_content(f"""Dear {student_name},
 
-Warm greetings from Persevex LLP!
+Greetings from Persevex!
 
-Congratulations on successfully completing your Internship program in {domain} with Persevex!
+🎉 Congratulations on successfully completing your Internship program in {domain} with Persevex!
 
-Your official Certificate of Internship Completion is attached with this email. You can also verify the authenticity of your certificate anytime by scanning the QR code printed on the bottom-left corner of the certificate.
+We truly appreciate your dedication, enthusiasm, and contributions throughout your internship with us.
 
-We truly appreciate your hard work, dedication, and contributions throughout the program. We wish you immense success in your academic and professional endeavors.
+📜 Attached to this email is your official Certificate of Internship Completion in recognition of your internship experience, commitment, and the skills you have developed.
 
-Warm regards,
-Team Persevex LLP
-www.persevex.com
+💼 Share Your Achievement!
+Celebrate this milestone by sharing your internship experience and certificate on LinkedIn and other social media platforms. Let your network know about the skills you have developed and the experience you have gained during your internship with Persevex.
+
+Tag @Persevex and use the hashtags #Persevex and #InternshipCompletion to share your achievement with your professional network and inspire other aspiring professionals.
+
+🔎 Digital Certificate Verification:
+Your certificate includes a unique, secure QR code. Anyone can scan this QR code to verify the certificate's authenticity online through our official verification portal.
+
+We wish you continued success in your career and future learning endeavors!
+
+Best regards,
+Team Persevex
+Persevex Education Consultancy LLP
+📧 support@persevex.com
+🌐 www.persevex.com
 """)
 
     # HTML formatted version
-    message.add_alternative(f"""
-<!DOCTYPE html>
-<html>
-<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f6f9; color: #333333; line-height: 1.6;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f6f9; padding: 30px 15px;">
+    message.add_alternative(f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Internship Completion Certificate</title>
+    <style type="text/css">
+        body, table, td, p, a, li, blockquote {{
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }}
+        table, td {{
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }}
+        img {{
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+            max-width: 100%;
+        }}
+        @media only screen and (max-width: 600px) {{
+            .email-outer-table {{
+                padding: 12px 6px !important;
+            }}
+            .email-container {{
+                width: 100% !important;
+                max-width: 100% !important;
+                border-radius: 8px !important;
+            }}
+            .header-cell {{
+                padding: 20px 18px !important;
+            }}
+            .content-cell {{
+                padding: 20px 18px !important;
+            }}
+            .footer-cell {{
+                padding: 14px 18px !important;
+            }}
+            .card-padding {{
+                padding: 12px 14px !important;
+            }}
+            .header-title {{
+                font-size: 20px !important;
+            }}
+            .body-text {{
+                font-size: 14px !important;
+                line-height: 1.55 !important;
+            }}
+        }}
+    </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f9; color: #334155; line-height: 1.6;">
+    <!-- Outer Background Wrapper Table -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-outer-table" style="background-color: #f4f6f9; padding: 24px 12px; margin: 0;">
         <tr>
             <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); overflow: hidden; border: 1px solid #e5e7eb;">
-                    <!-- Header -->
-                    <tr style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
-                        <td style="padding: 28px 32px; text-align: left;">
-                            <h2 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px;">persevex <span style="color: #60a5fa; font-size: 14px; font-weight: 500;">LLP</span></h2>
-                            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">LEARN, GROW, SUCCEED</p>
+                <!--[if (gte mso 9)|(IE)]>
+                <table role="presentation" align="center" border="0" cellspacing="0" cellpadding="0" width="600" style="width: 600px;">
+                <tr>
+                <td align="center" valign="top" width="600" style="width: 600px;">
+                <![endif]-->
+                <!-- Centered Responsive Email Card Container -->
+                <table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" class="email-container" style="max-width: 600px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.06); overflow: hidden; border: 1px solid #e2e8f0;">
+                    <!-- Brand Header -->
+                    <tr>
+                        <td class="header-cell" style="padding: 24px 30px; background-color: #0f172a; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); text-align: left;">
+                            <h2 class="header-title" style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; line-height: 1.2;">
+                                persevex <span style="color: #60a5fa; font-size: 14px; font-weight: 500;">LLP</span>
+                            </h2>
+                            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 11px; letter-spacing: 1px; text-transform: uppercase;">
+                                LEARN, GROW, SUCCEED
+                            </p>
                         </td>
                     </tr>
-                    <!-- Body Content -->
+                    <!-- Main Body Content -->
                     <tr>
-                        <td style="padding: 36px 32px;">
-                            <p style="font-size: 16px; margin: 0 0 16px 0; color: #1e293b;">Dear <strong>{student_name}</strong>,</p>
-
-                            <p style="font-size: 15px; margin: 0 0 16px 0; color: #334155;">
-                                Warm greetings from <strong>Persevex LLP</strong>!
+                        <td class="content-cell" style="padding: 28px 30px; background-color: #ffffff;">
+                            <p class="body-text" style="font-size: 15px; margin: 0 0 12px 0; color: #1e293b;">
+                                Dear <strong>{escaped_student_name}</strong>,
                             </p>
 
-                            <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 6px; padding: 16px; margin: 20px 0;">
-                                <p style="margin: 0; font-size: 15px; color: #15803d; font-weight: 600;">
-                                    🎉 Congratulations on successfully completing your Internship program in <strong>{domain}</strong>!
+                            <p class="body-text" style="font-size: 15px; margin: 0 0 14px 0; color: #334155;">
+                                Greetings from <strong>Persevex</strong>!
+                            </p>
+
+                            <!-- Congratulations Callout Box -->
+                            <div class="card-padding" style="background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 6px; padding: 14px 16px; margin: 16px 0;">
+                                <p style="margin: 0; font-size: 15px; line-height: 1.5; color: #15803d; font-weight: 600; word-break: break-word;">
+                                    🎉 Congratulations on successfully completing your Internship program in <strong>{escaped_domain}</strong>!
                                 </p>
                             </div>
 
-                            <p style="font-size: 15px; margin: 0 0 16px 0; color: #334155;">
-                                We are pleased to award you your official <strong>Certificate of Internship Completion</strong>, which is attached to this email.
+                            <p class="body-text" style="font-size: 15px; margin: 0 0 14px 0; color: #334155;">
+                                We truly appreciate your dedication, enthusiasm, and contributions throughout your internship with Persevex.
                             </p>
 
-                            <p style="font-size: 14px; margin: 0 0 16px 0; color: #475569;">
-                                <strong>Digital Verification:</strong> Your certificate includes a unique, secure QR code. Scanning the QR code allows anyone to verify the certificate's authenticity online on our official verification portal.
+                            <p class="body-text" style="font-size: 15px; margin: 0 0 16px 0; color: #334155;">
+                                📜 Please find attached your official <strong>Certificate of Internship Completion</strong> in recognition of your internship experience, commitment, and the skills you have developed.
                             </p>
 
-                            <p style="font-size: 15px; margin: 0 0 24px 0; color: #334155;">
-                                We appreciate your dedication and commitment throughout the internship. We wish you the very best in all your future endeavors!
+                            <!-- Social Media & LinkedIn Sharing Card -->
+                            <div class="card-padding" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #0a66c2; border-radius: 6px; padding: 14px 16px; margin: 18px 0;">
+                                <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 700; color: #0f172a;">
+                                    💼 Share Your Achievement!
+                                </p>
+                                <p style="margin: 0 0 10px 0; font-size: 14px; line-height: 1.55; color: #334155;">
+                                    Celebrate this milestone by sharing your internship experience and certificate on LinkedIn and other social media platforms. Let your network know about the skills you have developed and the experience you have gained during your internship with Persevex.
+                                </p>
+                                <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #475569; word-break: break-word;">
+                                    Tag <strong>@Persevex</strong> and use the hashtags <strong style="color: #0a66c2;">#Persevex</strong> and <strong style="color: #0a66c2;">#InternshipCompletion</strong> to share your achievement with your professional network and inspire other aspiring professionals.
+                                </p>
+                            </div>
+
+                            <!-- Digital QR Code Verification Card -->
+                            <div class="card-padding" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; border-radius: 6px; padding: 12px 16px; margin: 16px 0;">
+                                <p style="margin: 0; font-size: 13px; line-height: 1.55; color: #475569; word-break: break-word;">
+                                    <strong>🔎 Digital Verification:</strong> Your certificate includes a unique, secure QR code. Scanning the QR code allows anyone to verify the certificate's authenticity online on our official verification portal.
+                                </p>
+                            </div>
+
+                            <p class="body-text" style="font-size: 15px; margin: 16px 0 0 0; color: #334155;">
+                                We wish you continued success in your career and future learning endeavors!
                             </p>
 
-                            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+                            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0 16px 0;">
 
-                            <p style="margin: 0; font-size: 14px; color: #64748b;">
-                                Warm regards,<br>
+                            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #64748b;">
+                                Best regards,<br>
                                 <strong style="color: #0f172a; font-size: 15px;">Team Persevex</strong><br>
-                                <span style="font-size: 13px;">Persevex Education Consultancy LLP</span>
+                                <span style="font-size: 13px; color: #64748b;">Persevex Education Consultancy LLP</span><br>
+                                <span style="font-size: 13px;">📧 <a href="mailto:support@persevex.com" style="color: #2563eb; text-decoration: none;">support@persevex.com</a></span><br>
+                                <span style="font-size: 13px;">🌐 <a href="https://www.persevex.com" style="color: #2563eb; text-decoration: none;">www.persevex.com</a></span>
                             </p>
                         </td>
                     </tr>
                     <!-- Footer -->
                     <tr style="background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
-                        <td style="padding: 16px 32px; text-align: center; color: #94a3b8; font-size: 12px;">
-                            © {datetime.now().year} Persevex LLP. All rights reserved.
+                        <td class="footer-cell" style="padding: 14px 28px; text-align: center; color: #94a3b8; font-size: 12px; line-height: 1.4;">
+                            © {current_year} Persevex Education Consultancy LLP. All rights reserved.
                         </td>
                     </tr>
                 </table>
+                <!--[if (gte mso 9)|(IE)]>
+                </td>
+                </tr>
+                </table>
+                <![endif]-->
             </td>
         </tr>
     </table>
 </body>
-</html>
-""", subtype="html")
+</html>""", subtype="html")
 
     # Attach Certificate PDF
     message.add_attachment(
