@@ -735,13 +735,11 @@ class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
         class FakeSMTP421Error(Exception):
             smtp_code = 421
 
-        with (
-            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
-            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
-            patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}),
-            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
-            patch("app.smtplib.SMTP_SSL", side_effect=FakeSMTP421Error("421 SMTPAUTH: IP rejected")),
-        ):
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed), \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}), \
+             patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")), \
+             patch("app.smtplib.SMTP_SSL", side_effect=FakeSMTP421Error("421 SMTPAUTH: IP rejected")):
             response = client.post("/api/ca-certificate/send-email", json=payload)
 
         self.assertEqual(response.status_code, 503)
@@ -773,13 +771,11 @@ class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
 
         finish_mock = MagicMock(return_value={"saved": True, "status": "supabase_only"})
 
-        with (
-            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
-            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
-            patch.object(repository, "finish_ca_certificate_single_email", finish_mock),
-            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
-            patch("app.smtplib.SMTP_SSL", side_effect=ConnectionRefusedError("Connection refused")),
-        ):
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed), \
+             patch.object(repository, "finish_ca_certificate_single_email", finish_mock), \
+             patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")), \
+             patch("app.smtplib.SMTP_SSL", side_effect=ConnectionRefusedError("Connection refused")):
             response = client.post("/api/ca-certificate/send-email", json=payload)
 
         self.assertNotEqual(response.status_code, 200)
@@ -811,13 +807,11 @@ class ReadonlyFilesystemPersistenceTests(unittest.TestCase):
         import smtplib as _smtplib
         auth_error = _smtplib.SMTPAuthenticationError(535, b"Authentication failed")
 
-        with (
-            patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None),
-            patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed),
-            patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}),
-            patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")),
-            patch("app.smtplib.SMTP_SSL", side_effect=auth_error),
-        ):
+        with patch.object(repository, "get_latest_ca_certificate_by_email", return_value=None), \
+             patch.object(repository, "claim_ca_certificate_single_email", return_value=claimed), \
+             patch.object(repository, "finish_ca_certificate_single_email", return_value={"saved": True, "status": "supabase_only"}), \
+             patch("app.ca_certificate_service.generate_pdf_bytes", return_value=(b"%PDF-mock", "29-09-2026")), \
+             patch("app.smtplib.SMTP_SSL", side_effect=auth_error):
             response = client.post("/api/ca-certificate/send-email", json=payload)
 
         self.assertEqual(response.status_code, 503)

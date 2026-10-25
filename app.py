@@ -62,12 +62,21 @@ app = Flask(__name__)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError(
-        "SUPABASE_URL and SUPABASE_KEY must be configured."
-    )
+if APP_ENV == "test":
+    supabase = None
+    if SUPABASE_URL and SUPABASE_KEY and ".invalid" not in SUPABASE_URL:
+        try:
+            supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        except Exception:
+            supabase = None
+else:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError(
+            "SUPABASE_URL and SUPABASE_KEY must be configured."
+        )
 
-supabase: Client = create_client(SUPABASE_URL,SUPABASE_KEY)
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 
 # ============================================================
@@ -5335,8 +5344,16 @@ def ca_certificate_send_email():
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
         message["To"] = email
         message.set_content(
-            f"Dear {name},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
-            "Congratulations on your participation.\n\nWarm regards,\nTeam Persevex"
+            f"Dear {name},\n\n"
+            "Greetings from Persevex!\n\n"
+            "Congratulations on your achievement as a Campus Ambassador at Persevex! Please find attached your Campus Ambassador Certificate in recognition of your participation and contribution to our community.\n\n"
+            "Thank you for helping us build brand awareness and connect more students with valuable opportunities. We appreciate your efforts in representing Persevex.\n\n"
+            "\U0001f4e3 Share your achievement on LinkedIn, tag @Persevex, and use #Persevex #CampusAmbassador to inspire other students.\n\n"
+            "We wish you continued success in your future endeavors!\n\n"
+            "Best regards,\n"
+            "Team Persevex\n"
+            "\U0001f4e7 support@persevex.com\n"
+            "\U0001f310 www.persevex.com"
         )
         pdf_bytes, _ = ca_certificate_service.generate_pdf_bytes(name, date_value)
         message.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
@@ -5616,8 +5633,16 @@ def ca_certificate_bulk_send_job(job_id):
                 message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
                 message["To"] = item["participant_email"]
                 message.set_content(
-                    f"Dear {participant_name},\n\nPlease find attached your Campus Ambassador Certificate from Persevex.\n\n"
-                    "Congratulations on your participation.\n\nWarm regards,\nTeam Persevex"
+                    f"Dear {participant_name},\n\n"
+                    "Greetings from Persevex!\n\n"
+                    "Congratulations on your achievement as a Campus Ambassador at Persevex! Please find attached your Campus Ambassador Certificate in recognition of your participation and contribution to our community.\n\n"
+                    "Thank you for helping us build brand awareness and connect more students with valuable opportunities. We appreciate your efforts in representing Persevex.\n\n"
+                    "\U0001f4e3 Share your achievement on LinkedIn, tag @Persevex, and use #Persevex #CampusAmbassador to inspire other students.\n\n"
+                    "We wish you continued success in your future endeavors!\n\n"
+                    "Best regards,\n"
+                    "Team Persevex\n"
+                    "\U0001f4e7 support@persevex.com\n"
+                    "\U0001f310 www.persevex.com"
                 )
                 message.add_attachment(pdf_bytes, maintype="application", subtype="pdf", filename=filename)
                 with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
