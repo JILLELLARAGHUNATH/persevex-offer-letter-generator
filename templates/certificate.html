@@ -327,6 +327,7 @@
                     <span id="generateBtnText">Generate Certificate</span>
                 </button>
             </form>
+            <div id="certStatusMessage" aria-live="polite"></div>
         </section>
 
         <!-- RIGHT PREVIEW SECTION -->
@@ -1050,6 +1051,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         downloadBtn.href = downloadUrl;
                         downloadBtn.setAttribute('download', result.filename || 'Certificate.pdf');
                     }
+                    setCertMessage('Certificate generated successfully.', 'success');
                     showToast('Certificate generated successfully.', 'success');
                     localStorage.setItem('persevex_stats_updated', Date.now().toString());
                     refreshStats();
@@ -1272,6 +1274,7 @@ async function sendSingleCertificateEmail(sendAgain = false) {
         if (response.ok && result.success) {
             sendBtn.classList.add('is-sent');
             sendText.textContent = sendAgain ? '✓ Certificate Resent' : '✓ Certificate Sent';
+            setCertMessage(sendAgain ? 'Certificate email resent successfully.' : 'Certificate email sent successfully.', 'success');
             showToast(sendAgain ? 'Certificate email resent successfully.' : 'Certificate email sent to student successfully.', 'success');
             localStorage.setItem('persevex_stats_updated', Date.now().toString());
             localStorage.setItem('persevex_history_updated', Date.now().toString());
@@ -1390,6 +1393,13 @@ function showToast(text, type = "success") {
     }, 4000);
 }
 
+function setCertMessage(text, type) {
+    const el = document.getElementById('certStatusMessage');
+    if (!el) return;
+    if (!text) { el.innerHTML = ''; el.className = ''; return; }
+    el.className = `message-box ${type}`;
+    el.textContent = text;
+}
 function animateCounter(element, newValue) {
     if (!element) return;
     const currentVal = parseInt(element.textContent.trim(), 10) || 0;

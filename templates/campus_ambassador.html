@@ -778,6 +778,7 @@ document.addEventListener("DOMContentLoaded", () => {
             sendBtn.disabled = false;
             editBtn.disabled = false;
 
+            setMessage("Letter generated successfully.", "success");
             showToast("Campus Ambassador Offer Letter generated successfully!", "success");
         } catch (err) {
             console.error("Generation error:", err);
@@ -847,6 +848,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw new Error(data.error || "Failed to send CA Offer Letter email.");
             }
 
+            setMessage("Email sent successfully.", "success");
             showToast(`Offer letter successfully sent to ${currentPayload.student_email}!`, "success");
 
             // Increment success count in UI with pulse
