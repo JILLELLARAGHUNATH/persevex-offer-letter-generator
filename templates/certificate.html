@@ -947,6 +947,8 @@ function animateStepProgression() {
 // Single Certificate Generation & Email Dispatch
 document.addEventListener('DOMContentLoaded', () => {
     initBulkIssueDate();
+    const issuedDateInput = document.getElementById('issued_date');
+    if (issuedDateInput && !issuedDateInput.value) issuedDateInput.value = getTodayDateString();
     const domainSelect = document.getElementById('domain_select');
     const customInput = document.getElementById('custom_domain_input');
     const form = document.getElementById('certificateForm');
