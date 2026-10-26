@@ -3755,7 +3755,7 @@ button:disabled,
 /* Toast Notifications */
 .toast-notification {
     position: fixed;
-    bottom: 24px;
+    top: 76px;
     right: 24px;
     background: #1e293b;
     color: #ffffff;
@@ -3769,6 +3769,16 @@ button:disabled,
     font-size: 14px;
     z-index: 10000;
     animation: slideInRight 0.3s ease;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+    .toast-notification {
+        top: 68px;
+        right: 16px;
+        max-width: calc(100vw - 32px);
+    }
 }
 
 .toast-notification.success {
@@ -6166,13 +6176,26 @@ button:disabled,
    ========================================================== */
 .toast-container {
     position: fixed;
-    bottom: 24px;
+    top: 76px;
     right: 24px;
     z-index: 999999;
     display: flex;
     flex-direction: column;
     gap: 10px;
     pointer-events: none;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+    .toast-container {
+        top: 68px;
+        right: 16px;
+        max-width: calc(100vw - 32px);
+    }
+    .toast-message {
+        max-width: 100%;
+    }
 }
 
 .toast-message {
