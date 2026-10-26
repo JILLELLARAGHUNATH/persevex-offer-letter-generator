@@ -4923,5 +4923,112 @@ class CACertificateSentFolderTests(unittest.TestCase):
         imap2.__exit__.assert_called_once()
 
 
+class InternshipCertificateEmailTemplateTests(unittest.TestCase):
+    def test_internship_certificate_email_subject_body_and_attachment(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "Aarav Sharma",
+            "student_email": "aarav.sharma@example.com",
+            "domain": "Artificial Intelligence & Data Science",
+        }
+        mock_pdf = b"%PDF-1.4 Mock Certificate Data"
+
+        with patch.object(certificate_service, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(certificate_service, "SENDER_PASSWORD", "mock_password"), \
+             patch.object(certificate_service.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(certificate_service.imaplib, "IMAP4_SSL", return_value=imap):
+            result = certificate_service.send_certificate_email(
+                data=data,
+                pdf_bytes=mock_pdf,
+                filename="Aarav_Sharma_Certificate.pdf"
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(smtp.send_message.call_count, 1)
+        sent_msg = smtp.send_message.call_args[0][0]
+
+        # 1. Exact subject verification
+        self.assertEqual(sent_msg["Subject"], "Congratulations on Successfully Completing Your Internship!")
+
+        # 2. Recipient and sender address verification
+        self.assertEqual(sent_msg["To"], "aarav.sharma@example.com")
+        self.assertEqual(sent_msg["From"], "Persevex LLP <support@persevex.com>")
+
+        # 3. Exact wording and placeholder substitution verification
+        expected_body = (
+            "Dear Aarav Sharma,\n\n"
+            "We are delighted to congratulate you on the successful completion of your Artificial Intelligence & Data Science internship with Persevex!\n\n"
+            "Your dedication, commitment, and efforts throughout the internship are truly appreciated. We hope this experience has helped you strengthen your skills, gain valuable knowledge, and take another step toward achieving your professional goals.\n\n"
+            "Please find your official Internship Completion Certificate attached to this email as recognition of your successful completion of the program.\n\n"
+            "We wish you continued success in your academic and professional journey and look forward to seeing you achieve great things in the future.\n\n"
+            "Warm regards,\n"
+            "Team Persevex\n"
+            "Persevex Education Consultancy LLP\n"
+        )
+        body = sent_msg.get_body(preferencelist=('plain',)).get_content()
+        self.assertEqual(body, expected_body)
+
+        # 4. Certificate PDF attachment verification
+        attachments = list(sent_msg.iter_attachments())
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0].get_filename(), "Aarav_Sharma_Certificate.pdf")
+        self.assertEqual(attachments[0].get_content(), mock_pdf)
+
+        # 5. Verify no designed HTML template parts exist
+        for part in sent_msg.walk():
+            self.assertNotEqual(part.get_content_type(), "text/html")
+
+    def test_internship_certificate_email_placeholder_substitution_dynamic(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "Priya Patel",
+            "student_email": "priya.patel@example.com",
+            "domain": "Full Stack Web Development",
+        }
+        mock_pdf = b"%PDF-mock-bytes"
+
+        with patch.object(certificate_service, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(certificate_service, "SENDER_PASSWORD", "mock_password"), \
+             patch.object(certificate_service.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(certificate_service.imaplib, "IMAP4_SSL", return_value=imap):
+            certificate_service.send_certificate_email(
+                data=data,
+                pdf_bytes=mock_pdf,
+                filename="Priya_Patel_Certificate.pdf"
+            )
+
+        sent_msg = smtp.send_message.call_args[0][0]
+        body = sent_msg.get_body(preferencelist=('plain',)).get_content()
+        self.assertIn("Dear Priya Patel,", body)
+        self.assertIn("successful completion of your Full Stack Web Development internship with Persevex!", body)
+        self.assertIn("Warm regards,\nTeam Persevex\nPersevex Education Consultancy LLP", body)
+
+    def test_other_email_templates_remain_unchanged(self):
+        import app as main_app
+        # Verify Offer Letter email template subject in app.py
+        with open("app.py", "r", encoding="utf-8") as f:
+            app_code = f.read()
+
+        # Offer Letter email
+        self.assertIn('message["Subject"] = "Internship Acceptance Letter"', app_code)
+        self.assertIn("Warm greetings from Persevex LLP!", app_code)
+
+        # Campus Ambassador Offer Letter email
+        self.assertIn('message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"', app_code)
+
+        # Campus Ambassador Certificate email
+        self.assertIn('message["Subject"] = "Campus Ambassador Certificate – Persevex"', app_code)
+
+
+
 if __name__ == '__main__':
     unittest.main()
+
