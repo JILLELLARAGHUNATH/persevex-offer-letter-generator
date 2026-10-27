@@ -2507,11 +2507,16 @@ def get_certificate_by_id(cert_id, supabase_client=None, return_error_detail=Fal
 
     # Check course_certificate_history if not found in certificate_history
     try:
-        course_rec = get_course_certificate_by_id(cert_clean, supabase_client=sb, return_error_detail=False)
+        course_rec, course_err = get_course_certificate_by_id(cert_clean, supabase_client=sb, return_error_detail=True)
         if course_rec:
             return (course_rec, None) if return_error_detail else course_rec
-    except Exception:
-        pass
+        # Propagate a Supabase connectivity error from the course cert lookup if we don't
+        # already have one — but ignore "not_found" (that is not a service error).
+        if course_err and course_err not in ("not_found", "empty_id") and not db_error:
+            db_error = course_err
+    except Exception as exc:
+        if not db_error:
+            db_error = repr(exc)
 
     if return_error_detail:
         return (None, db_error)
@@ -3002,6 +3007,7 @@ def get_course_certificate_by_id(cert_id, supabase_client=None, return_error_det
         return (None, "empty_id") if return_error_detail else None
 
     cert_clean = str(cert_id).strip()
+    db_error = None
     sb = supabase_client or get_supabase_client()
     if sb:
         try:
@@ -3016,8 +3022,11 @@ def get_course_certificate_by_id(cert_id, supabase_client=None, return_error_det
                 if not rec.get("template_version"):
                     rec["template_version"] = "v1"
                 return (rec, None) if return_error_detail else rec
-        except Exception:
-            pass
+            # Supabase responded but found no record — authoritative not_found, no fallback needed
+            return (None, "not_found") if return_error_detail else None
+        except Exception as exc:
+            db_error = repr(exc)
+            print("SUPABASE GET COURSE CERT ERROR (checking local fallback):", db_error)
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -3038,8 +3047,10 @@ def get_course_certificate_by_id(cert_id, supabase_client=None, return_error_det
             return (rec, None) if return_error_detail else rec
     except Exception as exc:
         print("LOCAL DB GET COURSE CERT ERROR:", repr(exc))
+        if not db_error:
+            db_error = repr(exc)
 
-    return (None, "not_found") if return_error_detail else None
+    return (None, db_error or "not_found") if return_error_detail else None
 
 
 def get_course_certificate_by_pk_id(record_id, supabase_client=None):
@@ -3193,16 +3204,30 @@ def save_course_certificate_record(record_data, existing_id=None):
         "template_version": template_version,
     }
 
+    supabase_configured = bool(SUPABASE_URL and SUPABASE_KEY)
+    supabase_saved = False
+    supabase_error = None
+
     sb = get_supabase_client()
     if sb:
         try:
             if is_resend and target_id:
-                sb.table("course_certificate_history").update(payload).eq("id", target_id).execute()
+                result = sb.table("course_certificate_history").update(payload).eq("id", target_id).execute()
             else:
-                sb.table("course_certificate_history").upsert(payload, on_conflict="certificate_id").execute()
+                result = sb.table("course_certificate_history").upsert(payload, on_conflict="certificate_id").execute()
+            if result.data is None or (is_resend and target_id and not result.data):
+                raise RuntimeError("Supabase did not confirm the Course Certificate history write.")
+            supabase_saved = True
         except Exception as exc:
-            print("SUPABASE SAVE COURSE CERTIFICATE ERROR:", repr(exc))
+            supabase_error = str(exc)
+            supabase_saved = False
+            print("SUPABASE SAVE COURSE CERTIFICATE ERROR (local reconciliation copy retained):", repr(exc))
+    elif supabase_configured:
+        supabase_error = "Supabase client could not be initialized."
+        supabase_saved = False
 
+    local_saved = False
+    conn = None
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         cursor = conn.cursor()
@@ -3245,11 +3270,41 @@ def save_course_certificate_record(record_data, existing_id=None):
                 error_message, template_version
             ))
         conn.commit()
-        conn.close()
-        return True
+        local_saved = True
     except Exception as exc:
-        print("LOCAL DB SAVE COURSE CERTIFICATE ERROR:", repr(exc))
-        return False
+        print("LOCAL DB SAVE COURSE CERTIFICATE SYNC WARNING:", repr(exc))
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    if not supabase_configured:
+        persistence_status = "local_only" if local_saved else "not_saved"
+    elif supabase_saved and local_saved:
+        persistence_status = "supabase_and_local"
+    elif supabase_saved:
+        persistence_status = "supabase_only"
+    elif local_saved:
+        persistence_status = "supabase_failed_local_saved"
+    else:
+        persistence_status = "not_saved"
+
+    error_detail = None
+    if supabase_configured and not supabase_saved:
+        error_detail = supabase_error or "Failed to persist Course Certificate to Supabase."
+    elif not local_saved and not supabase_configured:
+        error_detail = "Failed to save record to local SQLite database."
+
+    return {
+        "saved": bool(supabase_saved or local_saved),
+        "supabase_saved": supabase_saved,
+        "local_saved": local_saved,
+        "supabase_configured": supabase_configured,
+        "status": persistence_status,
+        "error": error_detail,
+    }
 
 
 def get_course_certificate_stats():

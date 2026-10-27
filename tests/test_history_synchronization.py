@@ -166,5 +166,210 @@ class ApiErrorSanitizationTests(unittest.TestCase):
             self.assertNotIn("deadlock", data["error"])
 
 
+class CourseCertificateGenerationRegressionTests(unittest.TestCase):
+    def setUp(self):
+        import app as application
+        from services import course_certificate_service
+        self.client = application.app.test_client()
+        self.service = course_certificate_service
+        with self.client.session_transaction() as session:
+            session["authenticated"] = True
+
+    def test_generation_fails_when_production_supabase_write_fails(self):
+        payload = {
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.com",
+            "course_name": "Full Stack Web Development",
+            "issued_date": "2026-10-27",
+        }
+        mock_persistence_failure = {
+            "saved": False,
+            "supabase_saved": False,
+            "sqlite_saved": True,
+            "supabase_configured": True,
+            "error": "PGRST205: Could not find table public.course_certificate_history",
+        }
+        with patch.object(self.service, "generate_certificate_id", return_value="PER-CC-TEST01"), \
+             patch.object(self.service, "generate_certificate_pdf", return_value="test_cert.pdf"), \
+             patch.object(repository, "save_course_certificate_record", return_value=mock_persistence_failure):
+            res = self.client.post("/api/course-certificate/generate", json=payload)
+            self.assertEqual(res.status_code, 500)
+            data = res.get_json()
+            self.assertFalse(data["success"])
+            self.assertFalse(data["saved"])
+            self.assertFalse(data["supabase_saved"])
+            self.assertEqual(data["storage_target"], "none")
+            self.assertIn("Failed to persist certificate record in production database", data["error"])
+            self.assertNotIn("PGRST205", data["error"])
+
+    def test_generation_succeeds_when_production_supabase_write_succeeds(self):
+        payload = {
+            "student_name": "Alice Smith",
+            "student_email": "alice@example.com",
+            "course_name": "Full Stack Web Development",
+            "issued_date": "2026-10-27",
+        }
+        mock_persistence_success = {
+            "saved": True,
+            "supabase_saved": True,
+            "sqlite_saved": False,
+            "supabase_configured": True,
+            "error": None,
+        }
+        with patch.object(self.service, "generate_certificate_id", return_value="PER-CC-TEST02"), \
+             patch.object(self.service, "generate_certificate_pdf", return_value="test_cert.pdf"), \
+             patch.object(repository, "save_course_certificate_record", return_value=mock_persistence_success):
+            res = self.client.post("/api/course-certificate/generate", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["success"])
+            self.assertTrue(data["saved"])
+            self.assertTrue(data["supabase_saved"])
+            self.assertEqual(data["storage_target"], "supabase")
+            self.assertEqual(data["certificate_id"], "PER-CC-TEST02")
+
+    def test_generation_succeeds_and_distinguishes_local_sqlite_storage(self):
+        payload = {
+            "student_name": "Bob Jones",
+            "student_email": "bob@example.com",
+            "course_name": "Python Mastery",
+            "issued_date": "2026-10-27",
+        }
+        mock_local_success = {
+            "saved": True,
+            "supabase_saved": False,
+            "sqlite_saved": True,
+            "supabase_configured": False,
+            "error": None,
+        }
+        with patch.object(self.service, "generate_certificate_id", return_value="PER-CC-TEST03"), \
+             patch.object(self.service, "generate_certificate_pdf", return_value="test_cert.pdf"), \
+             patch.object(repository, "save_course_certificate_record", return_value=mock_local_success):
+            res = self.client.post("/api/course-certificate/generate", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["success"])
+            self.assertTrue(data["saved"])
+            self.assertFalse(data["supabase_saved"])
+            self.assertTrue(data["sqlite_saved"])
+            self.assertEqual(data["storage_target"], "sqlite_local")
+
+    def test_generation_fails_when_local_persistence_fails(self):
+        payload = {
+            "student_name": "Charlie Brown",
+            "student_email": "charlie@example.com",
+            "course_name": "UI/UX Design",
+            "issued_date": "2026-10-27",
+        }
+        mock_local_failure = {
+            "saved": False,
+            "supabase_saved": False,
+            "sqlite_saved": False,
+            "supabase_configured": False,
+            "error": "disk I/O error",
+        }
+        with patch.object(self.service, "generate_certificate_id", return_value="PER-CC-TEST04"), \
+             patch.object(self.service, "generate_certificate_pdf", return_value="test_cert.pdf"), \
+             patch.object(repository, "save_course_certificate_record", return_value=mock_local_failure):
+            res = self.client.post("/api/course-certificate/generate", json=payload)
+            self.assertEqual(res.status_code, 500)
+            data = res.get_json()
+            self.assertFalse(data["success"])
+            self.assertFalse(data["saved"])
+            self.assertEqual(data["storage_target"], "none")
+            self.assertIn("Failed to persist certificate record in local database", data["error"])
+
+
+class CourseCertificateQRVerificationRouteTests(unittest.TestCase):
+    def setUp(self):
+        import app as application
+        self.app_module = application
+        self.client = application.app.test_client()
+
+    def test_qr_route_verifies_course_certificate_from_supabase(self):
+        """
+        Follows the exact QR route (/verify/<cert_id>) where the Course Completion
+        Certificate record resides in the public.course_certificate_history Supabase table.
+        """
+        mock_sb = MagicMock()
+
+        def mock_table(table_name):
+            mock_t = MagicMock()
+            mock_query = MagicMock()
+            mock_eq = MagicMock()
+            mock_limit = MagicMock()
+            if table_name == "course_certificate_history":
+                mock_limit.execute.return_value = MagicMock(data=[{
+                    "certificate_id": "PXL-CCC-2026-QR123",
+                    "student_name": "Eleanor Vance",
+                    "student_email": "eleanor@example.com",
+                    "course_name": "Full Stack Cloud Architecture",
+                    "issued_date": "27-10-2026",
+                    "certificate_status": "active",
+                }])
+            else:
+                mock_limit.execute.return_value = MagicMock(data=[])
+            mock_eq.limit.return_value = mock_limit
+            mock_query.eq.return_value = mock_eq
+            mock_t.select.return_value = mock_query
+            return mock_t
+
+        mock_sb.table.side_effect = mock_table
+
+        with patch.object(self.app_module, "supabase", mock_sb), \
+             patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            resp = self.client.get("/verify/PXL-CCC-2026-QR123")
+            self.assertEqual(resp.status_code, 200)
+            html = resp.get_data(as_text=True)
+            self.assertIn("Eleanor Vance", html)
+            self.assertIn("Full Stack Cloud Architecture", html)
+            self.assertIn("PXL-CCC-2026-QR123", html)
+            self.assertIn("Certificate Verified", html)
+
+    def test_qr_route_unknown_certificate_returns_404(self):
+        """
+        Follows the exact QR route for an unknown certificate ID and asserts
+        that 404 Not Found is returned without crashing.
+        """
+        mock_sb = MagicMock()
+
+        def mock_table(table_name):
+            mock_t = MagicMock()
+            mock_query = MagicMock()
+            mock_eq = MagicMock()
+            mock_limit = MagicMock()
+            mock_limit.execute.return_value = MagicMock(data=[])
+            mock_eq.limit.return_value = mock_limit
+            mock_query.eq.return_value = mock_eq
+            mock_t.select.return_value = mock_query
+            return mock_t
+
+        mock_sb.table.side_effect = mock_table
+
+        with patch.object(self.app_module, "supabase", mock_sb), \
+             patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            resp = self.client.get("/verify/PXL-CCC-2026-UNKNOWN")
+            self.assertEqual(resp.status_code, 404)
+            html = resp.get_data(as_text=True)
+            self.assertIn("PXL-CCC-2026-UNKNOWN", html)
+            self.assertIn("Certificate Not Verified", html)
+
+    def test_qr_route_database_outage_returns_503(self):
+        """
+        Follows the exact QR route when Supabase experiences an infrastructure
+        connection error or outage, and asserts that 503 Service Unavailable is returned.
+        """
+        mock_sb = MagicMock()
+        mock_sb.table.side_effect = Exception("PGRST000: Supabase connection timeout")
+
+        with patch.object(self.app_module, "supabase", mock_sb), \
+             patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            resp = self.client.get("/verify/PXL-CCC-2026-CRASH")
+            self.assertEqual(resp.status_code, 503)
+            html = resp.get_data(as_text=True)
+            self.assertIn("PXL-CCC-2026-CRASH", html)
+            self.assertIn("Verification Service Temporarily Unavailable", html)
+
+
 if __name__ == "__main__":
     unittest.main()

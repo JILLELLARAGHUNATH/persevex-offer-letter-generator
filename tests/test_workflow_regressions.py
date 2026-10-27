@@ -4388,6 +4388,22 @@ class CertificateQrVerificationUrlTests(unittest.TestCase):
                 self.assertIn("Known Student", html)
                 self.assertIn("Cloud Computing", html)
 
+    def test_verify_route_unknown_certificate_returns_404(self):
+        with patch.object(certificate_service, "db_get_certificate_by_id", return_value=(None, None)):
+            with application.app.test_client() as client:
+                resp = client.get("/verify/PER-NONEXISTENT-999")
+                self.assertEqual(resp.status_code, 404)
+                html = resp.get_data(as_text=True)
+                self.assertIn("PER-NONEXISTENT-999", html)
+
+    def test_verify_route_database_failure_returns_503(self):
+        with patch.object(certificate_service, "db_get_certificate_by_id", return_value=(None, "Supabase connection error")):
+            with application.app.test_client() as client:
+                resp = client.get("/verify/PER-FAIL-503")
+                self.assertEqual(resp.status_code, 503)
+                html = resp.get_data(as_text=True)
+                self.assertIn("PER-FAIL-503", html)
+
     def test_verify_query_parameter_redirects_to_canonical_route(self):
         with application.app.test_client() as client:
             resp1 = client.get("/verify?certificate_id=PER-2026-REDIRECT1")

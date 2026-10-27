@@ -5941,6 +5941,53 @@ def course_certificate_generate():
             base_url=base_url,
         )
 
+        # Save initial pending record so certificate is immediately verifiable and traceable
+        pending_record = {
+            "certificate_id": cert_id,
+            "student_name": student_name,
+            "student_email": student_email,
+            "course_name": course_name,
+            "issued_date": formatted_issued,
+            "email_status": "pending",
+            "sent_at": None,
+            "send_count": 0,
+            "pdf_filename": filename,
+            "certificate_status": "active",
+            "error_message": None,
+            "template_version": "v1",
+        }
+        persistence = repository.save_course_certificate_record(pending_record)
+
+        # Explicit persistence verification:
+        # In production (Supabase configured), if Supabase write failed, do NOT return success: true.
+        # Fail safe and sanitize error message to avoid leaking database schema, keys, or endpoints.
+        if persistence and persistence.get("supabase_configured") and not persistence.get("supabase_saved"):
+            raw_err = persistence.get("error") or ""
+            print("COURSE CERTIFICATE GENERATE SUPABASE WRITE FAILURE:", raw_err)
+            return jsonify({
+                "success": False,
+                "error": "Failed to persist certificate record in production database. Certificate generation aborted.",
+                "certificate_id": cert_id,
+                "saved": False,
+                "supabase_saved": False,
+                "sqlite_saved": bool(persistence.get("sqlite_saved")),
+                "storage_target": "none",
+            }), 500
+
+        # In local development (Supabase not configured), ensure local persistence succeeded
+        if persistence and not persistence.get("saved"):
+            raw_err = persistence.get("error") or ""
+            print("COURSE CERTIFICATE GENERATE LOCAL PERSISTENCE FAILURE:", raw_err)
+            return jsonify({
+                "success": False,
+                "error": "Failed to persist certificate record in local database. Certificate generation aborted.",
+                "certificate_id": cert_id,
+                "saved": False,
+                "supabase_saved": False,
+                "sqlite_saved": False,
+                "storage_target": "none",
+            }), 500
+
         preview_params = urllib.parse.urlencode({
             "name": student_name,
             "email": student_email,
@@ -5950,6 +5997,10 @@ def course_certificate_generate():
         preview_url = f"/verify/{cert_id}/preview?{preview_params}"
         download_url = f"/verify/{cert_id}/download?{preview_params}"
 
+        is_sb_saved = bool(persistence and persistence.get("supabase_saved"))
+        is_sq_saved = bool(persistence and persistence.get("sqlite_saved"))
+        storage_target = "supabase" if is_sb_saved else ("sqlite_local" if is_sq_saved else "none")
+
         return jsonify({
             "success": True,
             "filename": filename,
@@ -5957,11 +6008,18 @@ def course_certificate_generate():
             "download_url": download_url,
             "certificate_id": cert_id,
             "data": data_payload,
+            "saved": bool(persistence and persistence.get("saved")),
+            "supabase_saved": is_sb_saved,
+            "sqlite_saved": is_sq_saved,
+            "storage_target": storage_target,
         })
 
     except Exception as exc:
         print("COURSE CERTIFICATE GENERATE API ERROR:", repr(exc))
-        return jsonify({"error": str(exc)}), 500
+        return jsonify({
+            "success": False,
+            "error": "An error occurred while generating the certificate. Please check server logs."
+        }), 500
 
 
 @app.post("/api/course-certificate/pdf")
@@ -6079,9 +6137,11 @@ def course_certificate_send_email():
                 "pdf_filename": safe_file,
                 "error_message": error_msg,
             }
-            if is_resend and target_record_id:
+            if target_record_id:
                 fail_record["id"] = target_record_id
-            repository.save_course_certificate_record(fail_record, existing_id=target_record_id if is_resend else None)
+            fail_persistence = repository.save_course_certificate_record(fail_record, existing_id=target_record_id if is_resend else None)
+            if fail_persistence and fail_persistence.get("supabase_configured") and not fail_persistence.get("supabase_saved"):
+                print("COURSE CERTIFICATE FAIL-RECORD PERSISTENCE WARNING (Supabase not confirmed):", fail_persistence.get("status"), fail_persistence.get("error"))
 
             return jsonify({
                 "success": False,
@@ -6102,17 +6162,33 @@ def course_certificate_send_email():
             "pdf_filename": safe_file,
             "error_message": None,
         }
-        if is_resend and target_record_id:
+        if target_record_id:
             success_record["id"] = target_record_id
-        repository.save_course_certificate_record(success_record, existing_id=target_record_id if is_resend else None)
+        persistence = repository.save_course_certificate_record(success_record, existing_id=target_record_id if is_resend else None)
 
-        return jsonify({
+        persistence_warning = None
+        if persistence:
+            is_sb_configured = persistence.get("supabase_configured", False)
+            p_sb_saved = persistence.get("supabase_saved", False)
+            p_status = persistence.get("status", "")
+            if is_sb_configured and not p_sb_saved:
+                persistence_warning = persistence.get("error") or "Record was not persisted to Supabase."
+                print("COURSE CERTIFICATE SUCCESS-RECORD PERSISTENCE WARNING:", p_status, persistence_warning)
+            elif not persistence.get("saved"):
+                persistence_warning = persistence.get("error") or "Record could not be saved to database."
+                print("COURSE CERTIFICATE SUCCESS-RECORD PERSISTENCE WARNING (not saved anywhere):", p_status, persistence_warning)
+
+        response_body = {
             "success": True,
             "message": "Course Certificate sent successfully!",
             "certificate_id": cert_id,
             "send_count": current_send_count,
             "pdf_filename": safe_file,
-        })
+        }
+        if persistence_warning:
+            response_body["persistence_warning"] = persistence_warning
+            response_body["email_sent_database_failed"] = True
+        return jsonify(response_body)
 
     except Exception as exc:
         print("COURSE CERTIFICATE SEND EMAIL ERROR:", repr(exc))
