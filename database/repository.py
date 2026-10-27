@@ -175,6 +175,27 @@ def init_database_tables():
         if "claimed_at" not in ca_cert_columns:
             cursor.execute("ALTER TABLE campus_ambassador_certificate_history ADD COLUMN claimed_at TEXT")
 
+        # 6. Course Completion Certificate history table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS course_certificate_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                certificate_id TEXT UNIQUE NOT NULL,
+                student_name TEXT NOT NULL,
+                student_email TEXT NOT NULL,
+                course_name TEXT NOT NULL,
+                issued_date TEXT NOT NULL,
+                generated_date TEXT,
+                created_at TEXT,
+                certificate_status TEXT DEFAULT 'active',
+                email_status TEXT DEFAULT 'pending',
+                sent_at TEXT,
+                send_count INTEGER DEFAULT 0,
+                pdf_filename TEXT,
+                error_message TEXT,
+                template_version TEXT DEFAULT 'v1'
+            )
+        """)
+
         conn.commit()
         conn.close()
     except Exception as exc:
@@ -2484,6 +2505,14 @@ def get_certificate_by_id(cert_id, supabase_client=None, return_error_detail=Fal
         if not db_error:
             db_error = repr(exc)
 
+    # Check course_certificate_history if not found in certificate_history
+    try:
+        course_rec = get_course_certificate_by_id(cert_clean, supabase_client=sb, return_error_detail=False)
+        if course_rec:
+            return (course_rec, None) if return_error_detail else course_rec
+    except Exception:
+        pass
+
     if return_error_detail:
         return (None, db_error)
     return None
@@ -2568,12 +2597,58 @@ def delete_certificate_record(record_id, document_id=None):
     return total_local_deleted > 0
 
 
+def delete_course_certificate_record(record_id, document_id=None):
+    """
+    Delete a Course Completion Certificate record from history.
+    Targets ONLY exact ID or exact certificate_id (PXL-CCC-...).
+    Never deletes by email address to prevent accidental cascades.
+    """
+    identifiers = set()
+    if record_id is not None and str(record_id).strip():
+        identifiers.add(str(record_id).strip())
+    if document_id is not None and str(document_id).strip():
+        identifiers.add(str(document_id).strip())
+
+    if not identifiers:
+        return False
+
+    sb = get_supabase_client()
+    deleted_count = 0
+    if sb:
+        for ident in identifiers:
+            try:
+                if ident.isdigit():
+                    res = sb.table("course_certificate_history").delete().eq("id", int(ident)).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+                if ident.startswith("PXL-CCC-") or "CCC" in ident:
+                    res = sb.table("course_certificate_history").delete().eq("certificate_id", ident).execute()
+                    if res and res.data:
+                        deleted_count += len(res.data)
+            except Exception as exc:
+                print("SUPABASE DELETE COURSE CERTIFICATE ERROR (falling back to SQLite):", repr(exc))
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cursor = conn.cursor()
+    total_local_deleted = 0
+    for ident in identifiers:
+        if ident.isdigit():
+            cursor.execute("DELETE FROM course_certificate_history WHERE id = ?", (int(ident),))
+            total_local_deleted += cursor.rowcount
+        if ident.startswith("PXL-CCC-") or "CCC" in ident:
+            cursor.execute("DELETE FROM course_certificate_history WHERE certificate_id = ?", (ident,))
+            total_local_deleted += cursor.rowcount
+    conn.commit()
+    conn.close()
+    return (deleted_count > 0) or (total_local_deleted > 0)
+
+
 def bulk_delete_records(items):
     """
     Safely delete multiple records from email_history, campus_ambassador_history,
-    certificate_history, and campus_ambassador_certificate_history.
-    items is a list of dicts: [{'record_type': 'offer_letter'|'ca_letter'|'certificate'|'ca_certificate', 'id': ..., 'document_id': ...}, ...]
-    Returns: dict with total_deleted, offer_letters_deleted, ca_letters_deleted, certificates_deleted, ca_certificates_deleted.
+    certificate_history, campus_ambassador_certificate_history, and course_certificate_history.
+    items is a list of dicts: [{'record_type': 'offer_letter'|'ca_letter'|'certificate'|'ca_certificate'|'course_certificate', 'id': ..., 'document_id': ...}, ...]
+    Returns: dict with total_deleted, offer_letters_deleted, ca_letters_deleted, certificates_deleted, ca_certificates_deleted, course_certificates_deleted.
     """
     if not items or not isinstance(items, list):
         return {"success": False, "error": "No items provided for deletion.", "total_deleted": 0}
@@ -2582,6 +2657,7 @@ def bulk_delete_records(items):
     ca_items_to_delete = []
     cert_items_to_delete = []
     ca_cert_items_to_delete = []
+    course_cert_items_to_delete = []
 
     for item in items:
         if isinstance(item, dict):
@@ -2596,11 +2672,15 @@ def bulk_delete_records(items):
                 offer_items_to_delete.append((rec_id, doc_id))
             elif rec_type in ("ca_certificate", "ca_certificates", "ca_cert"):
                 ca_cert_items_to_delete.append((rec_id, doc_id))
+            elif rec_type in ("course_certificate", "course_certificates", "ccc", "course"):
+                course_cert_items_to_delete.append((rec_id, doc_id))
             elif rec_type in ("certificate", "cert", "certificate_history"):
                 cert_items_to_delete.append((rec_id, doc_id))
         elif isinstance(item, (int, str)):
             item_str = str(item).strip()
-            if item_str.startswith("PXL-CERT-") or item_str.startswith("CERT-"):
+            if item_str.startswith("PXL-CCC-") or item_str.startswith("CCC-"):
+                course_cert_items_to_delete.append((None, item_str))
+            elif item_str.startswith("PXL-CERT-") or item_str.startswith("CERT-"):
                 cert_items_to_delete.append((None, item_str))
             else:
                 offer_items_to_delete.append((item_str, None))
@@ -2609,6 +2689,7 @@ def bulk_delete_records(items):
     deleted_cas = 0
     deleted_certs = 0
     deleted_ca_certs = 0
+    deleted_course_certs = 0
 
     for rec_id, doc_id in offer_items_to_delete:
         if delete_offer_letter_record(rec_id, doc_id):
@@ -2626,20 +2707,25 @@ def bulk_delete_records(items):
         if delete_ca_certificate_record(rec_id, doc_id):
             deleted_ca_certs += 1
 
+    for rec_id, doc_id in course_cert_items_to_delete:
+        if delete_course_certificate_record(rec_id, doc_id):
+            deleted_course_certs += 1
+
     return {
         "success": True,
-        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs + deleted_course_certs,
         "offer_letters_deleted": deleted_offers,
         "ca_letters_deleted": deleted_cas,
         "certificates_deleted": deleted_certs,
         "ca_certificates_deleted": deleted_ca_certs,
+        "course_certificates_deleted": deleted_course_certs,
     }
 
 
 def delete_all_history_records(record_type="all"):
     """
     Safely purge all records from email_history, campus_ambassador_history,
-    certificate_history, and/or campus_ambassador_certificate_history.
+    certificate_history, campus_ambassador_certificate_history, and/or course_certificate_history.
     """
     rec_type = str(record_type or "all").strip().lower()
     sb = get_supabase_client()
@@ -2647,6 +2733,7 @@ def delete_all_history_records(record_type="all"):
     deleted_cas = 0
     deleted_certs = 0
     deleted_ca_certs = 0
+    deleted_course_certs = 0
 
     if sb:
         # 1. Purge Offer Letters if requested
@@ -2685,6 +2772,15 @@ def delete_all_history_records(record_type="all"):
                 print("SUPABASE DELETE ALL CA CERTIFICATES ERROR:", repr(exc))
                 raise RuntimeError(f"Failed to purge CA certificates from Supabase: {exc}") from exc
 
+        # 5. Purge Course Certificates if requested
+        if rec_type in ("all", "course_certificate", "course_certificates", "ccc", "course"):
+            try:
+                res = sb.table("course_certificate_history").delete().neq("id", -999999).execute()
+                deleted_course_certs = len(res.data) if res and res.data else 0
+            except Exception as exc:
+                print("SUPABASE DELETE ALL COURSE CERTIFICATES ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to purge course certificates from Supabase: {exc}") from exc
+
         # Sync purges to local SQLite mirror if local DB exists
         try:
             conn = sqlite3.connect(SQLITE_DB_PATH)
@@ -2697,6 +2793,8 @@ def delete_all_history_records(record_type="all"):
                 cursor.execute("DELETE FROM certificate_history")
             if rec_type in ("all", "ca_certificate", "ca_certificates", "ca_cert"):
                 cursor.execute("DELETE FROM campus_ambassador_certificate_history")
+            if rec_type in ("all", "course_certificate", "course_certificates", "ccc", "course"):
+                cursor.execute("DELETE FROM course_certificate_history")
             conn.commit()
             conn.close()
         except Exception as exc:
@@ -2704,11 +2802,12 @@ def delete_all_history_records(record_type="all"):
 
         return {
             "success": True,
-            "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
+            "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs + deleted_course_certs,
             "offer_letters_deleted": deleted_offers,
             "ca_letters_deleted": deleted_cas,
             "certificates_deleted": deleted_certs,
             "ca_certificates_deleted": deleted_ca_certs,
+            "course_certificates_deleted": deleted_course_certs,
         }
 
     # Offline / local fallback only when no Supabase client is configured
@@ -2730,16 +2829,21 @@ def delete_all_history_records(record_type="all"):
         cursor.execute("SELECT count(*) FROM campus_ambassador_certificate_history")
         deleted_ca_certs = cursor.fetchone()[0]
         cursor.execute("DELETE FROM campus_ambassador_certificate_history")
+    if rec_type in ("all", "course_certificate", "course_certificates", "ccc", "course"):
+        cursor.execute("SELECT count(*) FROM course_certificate_history")
+        deleted_course_certs = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM course_certificate_history")
     conn.commit()
     conn.close()
 
     return {
         "success": True,
-        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs,
+        "total_deleted": deleted_offers + deleted_cas + deleted_certs + deleted_ca_certs + deleted_course_certs,
         "offer_letters_deleted": deleted_offers,
         "ca_letters_deleted": deleted_cas,
         "certificates_deleted": deleted_certs,
         "ca_certificates_deleted": deleted_ca_certs,
+        "course_certificates_deleted": deleted_course_certs,
     }
 
 
@@ -2873,6 +2977,288 @@ def _fetch_all_raw_ca_certificates():
         return []
 
 
+def _fetch_all_raw_course_certificates():
+    sb = get_supabase_client()
+    if sb:
+        try:
+            result = sb.table("course_certificate_history").select("*").order("created_at", desc=True).execute()
+            return [dict(row) for row in (result.data or [])]
+        except Exception as exc:
+            pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM course_certificate_history ORDER BY id DESC").fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as exc:
+        print("LOCAL DB FETCH COURSE CERTIFICATES ERROR:", repr(exc))
+        return []
+
+
+def get_course_certificate_by_id(cert_id, supabase_client=None, return_error_detail=False):
+    if not cert_id:
+        return (None, "empty_id") if return_error_detail else None
+
+    cert_clean = str(cert_id).strip()
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("course_certificate_history").select("*").eq("certificate_id", cert_clean).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                rec = dict(res.data[0])
+                rec["certificate_type"] = "course_completion"
+                rec["internship_domain"] = rec.get("course_name")
+                rec["domain"] = rec.get("course_name")
+                if not rec.get("certificate_status"):
+                    rec["certificate_status"] = "active"
+                if not rec.get("template_version"):
+                    rec["template_version"] = "v1"
+                return (rec, None) if return_error_detail else rec
+        except Exception:
+            pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM course_certificate_history WHERE certificate_id = ? LIMIT 1", (cert_clean,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            rec = dict(row)
+            rec["certificate_type"] = "course_completion"
+            rec["internship_domain"] = rec.get("course_name")
+            rec["domain"] = rec.get("course_name")
+            if not rec.get("certificate_status"):
+                rec["certificate_status"] = "active"
+            if not rec.get("template_version"):
+                rec["template_version"] = "v1"
+            return (rec, None) if return_error_detail else rec
+    except Exception as exc:
+        print("LOCAL DB GET COURSE CERT ERROR:", repr(exc))
+
+    return (None, "not_found") if return_error_detail else None
+
+
+def get_course_certificate_by_pk_id(record_id, supabase_client=None):
+    if not record_id:
+        return None
+    try:
+        pk = int(record_id)
+    except (ValueError, TypeError):
+        return None
+
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("course_certificate_history").select("*").eq("id", pk).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                rec = dict(res.data[0])
+                rec["certificate_type"] = "course_completion"
+                rec["internship_domain"] = rec.get("course_name")
+                rec["domain"] = rec.get("course_name")
+                return rec
+        except Exception:
+            pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM course_certificate_history WHERE id = ? LIMIT 1", (pk,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            rec = dict(row)
+            rec["certificate_type"] = "course_completion"
+            rec["internship_domain"] = rec.get("course_name")
+            rec["domain"] = rec.get("course_name")
+            return rec
+    except Exception:
+        pass
+    return None
+
+
+def get_course_certificate_by_email(email, supabase_client=None):
+    if not email:
+        return None
+    email_clean = str(email).strip().lower()
+    sb = supabase_client or get_supabase_client()
+    if sb:
+        try:
+            res = sb.table("course_certificate_history").select("*").eq("student_email", email_clean).order("created_at", desc=True).limit(1).execute()
+            if res.data and len(res.data) > 0:
+                rec = dict(res.data[0])
+                rec["certificate_type"] = "course_completion"
+                rec["internship_domain"] = rec.get("course_name")
+                rec["domain"] = rec.get("course_name")
+                return rec
+        except Exception:
+            pass
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM course_certificate_history WHERE LOWER(student_email) = ? ORDER BY id DESC LIMIT 1", (email_clean,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            rec = dict(row)
+            rec["certificate_type"] = "course_completion"
+            rec["internship_domain"] = rec.get("course_name")
+            rec["domain"] = rec.get("course_name")
+            return rec
+    except Exception:
+        pass
+    return None
+
+
+def save_course_certificate_record(record_data, existing_id=None):
+    now_iso = datetime.now(timezone.utc).isoformat()
+    send_again = bool(record_data.get("send_again"))
+    target_id_raw = existing_id if existing_id is not None else (
+        record_data.get("id") or record_data.get("record_id") or record_data.get("existing_id")
+    )
+
+    target_id = None
+    if target_id_raw is not None and str(target_id_raw).strip():
+        try:
+            target_id = int(str(target_id_raw).strip())
+        except (ValueError, TypeError):
+            target_id = None
+
+    is_resend = bool(send_again and target_id is not None)
+    existing = None
+    if is_resend:
+        try:
+            existing = get_course_certificate_by_pk_id(target_id)
+        except Exception:
+            existing = None
+    elif record_data.get("certificate_id"):
+        try:
+            existing = get_course_certificate_by_id(str(record_data.get("certificate_id")).strip())
+        except Exception:
+            existing = None
+
+    existing = existing or {}
+    cert_id = str(record_data.get("certificate_id") or existing.get("certificate_id") or "").strip()
+    if not cert_id and not target_id:
+        return False
+
+    student_name = str(record_data.get("student_name") or existing.get("student_name") or "").strip()
+    student_email = str(record_data.get("student_email") or existing.get("student_email") or "").strip().lower()
+    course_name = str(record_data.get("course_name") or record_data.get("domain") or existing.get("course_name") or "").strip()
+    issued_date = str(record_data.get("issued_date") or record_data.get("issue_date") or existing.get("issued_date") or "").strip()
+    generated_date = str(record_data.get("generated_date") or existing.get("generated_date") or now_iso).strip()
+    created_at = str(existing.get("created_at") or record_data.get("created_at") or now_iso).strip()
+    certificate_status = str(record_data.get("certificate_status") or existing.get("certificate_status") or "active").strip().lower()
+    email_status = str(record_data.get("email_status") or ("sent" if is_resend else "pending")).strip().lower()
+    sent_at = record_data.get("sent_at") or (now_iso if email_status == "sent" else existing.get("sent_at"))
+
+    if is_resend:
+        if record_data.get("send_count") is not None:
+            send_count = int(record_data["send_count"])
+        elif existing.get("send_count") is not None:
+            send_count = int(existing["send_count"]) + 1
+        else:
+            send_count = 2
+        error_message = record_data.get("error_message") if email_status == "failed" else None
+    else:
+        if record_data.get("send_count") is not None:
+            send_count = int(record_data["send_count"])
+        else:
+            send_count = 1 if email_status == "sent" else 0
+        error_message = record_data.get("error_message")
+
+    pdf_filename = str(record_data.get("pdf_filename") or existing.get("pdf_filename") or "").strip()
+    template_version = str(record_data.get("template_version") or existing.get("template_version") or "v1").strip()
+
+    payload = {
+        "certificate_id": cert_id,
+        "student_name": student_name,
+        "student_email": student_email,
+        "course_name": course_name,
+        "issued_date": issued_date,
+        "generated_date": generated_date,
+        "created_at": created_at,
+        "certificate_status": certificate_status,
+        "email_status": email_status,
+        "sent_at": sent_at,
+        "send_count": send_count,
+        "pdf_filename": pdf_filename,
+        "error_message": error_message,
+        "template_version": template_version,
+    }
+
+    sb = get_supabase_client()
+    if sb:
+        try:
+            if is_resend and target_id:
+                sb.table("course_certificate_history").update(payload).eq("id", target_id).execute()
+            else:
+                sb.table("course_certificate_history").upsert(payload, on_conflict="certificate_id").execute()
+        except Exception as exc:
+            print("SUPABASE SAVE COURSE CERTIFICATE ERROR:", repr(exc))
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        cursor = conn.cursor()
+        if is_resend and target_id:
+            cursor.execute("""
+                UPDATE course_certificate_history SET
+                    certificate_id = ?, student_name = ?, student_email = ?, course_name = ?,
+                    issued_date = ?, generated_date = ?, certificate_status = ?,
+                    email_status = ?, sent_at = ?, send_count = ?, pdf_filename = ?,
+                    error_message = ?, template_version = ?
+                WHERE id = ?
+            """, (
+                cert_id, student_name, student_email, course_name,
+                issued_date, generated_date, certificate_status,
+                email_status, sent_at, send_count, pdf_filename,
+                error_message, template_version, target_id
+            ))
+        else:
+            cursor.execute("""
+                INSERT INTO course_certificate_history (
+                    certificate_id, student_name, student_email, course_name,
+                    issued_date, generated_date, created_at, certificate_status,
+                    email_status, sent_at, send_count, pdf_filename,
+                    error_message, template_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(certificate_id) DO UPDATE SET
+                    student_name = excluded.student_name,
+                    student_email = excluded.student_email,
+                    course_name = excluded.course_name,
+                    issued_date = excluded.issued_date,
+                    email_status = excluded.email_status,
+                    sent_at = excluded.sent_at,
+                    send_count = excluded.send_count,
+                    pdf_filename = excluded.pdf_filename,
+                    error_message = excluded.error_message
+            """, (
+                cert_id, student_name, student_email, course_name,
+                issued_date, generated_date, created_at, certificate_status,
+                email_status, sent_at, send_count, pdf_filename,
+                error_message, template_version
+            ))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as exc:
+        print("LOCAL DB SAVE COURSE CERTIFICATE ERROR:", repr(exc))
+        return False
+
+
+def get_course_certificate_stats():
+    raw = _fetch_all_raw_course_certificates()
+    success = sum(1 for r in raw if str(r.get("email_status") or "").lower() in ("sent", "success", "successful"))
+    failed = sum(1 for r in raw if str(r.get("email_status") or "").lower() in ("failed", "failure", "error"))
+    return {"total": len(raw), "success": success, "failed": failed}
+
+
 def get_campus_ambassador_stats():
     """
     Get live success and failed counts querying ONLY campus_ambassador_history.
@@ -2937,6 +3323,7 @@ def get_unified_history(
     raw_cas = _fetch_all_raw_campus_ambassador()
     raw_certs = _fetch_all_raw_certificates()
     raw_ca_certs = _fetch_all_raw_ca_certificates()
+    raw_course_certs = _fetch_all_raw_course_certificates()
 
     unified_list = []
 
@@ -3106,6 +3493,47 @@ def get_unified_history(
             "sort_key": created_ts or sent_ts or "0"
         })
 
+    # 5. Transform Course Certificates (from course_certificate_history)
+    for r in raw_course_certs:
+        status_raw = str(r.get("email_status") or "").strip().lower()
+        if status_raw in ("sent", "success", "successful"):
+            status_clean = "sent"
+        elif status_raw in ("failed", "failure", "error"):
+            status_clean = "failed"
+        else:
+            status_clean = "pending"
+
+        created_ts = str(r.get("created_at") or r.get("generated_date") or r.get("sent_at") or "")
+        sent_ts = str(r.get("sent_at") or "")
+        filename = r.get("pdf_filename") or ""
+        doc_id = r.get("certificate_id") or f"CCC-{r.get('id')}"
+        cert_dl_url = f"/verify/{doc_id}/download" if doc_id else (f"/generated/{filename}" if filename else "")
+
+        unified_list.append({
+            "id": r.get("id"),
+            "record_type": "course_certificate",
+            "type_label": "Course Certificate",
+            "document_id": doc_id,
+            "certificate_id": doc_id,
+            "student_name": r.get("student_name") or "",
+            "student_email": r.get("student_email") or "",
+            "domain": r.get("course_name") or "",
+            "duration": "",
+            "start_date": "",
+            "end_date": "",
+            "issued_date": r.get("issued_date") or "",
+            "letter_type": "Course Certificate",
+            "email_status": status_clean,
+            "sent_at": sent_ts,
+            "sent_at_display": format_ist_timestamp(sent_ts),
+            "created_at": created_ts,
+            "send_count": r.get("send_count") or 0,
+            "pdf_filename": filename,
+            "download_url": cert_dl_url,
+            "error_message": r.get("error_message") or "",
+            "sort_key": created_ts or sent_ts or "0"
+        })
+
     # Sort descending by sort_key
     unified_list.sort(key=lambda x: x.get("sort_key", ""), reverse=True)
 
@@ -3141,6 +3569,8 @@ def get_unified_history(
             records = [r for r in records if r["record_type"] == "certificate"]
         elif rec_type_clean in ("ca_certificate", "ca_certificates", "ca_cert"):
             records = [r for r in records if r["record_type"] == "ca_certificate"]
+        elif rec_type_clean in ("course_certificate", "course_certificates", "ccc", "course"):
+            records = [r for r in records if r["record_type"] == "course_certificate"]
 
     # 2. Filter: Live Search
     if search:
@@ -3220,6 +3650,7 @@ def get_unified_history(
     total_ca_letters = sum(1 for r in records if r["record_type"] == "ca_letter")
     total_certificates = sum(1 for r in records if r["record_type"] == "certificate")
     total_ca_certificates = sum(1 for r in records if r["record_type"] == "ca_certificate")
+    total_course_certificates = sum(1 for r in records if r["record_type"] == "course_certificate")
     total_sent = sum(1 for r in records if r["email_status"] == "sent")
     total_failed = sum(
         1 for r in records
@@ -3257,6 +3688,7 @@ def get_unified_history(
         "total_ca_letters": total_ca_letters,
         "total_certificates": total_certificates,
         "total_ca_certificates": total_ca_certificates,
+        "total_course_certificates": total_course_certificates,
         "total_sent": total_sent,
         "total_failed": total_failed,
         "total_pending": total_pending,
@@ -3269,7 +3701,7 @@ def get_unified_history(
 
 def get_all_workflow_stats():
     """
-    Returns separate authoritative statistics for all four independent workflows
+    Returns separate authoritative statistics for all workflows
     plus the overall email summary. Loads all records to calculate per-workflow
     sent/failed breakdowns accurately.
     """
@@ -3291,8 +3723,9 @@ def get_all_workflow_stats():
             "failed": history_data.get("total_failed", 0),
             "total":  history_data.get("total_records", 0),
         },
-        "offer_letter":   _stats("offer_letter"),
-        "ca_letter":      _stats("ca_letter"),
-        "certificate":    _stats("certificate"),
-        "ca_certificate": _stats("ca_certificate"),
+        "offer_letter":       _stats("offer_letter"),
+        "ca_letter":          _stats("ca_letter"),
+        "certificate":        _stats("certificate"),
+        "ca_certificate":     _stats("ca_certificate"),
+        "course_certificate": _stats("course_certificate"),
     }

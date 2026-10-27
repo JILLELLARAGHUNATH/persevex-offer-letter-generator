@@ -246,19 +246,30 @@ def get_linkedin_share_data(record, request=None):
     """
     cert_id = str(record.get("certificate_id", "")).strip()
     student_name = str(record.get("student_name", "Student")).strip()
-    domain = str(record.get("internship_domain") or record.get("domain") or "Internship").strip()
+    is_course = record.get("certificate_type") == "course_completion" or cert_id.startswith("PXL-CCC-")
+    domain = str(record.get("course_name") or record.get("internship_domain") or record.get("domain") or ("Course" if is_course else "Internship")).strip()
     verification_url = get_verification_url(cert_id, request)
-    clean_domain_tag = re.sub(r"[^\w]", "", domain) or "Internship"
+    clean_domain_tag = re.sub(r"[^\w]", "", domain) or ("Course" if is_course else "Internship")
 
-    post_text = (
-        f"🎓 Excited to share that I have successfully completed my internship in {domain} "
-        f"at Persevex Education Consultancy LLP.\n\n"
-        f"I am grateful for the opportunity to gain practical experience, "
-        f"strengthen my technical skills, and learn throughout this internship.\n\n"
-        f"📜 Official Certificate:\n{verification_url}\n\n"
-        f"Thank you to Persevex Education Consultancy LLP for this valuable learning experience.\n\n"
-        f"#Internship\n#{clean_domain_tag}\n#Persevex\n#InternshipCertificate\n#CareerGrowth\n#Learning\n#ProfessionalDevelopment"
-    )
+    if is_course:
+        post_text = (
+            f"🎓 Excited to share that I have successfully completed the {domain} course "
+            f"at Persevex Education Consultancy LLP.\n\n"
+            f"I am grateful for the opportunity to strengthen my skills and knowledge throughout this program.\n\n"
+            f"📜 Official Certificate:\n{verification_url}\n\n"
+            f"Thank you to Persevex Education Consultancy LLP for this valuable learning experience.\n\n"
+            f"#Persevex #{clean_domain_tag} #CourseCompletion #Certification #CareerGrowth #Learning #ProfessionalDevelopment"
+        )
+    else:
+        post_text = (
+            f"🎓 Excited to share that I have successfully completed my internship in {domain} "
+            f"at Persevex Education Consultancy LLP.\n\n"
+            f"I am grateful for the opportunity to gain practical experience, "
+            f"strengthen my technical skills, and learn throughout this internship.\n\n"
+            f"📜 Official Certificate:\n{verification_url}\n\n"
+            f"Thank you to Persevex Education Consultancy LLP for this valuable learning experience.\n\n"
+            f"#Internship\n#{clean_domain_tag}\n#Persevex\n#InternshipCertificate\n#CareerGrowth\n#Learning\n#ProfessionalDevelopment"
+        )
 
     share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(verification_url, safe='')}"
     return post_text, share_url
@@ -270,16 +281,26 @@ def get_whatsapp_share_data(record, request=None):
     """
     cert_id = str(record.get("certificate_id", "")).strip()
     student_name = str(record.get("student_name", "Student")).strip()
-    domain = str(record.get("internship_domain") or record.get("domain") or "Internship").strip()
+    is_course = record.get("certificate_type") == "course_completion" or cert_id.startswith("PXL-CCC-")
+    domain = str(record.get("course_name") or record.get("internship_domain") or record.get("domain") or ("Course" if is_course else "Internship")).strip()
     verification_url = get_verification_url(cert_id, request)
 
-    message_text = (
-        f"🎓 I am proud to share my officially verified Persevex Internship Certificate.\n\n"
-        f"Certificate Holder: {student_name}\n"
-        f"Internship Domain: {domain}\n"
-        f"Certificate ID: {cert_id}\n\n"
-        f"Verify the certificate:\n{verification_url}"
-    )
+    if is_course:
+        message_text = (
+            f"🎓 I am proud to share my officially verified Persevex Course Completion Certificate.\n\n"
+            f"Certificate Holder: {student_name}\n"
+            f"Course: {domain}\n"
+            f"Certificate ID: {cert_id}\n\n"
+            f"Verify the certificate:\n{verification_url}"
+        )
+    else:
+        message_text = (
+            f"🎓 I am proud to share my officially verified Persevex Internship Certificate.\n\n"
+            f"Certificate Holder: {student_name}\n"
+            f"Internship Domain: {domain}\n"
+            f"Certificate ID: {cert_id}\n\n"
+            f"Verify the certificate:\n{verification_url}"
+        )
 
     share_url = f"https://wa.me/?text={urllib.parse.quote(message_text, safe='')}"
     return message_text, share_url

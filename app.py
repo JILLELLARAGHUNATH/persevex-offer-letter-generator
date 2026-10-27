@@ -50,6 +50,7 @@ import services.bulk_certificate_service as bulk_certificate_service
 from services.ca_bulk_service import parse_ca_file
 import services.bulk_offer_letter_service as bulk_offer_letter_service
 from services import ca_certificate_service
+from services import course_certificate_service
 from services.bulk_job_manager import bulk_job_manager
 
 
@@ -5064,6 +5065,8 @@ def delete_unified_history_record(record_type, record_id):
             deleted = repository.delete_ca_certificate_record(record_id)
         elif rec_type in ("offer_letter", "offer", "offer_letters", "email_history"):
             deleted = repository.delete_offer_letter_record(record_id)
+        elif rec_type in ("course_certificate", "course_completion", "ccc"):
+            deleted = repository.delete_course_certificate_record(record_id)
         else:
             deleted = repository.delete_certificate_record(record_id)
 
@@ -5141,6 +5144,7 @@ def delete_all_history_endpoint():
             "ca_letters_deleted": result.get("ca_letters_deleted", 0),
             "certificates_deleted": result.get("certificates_deleted", 0),
             "ca_certificates_deleted": result.get("ca_certificates_deleted", 0),
+            "course_certificates_deleted": result.get("course_certificates_deleted", 0),
             "message": "All history records deleted successfully."
         })
     except Exception as exc:
@@ -5855,6 +5859,265 @@ def ca_certificate_bulk_download():
         mimetype="application/zip",
         headers={"Content-Disposition": "attachment; filename=Persevex_CA_Certificates.zip"},
     )
+
+
+# ============================================================
+# COURSE COMPLETION CERTIFICATE (CCC) ROUTES
+# ============================================================
+
+@app.get("/course-certificate")
+@app.get("/course-certificate/single")
+def course_certificate_page():
+    try:
+        stats = repository.get_course_certificate_stats()
+        success_count = stats.get("success", 0)
+        failed_count = stats.get("failed", 0)
+    except Exception as exc:
+        print("COURSE CERTIFICATE STATS COUNT ERROR:", repr(exc))
+        success_count = 0
+        failed_count = 0
+
+    return render_template(
+        "course_certificate.html",
+        today_iso=datetime.now(APP_LOCAL_TIMEZONE).strftime("%Y-%m-%d"),
+        today_formatted=datetime.now(APP_LOCAL_TIMEZONE).strftime("%B %d, %Y"),
+        success_count=success_count,
+        failed_count=failed_count,
+    )
+
+
+@app.get("/api/course-certificate/stats")
+def course_certificate_stats():
+    try:
+        stats = repository.get_course_certificate_stats()
+        return jsonify({
+            "success": True,
+            "total_count": stats.get("total", 0),
+            "success_count": stats.get("success", 0),
+            "failed_count": stats.get("failed", 0),
+        })
+    except Exception as exc:
+        print("COURSE CERTIFICATE STATS ERROR:", repr(exc))
+        return jsonify({
+            "success": False,
+            "total_count": 0,
+            "success_count": 0,
+            "failed_count": 0,
+        }), 500
+
+
+@app.post("/api/course-certificate/generate")
+def course_certificate_generate():
+    try:
+        data = request.get_json(force=True) or {}
+        if not data:
+            return jsonify({"error": "No course certificate data received."}), 400
+
+        student_name = str(data.get("student_name", "")).strip()
+        student_email = str(data.get("student_email", "")).strip().lower()
+        course_name = str(data.get("course_name", "")).strip()
+        issued_date = str(data.get("issued_date", "")).strip()
+
+        if not student_name or not student_email or not course_name or not issued_date:
+            return jsonify({
+                "error": "Please fill all required fields: Student Name, Email, Course Name, and Issued Date."
+            }), 400
+
+        formatted_issued = course_certificate_service.format_display_date(issued_date)
+        cert_id = course_certificate_service.generate_certificate_id(supabase)
+
+        data_payload = {
+            "student_name": student_name,
+            "student_email": student_email,
+            "course_name": course_name,
+            "issued_date": formatted_issued,
+            "certificate_id": cert_id,
+        }
+
+        base_url = course_certificate_service.get_public_base_url(request)
+        filename = course_certificate_service.generate_certificate_pdf(
+            data=data_payload,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
+        )
+
+        preview_params = urllib.parse.urlencode({
+            "name": student_name,
+            "email": student_email,
+            "course_name": course_name,
+            "issued": formatted_issued,
+        })
+        preview_url = f"/verify/{cert_id}/preview?{preview_params}"
+        download_url = f"/verify/{cert_id}/download?{preview_params}"
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "url": preview_url,
+            "download_url": download_url,
+            "certificate_id": cert_id,
+            "data": data_payload,
+        })
+
+    except Exception as exc:
+        print("COURSE CERTIFICATE GENERATE API ERROR:", repr(exc))
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/pdf")
+def course_certificate_pdf():
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = str(data.get("student_name", "")).strip()
+        course_name = str(data.get("course_name", "")).strip()
+        issued_date = str(data.get("issued_date", "")).strip()
+        cert_id = str(data.get("certificate_id", "")).strip()
+
+        if not cert_id:
+            cert_id = course_certificate_service.generate_certificate_id(supabase)
+
+        base_url = course_certificate_service.get_public_base_url(request)
+        pdf_bytes, filename = course_certificate_service.generate_certificate_pdf_bytes(
+            data={
+                "student_name": student_name,
+                "course_name": course_name,
+                "issued_date": issued_date,
+                "certificate_id": cert_id,
+            },
+            base_url=base_url,
+        )
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=bool(data.get("download")),
+            download_name=filename,
+        )
+    except Exception as exc:
+        print("COURSE CERTIFICATE PDF STREAM ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/send-email")
+def course_certificate_send_email():
+    try:
+        data = request.get_json(force=True) or {}
+        recipient = str(data.get("student_email") or "").strip().lower()
+        student_name = str(data.get("student_name") or "Student").strip()
+        course_name = str(data.get("course_name") or "").strip()
+        issued_date = str(data.get("issued_date") or "").strip()
+        cert_id = str(data.get("certificate_id") or "").strip()
+        send_again = data.get("send_again") is True
+
+        if not recipient or not student_name or not course_name:
+            return jsonify({"success": False, "error": "Student name, email, and course name are required."}), 400
+
+        # Check duplicate / previous sends
+        existing_cert = repository.get_course_certificate_by_email(recipient)
+        is_sent_already = bool(existing_cert and str(existing_cert.get("email_status") or "").strip().lower() == "sent")
+
+        if is_sent_already and not send_again:
+            return jsonify({
+                "success": False,
+                "duplicate": True,
+                "message": "A Course Certificate has already been sent to this student email. Do you want to send it again?",
+                "previous_record": existing_cert,
+                "certificate_id": existing_cert.get("certificate_id"),
+                "email": recipient,
+            }), 409
+
+        is_resend = bool(send_again and is_sent_already)
+        target_record_id = (data.get("id") or (existing_cert.get("id") if existing_cert else None)) if is_resend else None
+
+        if is_resend and existing_cert:
+            cert_id = str(existing_cert.get("certificate_id") or cert_id).strip()
+            prev_count = int(existing_cert.get("send_count") or 1)
+            current_send_count = prev_count + 1
+        else:
+            current_send_count = 1
+            if not cert_id:
+                cert_id = course_certificate_service.generate_certificate_id(supabase)
+
+        formatted_issued = course_certificate_service.format_display_date(issued_date)
+        cert_data = {
+            "student_name": student_name,
+            "student_email": recipient,
+            "course_name": course_name,
+            "issued_date": formatted_issued,
+            "certificate_id": cert_id,
+        }
+
+        base_url = course_certificate_service.get_public_base_url(request)
+        safe_file = course_certificate_service.generate_certificate_pdf(
+            data=cert_data,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
+        )
+        pdf_path = GENERATED_DIR / safe_file
+        sent_time = datetime.now(timezone.utc).isoformat()
+
+        try:
+            course_certificate_service.send_certificate_email(
+                data=cert_data,
+                pdf_path=pdf_path,
+                filename=safe_file,
+                base_url=base_url,
+            )
+        except Exception as smtp_exc:
+            error_msg = str(smtp_exc)
+            print("COURSE CERTIFICATE SMTP SEND ERROR:", repr(smtp_exc))
+
+            fail_record = {
+                "certificate_id": cert_id,
+                "student_name": student_name,
+                "student_email": recipient,
+                "course_name": course_name,
+                "issued_date": formatted_issued,
+                "email_status": "failed",
+                "sent_at": None,
+                "send_count": current_send_count,
+                "pdf_filename": safe_file,
+                "error_message": error_msg,
+            }
+            if is_resend and target_record_id:
+                fail_record["id"] = target_record_id
+            repository.save_course_certificate_record(fail_record, existing_id=target_record_id if is_resend else None)
+
+            return jsonify({
+                "success": False,
+                "error": f"Failed to send email: {error_msg}",
+                "email_status": "failed",
+            }), 500
+
+        # Success record
+        success_record = {
+            "certificate_id": cert_id,
+            "student_name": student_name,
+            "student_email": recipient,
+            "course_name": course_name,
+            "issued_date": formatted_issued,
+            "email_status": "sent",
+            "sent_at": sent_time,
+            "send_count": current_send_count,
+            "pdf_filename": safe_file,
+            "error_message": None,
+        }
+        if is_resend and target_record_id:
+            success_record["id"] = target_record_id
+        repository.save_course_certificate_record(success_record, existing_id=target_record_id if is_resend else None)
+
+        return jsonify({
+            "success": True,
+            "message": "Course Certificate sent successfully!",
+            "certificate_id": cert_id,
+            "send_count": current_send_count,
+            "pdf_filename": safe_file,
+        })
+
+    except Exception as exc:
+        print("COURSE CERTIFICATE SEND EMAIL ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
 
 @app.get("/certificate")
 def certificate_page():
@@ -6620,14 +6883,26 @@ def verify_download_certificate(certificate_id):
     try:
         base_url = certificate_service.get_public_base_url(request)
 
-        pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
-            data=data,
-            base_url=base_url,
-            template_version=template_version,
-        )
-
-        student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
-        download_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
+        is_course = (record and record.get("certificate_type") == "course_completion") or cert_id.startswith("PXL-CCC-") or "CCC" in cert_id
+        if is_course:
+            if record:
+                data["course_name"] = record.get("course_name") or record.get("internship_domain") or record.get("domain", "")
+            else:
+                data["course_name"] = request.args.get("course_name") or request.args.get("course") or data.get("domain", "")
+            pdf_bytes, filename = course_certificate_service.generate_certificate_pdf_bytes(
+                data=data,
+                base_url=base_url,
+            )
+            student_name_safe = course_certificate_service.safe_filename(data.get("student_name", "Student"))
+            download_name = f"Persevex_Course_Certificate_{student_name_safe}_{cert_id}.pdf"
+        else:
+            pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
+                data=data,
+                base_url=base_url,
+                template_version=template_version,
+            )
+            student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
+            download_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
 
         return Response(
             pdf_bytes,
@@ -6690,14 +6965,26 @@ def verify_preview_certificate(certificate_id):
     try:
         base_url = certificate_service.get_public_base_url(request)
 
-        pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
-            data=data,
-            base_url=base_url,
-            template_version=template_version,
-        )
-
-        student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
-        preview_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
+        is_course = (record and record.get("certificate_type") == "course_completion") or cert_id.startswith("PXL-CCC-") or "CCC" in cert_id
+        if is_course:
+            if record:
+                data["course_name"] = record.get("course_name") or record.get("internship_domain") or record.get("domain", "")
+            else:
+                data["course_name"] = request.args.get("course_name") or request.args.get("course") or data.get("domain", "")
+            pdf_bytes, filename = course_certificate_service.generate_certificate_pdf_bytes(
+                data=data,
+                base_url=base_url,
+            )
+            student_name_safe = course_certificate_service.safe_filename(data.get("student_name", "Student"))
+            preview_name = f"Persevex_Course_Certificate_{student_name_safe}_{cert_id}.pdf"
+        else:
+            pdf_bytes, filename = certificate_service.generate_certificate_pdf_bytes(
+                data=data,
+                base_url=base_url,
+                template_version=template_version,
+            )
+            student_name_safe = certificate_service.safe_filename(data.get("student_name", "Student"))
+            preview_name = f"Persevex_Certificate_{student_name_safe}_{cert_id}.pdf"
 
         return Response(
             pdf_bytes,
@@ -6757,12 +7044,24 @@ def verify_image_certificate(certificate_id):
     try:
         base_url = certificate_service.get_public_base_url(request)
 
-        img_bytes = certificate_service.generate_certificate_image_bytes(
-            data=data,
-            base_url=base_url,
-            dpi=180,
-            template_version=template_version,
-        )
+        is_course = (record and record.get("certificate_type") == "course_completion") or cert_id.startswith("PXL-CCC-") or "CCC" in cert_id
+        if is_course:
+            if record:
+                data["course_name"] = record.get("course_name") or record.get("internship_domain") or record.get("domain", "")
+            else:
+                data["course_name"] = request.args.get("course_name") or request.args.get("course") or data.get("domain", "")
+            img_bytes = course_certificate_service.generate_certificate_image_bytes(
+                data=data,
+                base_url=base_url,
+                dpi=180,
+            )
+        else:
+            img_bytes = certificate_service.generate_certificate_image_bytes(
+                data=data,
+                base_url=base_url,
+                dpi=180,
+                template_version=template_version,
+            )
 
         return Response(
             img_bytes,

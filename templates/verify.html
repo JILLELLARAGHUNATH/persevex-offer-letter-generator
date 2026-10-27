@@ -137,16 +137,17 @@
                                     <strong class="detail-value highlight-student-name">{{ certificate.student_name }}</strong>
                                 </div>
 
-                                <!-- Internship Domain -->
+                                <!-- Domain / Course Name -->
                                 <div class="verify-detail-item highlight-item-domain">
-                                    <span class="detail-label">Internship Domain</span>
+                                    <span class="detail-label">{% if certificate.certificate_type == 'course_completion' %}Course Name{% else %}Internship Domain{% endif %}</span>
                                     <div class="domain-badge-wrapper">
-                                        <span class="domain-accent-badge">{{ certificate.internship_domain }}</span>
+                                        <span class="domain-accent-badge">{{ certificate.course_name or certificate.internship_domain }}</span>
                                     </div>
                                 </div>
 
                                 <!-- Details 2-Column Subgrid -->
                                 <div class="details-inner-subgrid">
+                                    {% if certificate.certificate_type != 'course_completion' and (certificate.start_date or certificate.end_date) %}
                                     <!-- Duration / Period -->
                                     <div class="verify-detail-item">
                                         <span class="detail-label">Internship Period</span>
@@ -156,6 +157,7 @@
                                             <span>{{ certificate.end_date }}</span>
                                         </strong>
                                     </div>
+                                    {% endif %}
 
                                     <!-- Issue Date -->
                                     <div class="verify-detail-item">

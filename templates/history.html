@@ -66,6 +66,13 @@
                     </svg>
                     <span>CA Certificate</span>
                 </a>
+                <a href="/course-certificate" class="nav-tab-link" title="Course Completion Certificate">
+                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                    </svg>
+                    <span>Course Certificate</span>
+                </a>
                 <a href="/history" class="nav-tab-link active" title="Unified History">
                     <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
@@ -127,6 +134,7 @@
                     <button type="button" class="type-filter-pill {% if record_type in ('ca_letter', 'ca', 'campus_ambassador') %}active{% endif %}" data-type="ca_letter">CA Offer Letters</button>
                     <button type="button" class="type-filter-pill {% if record_type in ('certificate', 'cert') %}active{% endif %}" data-type="certificate">Certificates</button>
                     <button type="button" class="type-filter-pill {% if record_type in ('ca_certificate', 'ca_certificates', 'ca_cert') %}active{% endif %}" data-type="ca_certificate">CA Certificates</button>
+                    <button type="button" class="type-filter-pill {% if record_type in ('course_certificate', 'course_completion', 'ccc') %}active{% endif %}" data-type="course_certificate">Course Certificates</button>
                 </div>
             </div>
 
@@ -198,6 +206,19 @@
                     <div class="stat-info">
                         <span class="stat-label">CA Certificates</span>
                         <span class="stat-value" id="summaryTotalCaCertificates">{{ total_ca_certificates or 0 }}</span>
+                    </div>
+                </div>
+
+                <div class="summary-stat-card" style="border-left: 4px solid #6366f1;">
+                    <div class="stat-icon-wrapper" style="background: #eef2ff; color: #4f46e5;">
+                        <svg class="stat-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                            <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-label">Course Certificates</span>
+                        <span class="stat-value" id="summaryTotalCourseCertificates">{{ total_course_certificates or 0 }}</span>
                     </div>
                 </div>
 
@@ -427,6 +448,8 @@
                                             <span class="type-badge-ca">CA Certificate</span>
                                         {% elif record.record_type == 'offer_letter' %}
                                             <span class="type-badge-offer">Offer Letter</span>
+                                        {% elif record.record_type == 'course_certificate' %}
+                                            <span class="type-badge-ca" style="background:#e0e7ff; color:#3730a3; border: 1px solid #c7d2fe;">Course Certificate</span>
                                         {% else %}
                                             <span class="type-badge-cert">Certificate</span>
                                         {% endif %}
@@ -489,7 +512,7 @@
 
                                     <td class="cell-action" data-label="Action" style="text-align: center;">
                                         <div style="display: inline-flex; align-items: center; gap: 6px; justify-content: center;">
-                                            {% if record.record_type == 'certificate' and record.document_id %}
+                                            {% if record.record_type in ('certificate', 'course_certificate') and record.document_id %}
                                                 <a
                                                     href="/verify/{{ record.document_id }}"
                                                     target="_blank"
@@ -687,10 +710,11 @@
                 <div class="form-group">
                     <label class="filter-label">Record Type</label>
                     <select id="exportRecordType" class="filter-input-wrap" style="width: 100%; height: 38px;">
-                        <option value="all">All Records (Offer Letters + CA Letters + Certificates)</option>
+                        <option value="all">All Records (Offer Letters + CA Letters + Certificates + Course Certificates)</option>
                         <option value="offer_letter">Offer Letters Only</option>
                         <option value="ca_letter">CA Offer Letters Only</option>
                         <option value="certificate">Certificates Only</option>
+                        <option value="course_certificate">Course Certificates Only</option>
                     </select>
                 </div>
 
@@ -883,6 +907,7 @@ function updateDashboardMetrics(data) {
     animateCounter(document.getElementById('summaryTotalCaOffers'), data.total_ca_letters || 0);
     animateCounter(document.getElementById('summaryTotalCerts'), data.total_certificates || 0);
     animateCounter(document.getElementById('summaryTotalCaCertificates'), data.total_ca_certificates || 0);
+    animateCounter(document.getElementById('summaryTotalCourseCertificates'), data.total_course_certificates || 0);
     animateCounter(document.getElementById('summarySentRecords'), data.total_sent || 0);
     animateCounter(document.getElementById('summaryFailedRecords'), data.total_failed || 0);
 }
@@ -909,6 +934,9 @@ function renderTableRecords(records) {
             if (activeSearch) {
                 emptyTitle.textContent = 'No Matching Records Found';
                 emptySubtitle.textContent = `No records matching "${activeSearch}" were found. Try adjusting your search query.`;
+            } else if (activeType === 'course_certificate' || activeType === 'course_completion' || activeType === 'ccc') {
+                emptyTitle.textContent = 'No Course Certificates Generated Yet';
+                emptySubtitle.textContent = 'You have not generated any course certificates yet. Use the Course Certificate tab to issue your first credential.';
             } else if (activeType === 'certificate' || activeType === 'cert') {
                 emptyTitle.textContent = 'No Certificates Generated Yet';
                 emptySubtitle.textContent = 'You have not generated any certificates yet. Use the Certificate Generator tab to create your first certificate.';
@@ -935,11 +963,15 @@ function renderTableRecords(records) {
         let typeBadge = '<span class="type-badge-cert">Certificate</span>';
         if (record.record_type === 'ca_letter') {
             typeBadge = '<span class="type-badge-ca">CA Offer Letter</span>';
+        } else if (record.record_type === 'ca_certificate') {
+            typeBadge = '<span class="type-badge-ca">CA Certificate</span>';
         } else if (record.record_type === 'offer_letter') {
             typeBadge = '<span class="type-badge-offer">Offer Letter</span>';
+        } else if (record.record_type === 'course_certificate') {
+            typeBadge = '<span class="type-badge-ca" style="background:#e0e7ff; color:#3730a3; border: 1px solid #c7d2fe;">Course Certificate</span>';
         }
 
-        const isCert = record.record_type === 'certificate';
+        const isCert = record.record_type === 'certificate' || record.record_type === 'course_certificate';
 
         let statusSymbol = '<span class="status-sym-pending" title="Pending" aria-label="Pending">⏳</span>';
         if (record.email_status === 'sent') {
@@ -1236,10 +1268,11 @@ async function executeBulkDelete() {
 // =========================================================
 function openDeleteAllModal() {
     const currentType = document.getElementById('filterRecordType').value;
-    let label = 'All Records (Offer Letters + CA Letters + Certificates)';
+    let label = 'All Records (Offer Letters + CA Letters + Certificates + Course Certificates)';
     if (currentType === 'offer_letter' || currentType === 'offer') label = 'All Offer Letters';
     else if (currentType === 'ca_letter' || currentType === 'ca' || currentType === 'campus_ambassador') label = 'All CA Offer Letters';
     else if (currentType === 'certificate' || currentType === 'cert') label = 'All Certificates';
+    else if (currentType === 'course_certificate' || currentType === 'course_completion' || currentType === 'ccc') label = 'All Course Certificates';
 
     document.getElementById('deleteAllTypeLabel').textContent = label;
     document.getElementById('deleteAllConfirmInput').value = '';
