@@ -76,6 +76,37 @@ class DeletionIntegrityTests(unittest.TestCase):
             self.assertTrue(result)
             table_mock.delete().eq.assert_called_with("id", 101)
 
+    def test_successful_course_certificate_supabase_deletion(self):
+        mock_sb = MagicMock()
+        table_mock = MagicMock()
+        delete_mock = MagicMock()
+        eq_mock = MagicMock()
+        eq_mock.execute.return_value = MagicMock(data=[{"id": 202}])
+        delete_mock.eq.return_value = eq_mock
+        table_mock.delete.return_value = delete_mock
+        mock_sb.table.return_value = table_mock
+
+        with patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            result = repository.delete_course_certificate_record(202)
+            self.assertTrue(result)
+            mock_sb.table.assert_called_with("course_certificate_history")
+            table_mock.delete().eq.assert_called_with("id", 202)
+
+    def test_failed_course_certificate_supabase_deletion_raises_error(self):
+        mock_sb = MagicMock()
+        table_mock = MagicMock()
+        delete_mock = MagicMock()
+        eq_mock = MagicMock()
+        eq_mock.execute.side_effect = Exception("PGRST205: Could not find table 'public.course_certificate_history'")
+        delete_mock.eq.return_value = eq_mock
+        table_mock.delete.return_value = delete_mock
+        mock_sb.table.return_value = table_mock
+
+        with patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            with self.assertRaises(RuntimeError) as ctx:
+                repository.delete_course_certificate_record(202)
+            self.assertIn("PGRST205", str(ctx.exception))
+
 
 class ExtendedDeletionIntegrityTests(unittest.TestCase):
     def test_delete_returns_false_when_no_rows_matched(self):
@@ -90,6 +121,20 @@ class ExtendedDeletionIntegrityTests(unittest.TestCase):
 
         with patch.object(repository, "get_supabase_client", return_value=mock_sb):
             result = repository.delete_certificate_record(999)
+            self.assertFalse(result)
+
+    def test_delete_course_certificate_returns_false_when_no_rows_matched(self):
+        mock_sb = MagicMock()
+        table_mock = MagicMock()
+        delete_mock = MagicMock()
+        eq_mock = MagicMock()
+        eq_mock.execute.return_value = MagicMock(data=[])  # No rows deleted
+        delete_mock.eq.return_value = eq_mock
+        table_mock.delete.return_value = delete_mock
+        mock_sb.table.return_value = table_mock
+
+        with patch.object(repository, "get_supabase_client", return_value=mock_sb):
+            result = repository.delete_course_certificate_record(999)
             self.assertFalse(result)
 
     def test_bulk_delete_propagates_supabase_failure(self):
@@ -146,6 +191,31 @@ class ApiErrorSanitizationTests(unittest.TestCase):
             data = res.get_json()
             self.assertFalse(data["success"])
             self.assertIn("not found", data["error"].lower())
+
+    def test_course_certificate_single_delete_route_success(self):
+        with patch.object(repository, "delete_course_certificate_record", return_value=True):
+            res = self.client.delete("/api/history/course_certificate/202")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertTrue(data["success"])
+            self.assertIn("Audit record deleted successfully", data["message"])
+
+    def test_course_certificate_single_delete_route_not_found(self):
+        with patch.object(repository, "delete_course_certificate_record", return_value=False):
+            res = self.client.delete("/api/history/course_certificate/999")
+            self.assertEqual(res.status_code, 404)
+            data = res.get_json()
+            self.assertFalse(data["success"])
+            self.assertIn("not found", data["error"].lower())
+
+    def test_course_certificate_single_delete_route_sanitizes_error(self):
+        with patch.object(repository, "delete_course_certificate_record", side_effect=RuntimeError("Supabase connection timeout")):
+            res = self.client.delete("/api/history/course_certificate/202")
+            self.assertEqual(res.status_code, 500)
+            data = res.get_json()
+            self.assertFalse(data["success"])
+            self.assertEqual(data["error"], "Failed to delete record. Please check server logs.")
+            self.assertNotIn("timeout", data["error"])
 
     def test_bulk_delete_route_sanitizes_supabase_error(self):
         with patch.object(repository, "bulk_delete_records", side_effect=RuntimeError("PGRST42501: permission denied")):

@@ -1173,6 +1173,10 @@ function openDeleteModal(recordType, recordId, studentName) {
         typeLabel = 'CA Offer Letter';
     } else if (recordType === 'offer_letter' || recordType === 'offer') {
         typeLabel = 'Offer Letter';
+    } else if (recordType === 'course_certificate' || recordType === 'course_completion' || recordType === 'ccc') {
+        typeLabel = 'Course Certificate';
+    } else if (recordType === 'ca_certificate' || recordType === 'ca_certificates' || recordType === 'ca_cert') {
+        typeLabel = 'CA Certificate';
     }
     document.getElementById('deleteTargetType').textContent = typeLabel;
     document.getElementById('deleteModal').style.display = 'flex';

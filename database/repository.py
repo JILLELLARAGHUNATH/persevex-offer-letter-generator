@@ -2618,20 +2618,38 @@ def delete_course_certificate_record(record_id, document_id=None):
         return False
 
     sb = get_supabase_client()
-    deleted_count = 0
     if sb:
+        deleted_count = 0
         for ident in identifiers:
             try:
                 if ident.isdigit():
                     res = sb.table("course_certificate_history").delete().eq("id", int(ident)).execute()
                     if res and res.data:
                         deleted_count += len(res.data)
-                if ident.startswith("PXL-CCC-") or "CCC" in ident:
+                else:
                     res = sb.table("course_certificate_history").delete().eq("certificate_id", ident).execute()
                     if res and res.data:
                         deleted_count += len(res.data)
             except Exception as exc:
-                print("SUPABASE DELETE COURSE CERTIFICATE ERROR (falling back to SQLite):", repr(exc))
+                print("SUPABASE DELETE COURSE CERTIFICATE ERROR:", repr(exc))
+                raise RuntimeError(f"Failed to delete course certificate from Supabase: {exc}") from exc
+
+        if deleted_count > 0:
+            try:
+                conn = sqlite3.connect(SQLITE_DB_PATH)
+                cursor = conn.cursor()
+                for ident in identifiers:
+                    if ident.isdigit():
+                        cursor.execute("DELETE FROM course_certificate_history WHERE id = ?", (int(ident),))
+                    else:
+                        cursor.execute("DELETE FROM course_certificate_history WHERE certificate_id = ?", (ident,))
+                conn.commit()
+                conn.close()
+            except Exception as exc:
+                print("LOCAL DB DELETE COURSE CERTIFICATE SYNC WARNING:", repr(exc))
+            return True
+
+        return False
 
     conn = sqlite3.connect(SQLITE_DB_PATH)
     cursor = conn.cursor()
@@ -2640,12 +2658,12 @@ def delete_course_certificate_record(record_id, document_id=None):
         if ident.isdigit():
             cursor.execute("DELETE FROM course_certificate_history WHERE id = ?", (int(ident),))
             total_local_deleted += cursor.rowcount
-        if ident.startswith("PXL-CCC-") or "CCC" in ident:
+        else:
             cursor.execute("DELETE FROM course_certificate_history WHERE certificate_id = ?", (ident,))
             total_local_deleted += cursor.rowcount
     conn.commit()
     conn.close()
-    return (deleted_count > 0) or (total_local_deleted > 0)
+    return total_local_deleted > 0
 
 
 def bulk_delete_records(items):
