@@ -5045,6 +5045,793 @@ class InternshipCertificateEmailTemplateTests(unittest.TestCase):
 
 
 
+
+
+class CourseCertificateBulkWorkflowTests(unittest.TestCase):
+    def setUp(self):
+        self.app = application.app.test_client()
+        self.app.testing = True
+        with self.app.session_transaction() as session:
+            session["authenticated"] = True
+
+    def test_bulk_ccc_sample_template_csv(self):
+        resp = self.app.get("/api/course-certificate/bulk/template?format=csv")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/csv", resp.headers.get("Content-Type", ""))
+        self.assertIn("attachment; filename=\"Persevex_Course_Certificate_Bulk_Sample.csv\"", resp.headers.get("Content-Disposition", ""))
+        text = resp.data.decode("utf-8-sig")
+        self.assertIn("Student Name", text)
+        self.assertIn("Student Email", text)
+        self.assertIn("Course Name", text)
+        self.assertIn("Issue Date", text)
+        self.assertIn("Priya Sharma", text)
+
+    def test_bulk_ccc_sample_template_excel(self):
+        resp = self.app.get("/api/course-certificate/bulk/template?format=excel")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("spreadsheetml.sheet", resp.headers.get("Content-Type", ""))
+        self.assertIn("Persevex_Course_Certificate_Bulk_Sample.xlsx", resp.headers.get("Content-Disposition", ""))
+        self.assertGreater(len(resp.data), 100)
+
+    def test_bulk_ccc_csv_parse_and_validate(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        csv_content = (
+            "Student Name,Student Email,Course Name,Issue Date\n"
+            "Aarav Sharma,aarav@example.com,Python Development,15-06-2026\n"
+            "Neha Gupta,neha@example.com,Machine Learning,20-07-2026\n"
+        ).encode("utf-8")
+
+        parsed = bulk_ccc_service.parse_csv_content(csv_content)
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]["student_name"], "Aarav Sharma")
+        self.assertEqual(parsed[0]["student_email"], "aarav@example.com")
+        self.assertEqual(parsed[0]["course_name"], "Python Development")
+        self.assertEqual(parsed[0]["issued_date"], "15-06-2026")
+
+        val_res = bulk_ccc_service.validate_bulk_ccc_records(parsed)
+        self.assertEqual(val_res["total_records"], 2)
+        self.assertEqual(val_res["valid_records_count"], 2)
+        self.assertEqual(val_res["invalid_records_count"], 0)
+        self.assertEqual(val_res["duplicate_records_count"], 0)
+
+    def test_bulk_ccc_validate_missing_and_invalid_fields(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        rows = [
+            {"student_name": "", "student_email": "bad-email", "course_name": "", "issued_date": "not-a-date"},
+            {"student_name": "Valid User", "student_email": "valid@example.com", "course_name": "Web Dev", "issued_date": "10-05-2026"},
+        ]
+        val_res = bulk_ccc_service.validate_bulk_ccc_records(rows)
+        self.assertEqual(val_res["total_records"], 2)
+        self.assertEqual(val_res["valid_records_count"], 1)
+        self.assertEqual(val_res["invalid_records_count"], 1)
+
+        invalid_row = val_res["rows"][0]
+        self.assertFalse(invalid_row["is_valid"])
+        self.assertIn("Student Name is required.", invalid_row["errors"])
+        self.assertIn("Invalid email format: 'bad-email'", invalid_row["errors"])
+        self.assertIn("Course Name is required.", invalid_row["errors"])
+        self.assertTrue(any("Issue Date" in err for err in invalid_row["errors"]))
+
+    def test_bulk_ccc_duplicate_detection_4_tuple(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        rows = [
+            {"student_name": "Aarav", "student_email": "aarav@test.com", "course_name": "Python", "issued_date": "15-06-2026"},
+            {"student_name": "Aarav", "student_email": "aarav@test.com", "course_name": "Python", "issued_date": "15-06-2026"},
+            {"student_name": "Aarav", "student_email": "aarav@test.com", "course_name": "Data Science", "issued_date": "15-06-2026"},
+        ]
+        val_res = bulk_ccc_service.validate_bulk_ccc_records(rows)
+        self.assertEqual(val_res["total_records"], 3)
+        self.assertEqual(val_res["valid_records_count"], 2)
+        self.assertEqual(val_res["duplicate_records_count"], 1)
+        self.assertTrue(val_res["rows"][1]["is_duplicate"])
+        self.assertFalse(val_res["rows"][2]["is_duplicate"])
+
+    def test_bulk_ccc_validate_api_json_rows(self):
+        payload = {
+            "rows": [
+                {"student_name": "Rohan Verma", "student_email": "rohan@test.com", "course_name": "AI Basics", "issued_date": "2026-06-15"}
+            ]
+        }
+        resp = self.app.post("/api/course-certificate/bulk/validate", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["valid_records_count"], 1)
+        self.assertEqual(data["rows"][0]["student_name"], "Rohan Verma")
+        self.assertEqual(data["rows"][0]["issued_date"], "15-06-2026")
+
+    def test_bulk_ccc_validate_api_file_upload(self):
+        csv_bytes = b"Student Name,Student Email,Course Name,Issue Date\nPriya,priya@test.com,Full Stack,12-08-2026\n"
+        data = {
+            "file": (BytesIO(csv_bytes), "students.csv")
+        }
+        resp = self.app.post(
+            "/api/course-certificate/bulk/validate",
+            data=data,
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(resp.status_code, 200)
+        json_data = resp.get_json()
+        self.assertTrue(json_data["success"])
+        self.assertEqual(json_data["valid_records_count"], 1)
+        self.assertEqual(json_data["rows"][0]["student_name"], "Priya")
+
+    def test_bulk_ccc_generate_and_persist(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        rows = [
+            {
+                "row_index": 1,
+                "student_name": "Aditi Roy",
+                "student_email": "aditi@test.com",
+                "course_name": "Cybersecurity",
+                "issued_date": "10-09-2026",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            with patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="Aditi_Roy_Course_Certificate.pdf"):
+                result = bulk_ccc_service.generate_bulk_course_certificates(
+                    valid_rows=rows,
+                    output_dir=out_dir,
+                    base_url="http://localhost:5000",
+                )
+                self.assertEqual(result["total"], 1)
+                self.assertEqual(result["generated_count"], 1)
+                self.assertEqual(result["failed_count"], 0)
+                gen_item = result["results"][0]
+                self.assertTrue(gen_item["success"])
+                self.assertTrue(gen_item["certificate_id"].startswith("PXL-CCC-"))
+
+                # Verify persistence in database
+                saved = repository.get_course_certificate_by_id(gen_item["certificate_id"])
+                self.assertIsNotNone(saved)
+                self.assertEqual(saved["student_name"], "Aditi Roy")
+                self.assertEqual(saved["course_name"], "Cybersecurity")
+                self.assertEqual(saved["email_status"], "pending")
+
+    def test_bulk_ccc_generate_api_endpoint(self):
+        payload = {
+            "rows": [
+                {
+                    "row_index": 1,
+                    "student_name": "Kiran Rao",
+                    "student_email": "kiran@test.com",
+                    "course_name": "DevOps Engineering",
+                    "issued_date": "05-10-2026",
+                }
+            ]
+        }
+        with patch("services.course_certificate_service.generate_certificate_pdf", return_value="Kiran_Course_Certificate.pdf"):
+            resp = self.app.post("/api/course-certificate/bulk/generate", json=payload)
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data["success"])
+            self.assertEqual(data["generated_count"], 1)
+            self.assertEqual(len(data["results"]), 1)
+            self.assertTrue(data["results"][0]["certificate_id"].startswith("PXL-CCC-"))
+
+    def test_bulk_ccc_send_bulk_emails(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        cert_id = f"PXL-CCC-2026-{tempfile.NamedTemporaryFile().name[-6:]}"
+        # Seed record in DB
+        repository.save_course_certificate_record({
+            "certificate_id": cert_id,
+            "student_name": "Sameer Joshi",
+            "student_email": "sameer@test.com",
+            "course_name": "Cloud Computing",
+            "issued_date": "15-11-2026",
+            "email_status": "pending",
+            "send_count": 0,
+        })
+
+        items = [
+            {
+                "certificate_id": cert_id,
+                "student_name": "Sameer Joshi",
+                "student_email": "sameer@test.com",
+                "course_name": "Cloud Computing",
+                "issued_date": "15-11-2026",
+                "filename": "Sameer_Joshi_Course_Certificate.pdf",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            with patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="Sameer_Joshi_Course_Certificate.pdf"), \
+                 patch.object(bulk_ccc_service.course_certificate_service, "send_certificate_email", return_value=True):
+                res = bulk_ccc_service.send_bulk_course_certificate_emails(
+                    certificate_items=items,
+                    output_dir=out_dir,
+                    batch_size=5,
+                    delay_seconds=0,
+                )
+                self.assertEqual(res["total"], 1)
+                self.assertEqual(res["successful_count"], 1)
+                self.assertEqual(res["failed_count"], 0)
+
+                updated = repository.get_course_certificate_by_id(cert_id)
+                self.assertIsNotNone(updated)
+                self.assertEqual(updated["email_status"], "sent")
+                self.assertEqual(updated["send_count"], 1)
+
+    def test_bulk_ccc_send_email_api_endpoint(self):
+        items = [
+            {
+                "certificate_id": "PXL-CCC-2026-TEST99",
+                "student_name": "Tanya Sen",
+                "student_email": "tanya@test.com",
+                "course_name": "UI/UX Design",
+                "issued_date": "10-12-2026",
+                "filename": "Tanya_Sen_Course_Certificate.pdf",
+            }
+        ]
+        with patch("services.course_certificate_service.generate_certificate_pdf", return_value="Tanya_Sen_Course_Certificate.pdf"), \
+             patch("services.course_certificate_service.send_certificate_email", return_value=True):
+            resp = self.app.post("/api/course-certificate/bulk/send-email", json={"items": items})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data["success"])
+            self.assertEqual(data["successful_count"], 1)
+
+    def test_bulk_ccc_job_progress_and_cancel_endpoints(self):
+        from services.bulk_job_manager import bulk_job_manager
+
+        job = bulk_job_manager.create_job(
+            workflow_type="course_certificate",
+            operation_type="generation",
+            total=10
+        )
+        job_id = job["job_id"]
+
+        progress_resp = self.app.get(f"/api/course-certificate/bulk/progress/{job_id}")
+        self.assertEqual(progress_resp.status_code, 200)
+        self.assertEqual(progress_resp.get_json()["job"]["total"], 10)
+
+        cancel_resp = self.app.post(f"/api/course-certificate/bulk/cancel/{job_id}")
+        self.assertEqual(cancel_resp.status_code, 200)
+        self.assertTrue(bulk_job_manager.is_cancelled(job_id))
+
+    def test_single_course_certificate_workflow_unaffected(self):
+        # Verify single course certificate page loads properly
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+        self.assertIn("COURSE COMPLETION", html)
+        self.assertIn("Student & Course Details", html)
+        self.assertIn("Bulk Generate Certificates", html)
+        self.assertIn("switchCCCMode", html)
+        self.assertIn("singleCertWorkspace", html)
+        self.assertIn("bulkCertWorkspace", html)
+
+    def test_bulk_ccc_parse_upload_endpoint(self):
+        csv_bytes = b"Student Name,Student Email,Domain\nRahul Kumar,rahul@gmail.com,Python Full Stack\nPriya Sharma,priya@gmail.com,Data Science\nArjun Reddy,arjun@gmail.com,Web Development\n"
+        data = {
+            "file": (BytesIO(csv_bytes), "students_with_domain.csv")
+        }
+        resp = self.app.post(
+            "/api/course-certificate/bulk/parse-upload",
+            data=data,
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(resp.status_code, 200)
+        json_data = resp.get_json()
+        self.assertTrue(json_data["success"])
+        self.assertEqual(json_data["total_rows"], 3)
+        self.assertEqual(json_data["valid_count"], 3)
+        self.assertEqual(json_data["invalid_count"], 0)
+        self.assertEqual(json_data["duplicate_count"], 0)
+        self.assertIn("Rahul Kumar", json_data["names_text"])
+        self.assertIn("rahul@gmail.com", json_data["emails_text"])
+        self.assertIn("Python Full Stack", json_data["domains_text"])
+
+    def test_bulk_ccc_check_duplicates_endpoint(self):
+        # Insert a sent record for testing
+        test_email = "already_sent_ccc@example.com"
+        record = {
+            "certificate_id": "PXL-CCC-2026-EXISTS1",
+            "student_name": "Existing Student",
+            "student_email": test_email,
+            "course_name": "Full Stack",
+            "issued_date": "10-05-2026",
+            "email_status": "sent",
+            "send_count": 1,
+            "pdf_filename": "dummy.pdf",
+            "certificate_status": "active",
+        }
+        repository.save_course_certificate_record(record)
+
+        payload = {
+            "records": [
+                {"student_name": "Existing Student", "student_email": test_email},
+                {"student_name": "Brand New", "student_email": "brand_new_ccc@example.com"},
+            ]
+        }
+        resp = self.app.post("/api/course-certificate/bulk/check-duplicates", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        json_data = resp.get_json()
+        self.assertTrue(json_data["success"])
+        self.assertEqual(json_data["duplicate_count"], 1)
+        self.assertIn(test_email, json_data["duplicates"])
+        self.assertIn(test_email, json_data["duplicate_map"])
+
+    def test_bulk_ccc_domain_used_as_course_name_and_shared_date(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        rows = [
+            {
+                "row_index": 1,
+                "student_name": "Siddharth Roy",
+                "student_email": "sid@domaintest.com",
+                "course_name": "Cloud Computing",
+                "issued_date": "29-10-2026",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as out_dir:
+            with patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="Siddharth_Roy_Course_Certificate.pdf"):
+                result = bulk_ccc_service.generate_bulk_course_certificates(
+                    valid_rows=rows,
+                    output_dir=out_dir,
+                    base_url="http://localhost:5000",
+                )
+                self.assertEqual(result["generated_count"], 1)
+                cert_id = result["results"][0]["certificate_id"]
+                saved = repository.get_course_certificate_by_id(cert_id)
+                self.assertIsNotNone(saved)
+                # Ensure the Domain provided as course_name is properly preserved
+                self.assertEqual(saved["course_name"], "Cloud Computing")
+                self.assertEqual(saved["issued_date"], "29-10-2026")
+
+    def test_bulk_ccc_retry_controls_zero_failures_hidden_in_ui(self):
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Retry modal must be hidden with display: none and hidden attribute
+        self.assertIn('id="cccBulkRetryModal" class="modal-overlay" style="display: none;" hidden', html)
+
+        # Retry button must be initially hidden and disabled
+        self.assertIn('id="cccRetryFailedBtn" style="display: none;" onclick="cccRetryFailedRecords()" disabled', html)
+
+        # Failed section must be initially hidden
+        self.assertIn('id="cccBulkFailedSection" class="bulk-failed-list-card" style="display:none;', html)
+
+        # Scoped CSS guard must be present
+        self.assertIn('#cccBulkRetryModal[hidden]', html)
+        self.assertIn('#cccBulkRetryModal[style*="display: none"]', html)
+
+    def test_bulk_ccc_retry_generation_handles_failures_and_retry_resolves_all(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        rows = [
+            {"row_index": 1, "student_name": "Success Student", "student_email": "success@example.com", "course_name": "Python", "issued_date": "29-10-2026"},
+            {"row_index": 2, "student_name": "Failing Student", "student_email": "fail@example.com", "course_name": "Data Science", "issued_date": "29-10-2026"},
+        ]
+
+        # First run: row 2 fails
+        call_count = [0]
+        def mock_generate(data, output_dir, base_url):
+            call_count[0] += 1
+            if data["student_email"] == "fail@example.com":
+                raise RuntimeError("PDF render timeout")
+            return f"{data['student_name']}.pdf"
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            with patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", side_effect=mock_generate):
+                res1 = bulk_ccc_service.generate_bulk_course_certificates(rows, out_dir)
+                self.assertEqual(res1["total"], 2)
+                self.assertEqual(res1["generated_count"], 1)
+                self.assertEqual(res1["failed_count"], 1)
+                self.assertEqual(len(res1["failed_items"]), 1)
+                self.assertEqual(res1["failed_items"][0]["student_email"], "fail@example.com")
+
+            # Retry run: only the failed item is retried and now succeeds
+            to_retry = [
+                {"row_index": res1["failed_items"][0]["row_index"], "student_name": res1["failed_items"][0]["student_name"], "student_email": res1["failed_items"][0]["student_email"], "course_name": res1["failed_items"][0]["course_name"], "issued_date": "29-10-2026"}
+            ]
+            with patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="Failing_Student.pdf"):
+                res2 = bulk_ccc_service.generate_bulk_course_certificates(to_retry, out_dir)
+                self.assertEqual(res2["total"], 1)
+                self.assertEqual(res2["generated_count"], 1)
+                self.assertEqual(res2["failed_count"], 0)
+                self.assertEqual(len(res2["failed_items"]), 0)
+
+    def test_bulk_ccc_retry_email_dispatch_resolves_all_failures_without_duplicate_sends(self):
+        import services.bulk_course_certificate_service as bulk_ccc_service
+
+        cert_id = "PXL-CCC-2026-RETRYMAIL1"
+        repository.save_course_certificate_record({
+            "certificate_id": cert_id,
+            "student_name": "Email Retry Candidate",
+            "student_email": "retry_candidate@example.com",
+            "course_name": "Web Dev",
+            "issued_date": "29-10-2026",
+            "email_status": "pending",
+            "send_count": 0,
+            "pdf_filename": "dummy.pdf",
+            "certificate_status": "active",
+        })
+
+        items = [
+            {
+                "certificate_id": cert_id,
+                "student_name": "Email Retry Candidate",
+                "student_email": "retry_candidate@example.com",
+                "course_name": "Web Dev",
+                "issued_date": "29-10-2026",
+                "filename": "dummy.pdf",
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            # 1. First send attempt fails (e.g. SMTP connection timeout)
+            with patch.object(bulk_ccc_service.course_certificate_service, "send_certificate_email", side_effect=RuntimeError("SMTP connection timed out")),                  patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="dummy.pdf"):
+                res1 = bulk_ccc_service.send_bulk_course_certificate_emails(items, output_dir=out_dir)
+                self.assertEqual(res1["successful_count"], 0)
+                self.assertEqual(res1["failed_count"], 1)
+                self.assertEqual(len(res1["failed_items"]), 1)
+
+                rec_after_fail = repository.get_course_certificate_by_id(cert_id)
+                self.assertEqual(rec_after_fail["email_status"], "failed")
+                self.assertEqual(rec_after_fail["send_count"], 0)
+
+            # 2. Retry attempt succeeds
+            retry_items = res1["failed_items"]
+            with patch.object(bulk_ccc_service.course_certificate_service, "send_certificate_email", return_value=True),                  patch.object(bulk_ccc_service.course_certificate_service, "generate_certificate_pdf", return_value="dummy.pdf"):
+                res2 = bulk_ccc_service.send_bulk_course_certificate_emails(retry_items, output_dir=out_dir)
+                self.assertEqual(res2["successful_count"], 1)
+                self.assertEqual(res2["failed_count"], 0)
+                self.assertEqual(len(res2["failed_items"]), 0)
+
+                rec_after_success = repository.get_course_certificate_by_id(cert_id)
+                self.assertEqual(rec_after_success["email_status"], "sent")
+                self.assertEqual(rec_after_success["send_count"], 1)
+
+    def test_bulk_ccc_workspace_isolation_and_mode_switching_guard(self):
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Single workspace is default, bulk workspace is strictly hidden by default
+        self.assertIn('id="singleCertWorkspace" class="ca-certificate-layout"', html)
+        self.assertIn('id="bulkCertWorkspace" class="ca-bulk-main" style="display: none !important;" hidden', html)
+
+        # Mode switch pills are present and single is active
+        self.assertIn('id="tabSingleCert" class="mode-pill-btn active" onclick="switchCCCMode(\'single\')"', html)
+        self.assertIn('id="tabBulkCert" class="mode-pill-btn" onclick="switchCCCMode(\'bulk\')"', html)
+
+        # Scoped isolation CSS guards present
+        self.assertIn('#singleCertWorkspace[hidden]', html)
+        self.assertIn('#bulkCertWorkspace[hidden]', html)
+        self.assertIn('#bulkCertWorkspace[style*="display: none"]', html)
+
+        # Switch function uses setProperty !important and hidden attribute toggling
+        self.assertIn("single.style.setProperty('display', 'none', 'important')", html)
+        self.assertIn("bulk.style.setProperty('display', 'none', 'important')", html)
+
+    def test_bulk_ccc_three_column_textareas_grid_layout(self):
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Scoped CSS sets 3-column repeat(3, minmax(0, 1fr))
+        self.assertIn('#bulkCertWorkspace .bulk-textareas-grid', html)
+        self.assertIn('grid-template-columns: repeat(3, minmax(0, 1fr)) !important;', html)
+
+        # Mobile breakpoint stacks to 1fr
+        self.assertIn('grid-template-columns: 1fr !important;', html)
+
+        # All three textareas exist in the DOM with their live counter badges
+        self.assertIn('id="cccStudentNames"', html)
+        self.assertIn('id="cccNamesCount"', html)
+        self.assertIn('id="cccEmailAddresses"', html)
+        self.assertIn('id="cccEmailsCount"', html)
+        self.assertIn('id="cccDomains"', html)
+        self.assertIn('id="cccDomainsCount"', html)
+
+        # Shared Issue Date for All is present
+        self.assertIn('id="cccIssueDate"', html)
+
+
+    def test_bulk_ccc_generated_preview_table_in_html(self):
+        """Generated Certificate Previews section with 6-column table must exist in HTML."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Section container exists
+        self.assertIn('id="cccGeneratedSection"', html)
+        self.assertIn('id="cccGenTableBody"', html)
+        self.assertIn('id="cccGenTable"', html)
+        self.assertIn('id="cccGenSectionCount"', html)
+
+        import re as _re
+        gen_table_match = _re.search(r'id="cccGenTable".*?</table>', html, _re.DOTALL)
+        self.assertIsNotNone(gen_table_match, "cccGenTable not found")
+        gen_table_html = gen_table_match.group(0)
+        for col in ["#", "Student Name", "Email", "Domain / Course", "Issue Date", "Preview"]:
+            self.assertIn(col, gen_table_html, f"Missing column: {col}")
+        self.assertNotIn("<th>Status</th>", gen_table_html)
+        self.assertNotIn("<th>Action</th>", gen_table_html)
+
+    def test_bulk_ccc_preview_panel_elements(self):
+        """Preview panel with empty state, prev/next controls, and action buttons must be present."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        self.assertIn('id="cccPreviewPanel"', html)
+        self.assertIn('id="cccPreviewEmpty"', html)
+        self.assertIn('id="cccPreviewLoading"', html)
+        self.assertIn('id="cccPreviewCanvasArea"', html)
+        self.assertIn('id="cccPreviewActions"', html)
+        self.assertIn('id="cccPreviewPanelTitle"', html)
+        self.assertIn('id="cccPrevBtn"', html)
+        self.assertIn('id="cccNextBtn"', html)
+        self.assertIn('id="cccPreviewNavLabel"', html)
+        self.assertIn('id="cccPreviewDownloadBtn"', html)
+        self.assertIn('cccDownloadSelectedCert()', html)
+        self.assertIn('cccOpenCertInNewTab()', html)
+        self.assertIn('id="cccPreviewNewTabBtn"', html)
+
+    def test_bulk_ccc_bulk_email_button_present_and_distinct(self):
+        """Prominent cccBulkEmailBtn must be present, disabled by default, old send btn hidden."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        self.assertIn('id="cccBulkEmailBtn"', html)
+        self.assertIn('id="cccBulkEmailBtnText"', html)
+
+        import re as _re
+        btn_match = _re.search(r'id="cccBulkEmailBtn"[^>]*>', html)
+        self.assertIsNotNone(btn_match)
+        self.assertIn("disabled", btn_match.group(0))
+
+        # Old cccSendBtn still in DOM but hidden from view
+        self.assertIn('id="cccSendBtn"', html)
+        send_match = _re.search(r'id="cccSendBtn"[^>]*>', html)
+        self.assertIsNotNone(send_match)
+        send_tag = send_match.group(0).lower().replace(" ", "")
+        self.assertIn("display:none", send_tag)
+
+    def test_bulk_ccc_preview_pdf_endpoint_exists(self):
+        """POST /api/course-certificate/bulk/preview-pdf must return PDF bytes."""
+        from unittest.mock import patch
+        stub_bytes = b"%PDF-1.4 stub"
+        with patch(
+            "services.course_certificate_service.generate_certificate_pdf_bytes",
+            return_value=(stub_bytes, "Test_Student_Course_Certificate.pdf"),
+        ):
+            resp = self.app.post(
+                "/api/course-certificate/bulk/preview-pdf",
+                json={
+                    "student_name":   "Test Student",
+                    "course_name":    "Python Full Stack",
+                    "issued_date":    "01-01-2025",
+                    "certificate_id": "PXL-CCC-2025-TEST01",
+                },
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("pdf", resp.content_type.lower())
+
+    def test_bulk_ccc_preview_pdf_endpoint_requires_student_name(self):
+        """Preview endpoint must return 400 when student_name is missing."""
+        resp = self.app.post(
+            "/api/course-certificate/bulk/preview-pdf",
+            json={"course_name": "Python", "issued_date": "01-01-2025"},
+            content_type="application/json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data.get("success", True))
+        self.assertIn("student_name", data.get("error", "").lower())
+
+    def test_bulk_ccc_render_generated_table_js_present(self):
+        """renderGeneratedTable JS function and related functions must be in the page."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        self.assertIn("renderGeneratedTable", html)
+        self.assertIn("openCertPreview", html)
+        self.assertIn("cccDownloadSelectedCert", html)
+        self.assertIn("cccOpenCertInNewTab", html)
+        self.assertIn("renderGeneratedTable(genItems)", html)
+
+    def test_bulk_ccc_six_columns_no_status_no_action(self):
+        """Generated table must have the 6 required columns and no Status or Action."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        import re as _re
+        thead_match = _re.search(
+            r'id="cccGenTable".*?<thead>(.*?)</thead>',
+            html,
+            _re.DOTALL,
+        )
+        self.assertIsNotNone(thead_match, "cccGenTable thead not found")
+        thead_html = thead_match.group(1)
+
+        for col in ["Student Name", "Email", "Domain / Course", "Issue Date", "Preview"]:
+            self.assertIn(col, thead_html, f"Missing column: {col}")
+
+        self.assertNotIn(">Status<", thead_html)
+        self.assertNotIn(">Action<", thead_html)
+
+
+    def test_bulk_ccc_preview_endpoint_serves_actual_disk_file_when_present(self):
+        """Preview endpoint must serve the actual generated PDF file from disk directly."""
+        import tempfile
+        from app import GENERATED_DIR
+        test_filename = "Unit_Test_Actual_Generated_Certificate.pdf"
+        test_path = GENERATED_DIR / test_filename
+        expected_bytes = b"%PDF-1.4 ACTUAL ON DISK FILE CONTENT FOR TEST"
+        try:
+            test_path.write_bytes(expected_bytes)
+            resp = self.app.post(
+                "/api/course-certificate/bulk/preview-pdf",
+                json={
+                    "student_name": "Unit Test Student",
+                    "course_name": "Testing",
+                    "issued_date": "01-01-2025",
+                    "certificate_id": "PXL-CCC-2025-ACTUAL01",
+                    "filename": test_filename,
+                },
+                content_type="application/json",
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.data, expected_bytes)
+            resp.close()
+        finally:
+            if test_path.exists():
+                test_path.unlink()
+
+    def test_bulk_ccc_preview_endpoint_serves_earlier_batch_records(self):
+        """The preview endpoint works for every generated record, including earlier records in batch."""
+        from app import GENERATED_DIR
+        files = [
+            ("Student_Early_1.pdf", b"%PDF-1.4 early 1"),
+            ("Student_Early_2.pdf", b"%PDF-1.4 early 2"),
+        ]
+        try:
+            for fname, b in files:
+                (GENERATED_DIR / fname).write_bytes(b)
+
+            for fname, b in files:
+                resp = self.app.post(
+                    "/api/course-certificate/bulk/preview-pdf",
+                    json={
+                        "student_name": fname.replace(".pdf", ""),
+                        "filename": fname,
+                    },
+                    content_type="application/json",
+                )
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(resp.data, b)
+                resp.close()
+        finally:
+            for fname, _ in files:
+                p = GENERATED_DIR / fname
+                if p.exists():
+                    p.unlink()
+
+    def test_bulk_ccc_incremental_preview_table_updates_in_js(self):
+        """Frontend must update preview table as soon as each record is generated, not wait for all."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # addGeneratedRecord must be defined and called per-record in loop
+        self.assertIn("function addGeneratedRecord(item)", html)
+        self.assertIn("addGeneratedRecord(newCert);", html)
+
+        # First generated certificate immediately triggers preview
+        self.assertIn("openCertPreview(0)", html)
+
+        # Bulk email button remains disabled during generation (isProcessing)
+        self.assertIn("bulkEmailBtn.disabled = isProcessing", html)
+
+    def test_bulk_ccc_failed_records_excluded_from_preview_table(self):
+        """Failed records must only be pushed to failItems and never to addGeneratedRecord."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Failure branches only push to failItems
+        self.assertIn("failItems.push", html)
+        self.assertIn('renderFailedTable(failedRecordsList, "generation")', html)
+
+    def test_bulk_ccc_dashboard_bounded_height_and_internal_scrolling(self):
+        """Records table and preview panel must have bounded max-height and internal scrolling."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # gen-table-wrap has bounded height and vertical scroll
+        self.assertIn("#cccGeneratedSection .gen-table-wrap", html)
+        self.assertIn("max-height: 520px;", html)
+        self.assertIn("overflow-y: auto;", html)
+
+        # Sticky header for table column headings
+        self.assertIn("#cccGeneratedSection .gen-table thead th", html)
+        self.assertIn("position: sticky;", html)
+        self.assertIn("top: 0;", html)
+
+        # Preview panel is bounded alongside the table
+        self.assertIn("#cccPreviewPanel", html)
+        self.assertIn("position: sticky;", html)
+
+    def test_bulk_ccc_no_autoscroll_during_generation_or_email(self):
+        """Page must not auto-scroll into view during generation or email dispatch."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Verify comment or lack of progressSection.scrollIntoView
+        self.assertIn("Fixed Dashboard: do NOT call scrollIntoView to keep layout stable!", html)
+
+        # In addGeneratedRecord, ensure no whole-page scroll is called
+        import re
+        add_gen_match = re.search(r"function addGeneratedRecord\(item\)\s*\{(.*?)\n\s*\}", html, re.DOTALL)
+        self.assertIsNotNone(add_gen_match)
+        add_gen_body = add_gen_match.group(1)
+        self.assertNotIn("scrollIntoView", add_gen_body)
+        self.assertNotIn("window.scrollTo", add_gen_body)
+
+    def test_bulk_ccc_pause_and_resume_controls_present_in_progress_section(self):
+        """Pause and resume controls for both Generation and Email must be present in DOM."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # HTML buttons
+        self.assertIn('id="cccPauseGenBtn"', html)
+        self.assertIn('id="cccResumeGenBtn"', html)
+        self.assertIn('id="cccPauseEmailBtn"', html)
+        self.assertIn('id="cccResumeEmailBtn"', html)
+
+        # Handlers
+        self.assertIn("cccPauseGeneration()", html)
+        self.assertIn("cccResumeGeneration()", html)
+        self.assertIn("cccPauseEmailSending()", html)
+        self.assertIn("cccResumeEmailSending()", html)
+
+    def test_bulk_ccc_pause_resume_independent_state_and_safe_dispatch(self):
+        """Generation and Email pause states must be independent and resume safely."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        # Independent state variables
+        self.assertIn("let _isGenPaused", html)
+        self.assertIn("let _isEmailPaused", html)
+        self.assertIn("let _genNextIndex", html)
+        self.assertIn("let _emailNextIndex", html)
+
+        # Generation loop checks _isGenPaused and advances _genNextIndex
+        self.assertIn("while (_genNextIndex < total)", html)
+        self.assertIn("if (_isGenPaused)", html)
+
+        # Email loop checks _isEmailPaused and advances _emailNextIndex
+        self.assertIn("while (_emailNextIndex < total)", html)
+        self.assertIn("if (_isEmailPaused)", html)
+
+    def test_bulk_ccc_progress_counters_and_failure_retry_preserved_across_pause(self):
+        """Counters and failed retry items must be preserved across pause/resume."""
+        resp = self.app.get("/course-certificate")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.data.decode("utf-8")
+
+        self.assertIn("updateProgressBar(completed, total, _genSuccessCount, _genFailCount);", html)
+        self.assertIn("failedRecordsList = _genFailItems;", html)
+        self.assertIn("renderFailedTable(failedRecordsList, \"generation\");", html)
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -47,6 +47,7 @@ import pymupdf
 import certificate_service
 import database.repository as repository
 import services.bulk_certificate_service as bulk_certificate_service
+import services.bulk_course_certificate_service as bulk_course_certificate_service
 from services.ca_bulk_service import parse_ca_file
 import services.bulk_offer_letter_service as bulk_offer_letter_service
 from services import ca_certificate_service
@@ -6056,6 +6057,62 @@ def course_certificate_pdf():
         return jsonify({"success": False, "error": str(exc)}), 500
 
 
+
+
+@app.post("/api/course-certificate/bulk/preview-pdf")
+def course_cert_bulk_preview_pdf():
+    """
+    Serve a generated Course Completion Certificate PDF for bulk preview.
+    Accepts JSON: { student_name, course_name, issued_date, certificate_id, filename?, download? }
+    If the generated PDF file exists in GENERATED_DIR, serves that actual file directly.
+    Otherwise re-generates the PDF on-the-fly from the stored cert_id.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        student_name = str(data.get("student_name", "")).strip()
+        course_name  = str(data.get("course_name", "")).strip()
+        issued_date  = str(data.get("issued_date", "")).strip()
+        cert_id      = str(data.get("certificate_id", "")).strip()
+        filename     = str(data.get("filename", "")).strip()
+        as_download  = bool(data.get("download", False))
+
+        # 1. Serve actual generated PDF from disk if it exists
+        if filename:
+            safe_name = Path(filename).name
+            disk_file = GENERATED_DIR / safe_name
+            if disk_file.is_file():
+                return send_file(
+                    io.BytesIO(disk_file.read_bytes()),
+                    mimetype="application/pdf",
+                    as_attachment=as_download,
+                    download_name=safe_name,
+                )
+
+        if not student_name:
+            return jsonify({"success": False, "error": "student_name is required"}), 400
+
+        # 2. Fallback: generate bytes matching the stored cert_id
+        base_url = course_certificate_service.get_public_base_url(request)
+        pdf_bytes, gen_filename = course_certificate_service.generate_certificate_pdf_bytes(
+            data={
+                "student_name":   student_name,
+                "course_name":    course_name,
+                "issued_date":    issued_date,
+                "certificate_id": cert_id,
+            },
+            base_url=base_url,
+        )
+
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=as_download,
+            download_name=filename or gen_filename,
+        )
+    except Exception as exc:
+        print("CCC BULK PREVIEW PDF ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
 @app.post("/api/course-certificate/send-email")
 def course_certificate_send_email():
     try:
@@ -6194,6 +6251,253 @@ def course_certificate_send_email():
         print("COURSE CERTIFICATE SEND EMAIL ERROR:", repr(exc))
         return jsonify({"success": False, "error": str(exc)}), 500
 
+
+
+
+# ============================================================
+# COURSE COMPLETION CERTIFICATE — BULK ENDPOINTS
+# ============================================================
+
+@app.get("/api/course-certificate/bulk/template")
+def course_cert_bulk_sample_template():
+    """Download a sample CSV or Excel template for bulk Course Certificate upload."""
+    try:
+        fmt = (request.args.get("format") or "csv").strip().lower()
+        if fmt in ("excel", "xlsx"):
+            excel_bytes = bulk_course_certificate_service.get_sample_excel_template_ccc()
+            if excel_bytes:
+                return Response(
+                    excel_bytes,
+                    mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={
+                        "Content-Disposition": 'attachment; filename="Persevex_Course_Certificate_Bulk_Sample.xlsx"',
+                        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    },
+                )
+        csv_content = bulk_course_certificate_service.get_sample_csv_template_ccc()
+        return Response(
+            csv_content,
+            mimetype="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="Persevex_Course_Certificate_Bulk_Sample.csv"',
+                "Content-Type": "text/csv; charset=utf-8",
+            },
+        )
+    except Exception as exc:
+        print("CCC BULK TEMPLATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/bulk/validate")
+def course_cert_bulk_validate():
+    """
+    Parse and validate a bulk Course Certificate file upload or JSON manual rows.
+    Returns validated row summary with per-row errors and duplicate flags.
+    """
+    try:
+        # Manual JSON rows submitted from the editable table
+        raw_json = request.get_json(silent=True)
+        if raw_json and isinstance(raw_json.get("rows"), list):
+            parsed_rows = raw_json["rows"]
+            normalised = []
+            for r in parsed_rows:
+                normalised.append({
+                    "student_name": str(r.get("student_name") or "").strip(),
+                    "student_email": str(r.get("student_email") or "").strip().lower(),
+                    "course_name": str(r.get("course_name") or "").strip(),
+                    "issued_date": str(r.get("issued_date") or "").strip(),
+                })
+            validation_result = bulk_course_certificate_service.validate_bulk_ccc_records(normalised)
+            return jsonify({"success": True, **validation_result})
+
+        # File upload
+        file = request.files.get("file")
+        if not file or not file.filename:
+            return jsonify({"success": False, "error": "No file uploaded."}), 400
+
+        filename = file.filename.lower()
+        file_bytes = file.read()
+
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            parsed_rows = bulk_course_certificate_service.parse_excel_content(file_bytes)
+        elif filename.endswith(".csv") or filename.endswith(".txt"):
+            parsed_rows = bulk_course_certificate_service.parse_csv_content(file_bytes)
+        else:
+            return jsonify({"success": False, "error": "Unsupported file type. Please upload CSV or Excel (.xlsx)."}), 400
+
+        if not parsed_rows:
+            return jsonify({"success": False, "error": "The uploaded spreadsheet is empty or has invalid headers."}), 400
+
+        validation_result = bulk_course_certificate_service.validate_bulk_ccc_records(parsed_rows)
+        return jsonify({"success": True, **validation_result})
+
+    except Exception as exc:
+        print("CCC BULK VALIDATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/bulk/generate")
+def course_cert_bulk_generate():
+    """
+    Generate Course Completion Certificate PDFs for all valid bulk rows.
+    Accepts a JSON body with 'rows' (list of validated row dicts) and optional 'job_id'.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        rows = data.get("rows") or []
+        job_id = (data.get("job_id") or "").strip() or None
+
+        if not rows:
+            return jsonify({"success": False, "error": "No valid rows provided for certificate generation."}), 400
+
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
+
+        base_url = course_certificate_service.get_public_base_url(request)
+        result = bulk_course_certificate_service.generate_bulk_course_certificates(
+            valid_rows=rows,
+            output_dir=GENERATED_DIR,
+            base_url=base_url,
+            supabase_client=supabase,
+            job_id=job_id,
+        )
+
+        if result.get("cancelled"):
+            return jsonify({
+                "success": False,
+                "cancelled": True,
+                "error": "Bulk generation cancelled.",
+                **result,
+            }), 409
+
+        return jsonify({"success": True, **result})
+
+    except Exception as exc:
+        print("CCC BULK GENERATE ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/bulk/send-email")
+def course_cert_bulk_send_email():
+    """
+    Send Course Completion Certificate emails in bulk batches.
+    Accepts a JSON body with 'items' (list of generated cert dicts) and optional 'job_id'.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        items = data.get("items") or []
+        send_again_all = bool(data.get("send_again_all", False))
+        job_id = (data.get("job_id") or "").strip() or None
+
+        if not items:
+            return jsonify({"success": False, "error": "No certificates selected for email dispatch."}), 400
+
+        if job_id and bulk_job_manager.is_cancelled(job_id):
+            return jsonify({"success": False, "cancelled": True, "error": "Job cancelled by user."}), 409
+
+        base_url = course_certificate_service.get_public_base_url(request)
+        result = bulk_course_certificate_service.send_bulk_course_certificate_emails(
+            certificate_items=items,
+            output_dir=GENERATED_DIR,
+            batch_size=5,
+            delay_seconds=0.4,
+            send_again_all=send_again_all,
+            job_id=job_id,
+            base_url=base_url,
+        )
+
+        if result.get("cancelled"):
+            return jsonify({
+                "success": False,
+                "cancelled": True,
+                "error": "Bulk dispatch cancelled.",
+                **result,
+            }), 409
+
+        return jsonify({"success": True, **result})
+
+    except Exception as exc:
+        print("CCC BULK SEND EMAIL ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.get("/api/course-certificate/bulk/progress/<job_id>")
+def course_cert_bulk_progress(job_id):
+    """Poll live job progress for a bulk Course Certificate generation or email job."""
+    try:
+        job = bulk_job_manager.get_job(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "Job not found."}), 404
+        return jsonify({"success": True, "job": job})
+    except Exception as exc:
+        print("CCC BULK PROGRESS ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/bulk/cancel/<job_id>")
+def course_cert_bulk_cancel(job_id):
+    """Request cancellation of a running bulk Course Certificate job."""
+    try:
+        job = bulk_job_manager.request_cancel(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "Job not found."}), 404
+        return jsonify({"success": True, "job": job})
+    except Exception as exc:
+        print("CCC BULK CANCEL ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+
+@app.post("/api/course-certificate/bulk/parse-upload")
+def course_cert_bulk_parse_upload():
+    """Parse uploaded CSV or Excel file for Bulk Course Certificates."""
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file uploaded."}), 400
+    file = request.files["file"]
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "No file selected."}), 400
+
+    try:
+        file_bytes = file.read()
+        res = bulk_course_certificate_service.parse_ccc_file_for_ui(file_bytes, file.filename)
+        if not res.get("success"):
+            return jsonify(res), 400
+        return jsonify(res)
+    except Exception as exc:
+        print("CCC BULK PARSE UPLOAD ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+
+@app.post("/api/course-certificate/bulk/check-duplicates")
+def course_cert_bulk_check_duplicates():
+    """
+    Batch duplicate check against public.course_certificate_history.
+    Considers ONLY records where email_status = 'sent'.
+    Normalizes candidate emails and database emails using email.strip().lower().
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        records = data.get("records") or data.get("emails") or []
+        if not records:
+            return jsonify({
+                "success": True,
+                "duplicate_count": 0,
+                "duplicates": [],
+                "duplicate_map": {},
+            })
+
+        duplicate_map = repository.find_existing_course_certificate_batch(records)
+        duplicate_emails = list(duplicate_map.keys())
+
+        return jsonify({
+            "success": True,
+            "duplicate_count": len(duplicate_emails),
+            "duplicates": duplicate_emails,
+            "duplicate_map": duplicate_map,
+        })
+    except Exception as exc:
+        print("CCC BULK CHECK DUPLICATES ERROR:", repr(exc))
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 @app.get("/certificate")
 def certificate_page():

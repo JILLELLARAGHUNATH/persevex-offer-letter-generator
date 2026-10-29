@@ -61,6 +61,466 @@
             color: #0f172a;
             border-color: #cbd5e1;
         }
+
+        /* ── Bulk Course Certificate Scoped Styles (Strictly within #bulkCertWorkspace) ── */
+        #bulkCertWorkspace .bulk-table input[type="text"],
+        #bulkCertWorkspace .bulk-table input[type="email"],
+        #bulkCertWorkspace .bulk-table input[type="date"] {
+            width: 100%;
+            padding: 6px 10px;
+            border: 1px solid var(--border-color, #cbd5e1);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 13px;
+            box-sizing: border-box;
+            background: #ffffff;
+            color: var(--text-main, #0f172a);
+        }
+        #bulkCertWorkspace .bulk-table input:focus {
+            outline: 2px solid var(--brand-primary, #2563eb);
+            border-color: transparent;
+        }
+        #bulkCertWorkspace .row-remove-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #ef4444;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        #bulkCertWorkspace .row-remove-btn:hover {
+            background: #fee2e2;
+        }
+        #bulkCertWorkspace .bulk-row-error td {
+            background: #fef2f2 !important;
+        }
+        #bulkCertWorkspace .bulk-row-duplicate td {
+            background: #fffbeb !important;
+        }
+        #bulkCertWorkspace .bulk-row-success td {
+            background: #f0fdf4 !important;
+        }
+        #bulkCertWorkspace .bulk-row-sent td {
+            background: #f0fdf4 !important;
+        }
+        #bulkCertWorkspace .bulk-row-failed td {
+            background: #fef2f2 !important;
+        }
+        #bulkCertWorkspace .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        #bulkCertWorkspace .badge-sent { background: #dcfce7; color: #166534; }
+        #bulkCertWorkspace .badge-failed { background: #fee2e2; color: #991b1b; }
+        #bulkCertWorkspace .badge-valid { background: #dbeafe; color: #1d4ed8; }
+        #bulkCertWorkspace .badge-dup { background: #fef3c7; color: #b45309; }
+
+        /* CCC Bulk Modals default hidden guard */
+        #cccBulkResendModal[hidden],
+        #cccBulkResendModal[style*="display: none"],
+        #cccBulkResendModal[style*="display:none"],
+        #cccBulkSendModal[hidden],
+        #cccBulkSendModal[style*="display: none"],
+        #cccBulkSendModal[style*="display:none"],
+        #cccBulkRetryModal[hidden],
+        #cccBulkRetryModal[style*="display: none"],
+        #cccBulkRetryModal[style*="display:none"] {
+            display: none !important;
+        }
+
+        /* Workspace isolation guards */
+        #singleCertWorkspace[hidden],
+        #singleCertWorkspace[style*="display: none"],
+        #singleCertWorkspace[style*="display:none"] {
+            display: none !important;
+        }
+
+        #bulkCertWorkspace[hidden],
+        #bulkCertWorkspace[style*="display: none"],
+        #bulkCertWorkspace[style*="display:none"] {
+            display: none !important;
+        }
+
+        /* 3-Column manual input textareas grid strictly for Course Certificate Bulk */
+        #bulkCertWorkspace .bulk-textareas-grid {
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 20px !important;
+            margin-bottom: 20px !important;
+            width: 100% !important;
+            align-items: start !important;
+        }
+
+        #bulkCertWorkspace .bulk-field-wrapper {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 6px !important;
+            min-width: 0 !important;
+            width: 100% !important;
+        }
+
+        #bulkCertWorkspace .bulk-textarea {
+            width: 100% !important;
+            min-height: 240px !important;
+            box-sizing: border-box !important;
+            resize: vertical !important;
+        }
+
+        @media (max-width: 900px) {
+            #bulkCertWorkspace .bulk-textareas-grid {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+            }
+        }
+
+        /* ── CCC Generated Certificate Preview Section ── */
+        #cccGeneratedSection {
+            margin-top: 28px;
+        }
+        #cccGeneratedSection .gen-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        #cccGeneratedSection .gen-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main, #0f172a);
+            margin: 0;
+        }
+        #cccGeneratedSection .gen-section-count {
+            font-size: 12px;
+            font-weight: 700;
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 3px 12px;
+            border-radius: 20px;
+        }
+        /* Side-by-side layout: table left, preview right */
+        #cccGeneratedSection .gen-layout {
+            display: grid;
+            grid-template-columns: 1fr minmax(0, 440px);
+            gap: 20px;
+            align-items: start;
+        }
+        @media (max-width: 1100px) {
+            #cccGeneratedSection .gen-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* Generated certificates table - Fixed Dashboard & Internal Scrolling */
+        #cccGeneratedSection .gen-table-wrap {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 520px;
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: var(--radius-lg, 12px);
+            background: #fff;
+            position: relative;
+        }
+        #cccGeneratedSection .gen-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: #f8fafc;
+            box-shadow: 0 1px 0 var(--border-color, #e2e8f0);
+        }
+        #cccGeneratedSection .gen-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        #cccGeneratedSection .gen-table thead tr {
+            background: #f8fafc;
+        }
+        #cccGeneratedSection .gen-table th {
+            padding: 11px 14px;
+            text-align: left;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: var(--text-muted, #64748b);
+            border-bottom: 1px solid var(--border-color, #e2e8f0);
+            white-space: nowrap;
+        }
+        #cccGeneratedSection .gen-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            vertical-align: middle;
+            color: var(--text-body, #334155);
+        }
+        #cccGeneratedSection .gen-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        #cccGeneratedSection .gen-table tbody tr:hover td {
+            background: #f0f9ff;
+        }
+        #cccGeneratedSection .gen-table tbody tr.gen-row-selected td {
+            background: #eff6ff;
+        }
+        #cccGeneratedSection .gen-table .gen-row-num {
+            font-size: 12px;
+            color: var(--text-muted, #94a3b8);
+            font-weight: 600;
+            width: 36px;
+        }
+        #cccGeneratedSection .gen-table .gen-name {
+            font-weight: 600;
+            color: var(--text-main, #0f172a);
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #cccGeneratedSection .gen-table .gen-email {
+            color: var(--brand-primary, #2563eb);
+            font-size: 12.5px;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #cccGeneratedSection .gen-table .gen-domain {
+            color: var(--text-body, #334155);
+            max-width: 140px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #cccGeneratedSection .gen-table .gen-date {
+            white-space: nowrap;
+            font-size: 12.5px;
+        }
+        #cccGeneratedSection .eye-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border: 1.5px solid var(--border-color, #e2e8f0);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--brand-primary, #2563eb);
+            cursor: pointer;
+            transition: all 0.15s;
+            padding: 0;
+        }
+        #cccGeneratedSection .eye-btn:hover {
+            background: #eff6ff;
+            border-color: var(--brand-primary, #2563eb);
+        }
+        #cccGeneratedSection .eye-btn.active {
+            background: var(--brand-primary, #2563eb);
+            border-color: var(--brand-primary, #2563eb);
+            color: #fff;
+        }
+        /* Preview panel - Fixed Dashboard Bounded */
+        #cccPreviewPanel {
+            border: 1px solid var(--border-color, #e2e8f0);
+            border-radius: var(--radius-lg, 12px);
+            background: #fff;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 400px;
+            max-height: 520px;
+            position: sticky;
+            top: 20px;
+        }
+        /* Progress Pause / Resume Controls */
+        .progress-ctrl-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s ease;
+            border: 1.5px solid transparent;
+        }
+        .progress-ctrl-btn.pause-btn {
+            background: #fef3c7;
+            color: #92400e;
+            border-color: #fde68a;
+        }
+        .progress-ctrl-btn.pause-btn:hover {
+            background: #fde68a;
+            color: #78350f;
+        }
+        .progress-ctrl-btn.resume-btn {
+            background: #dcfce7;
+            color: #166534;
+            border-color: #bbf7d0;
+        }
+        .progress-ctrl-btn.resume-btn:hover {
+            background: #bbf7d0;
+            color: #14532d;
+        }
+
+        #cccPreviewPanel .preview-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color, #e2e8f0);
+            background: #f8fafc;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        #cccPreviewPanel .preview-panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main, #0f172a);
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+        #cccPreviewPanel .preview-panel-nav {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #cccPreviewPanel .preview-nav-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border: 1.5px solid var(--border-color, #e2e8f0);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--text-body, #334155);
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+            padding: 0;
+        }
+        #cccPreviewPanel .preview-nav-btn:hover:not(:disabled) {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+        #cccPreviewPanel .preview-nav-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        #cccPreviewPanel .preview-nav-label {
+            font-size: 12px;
+            color: var(--text-muted, #64748b);
+            white-space: nowrap;
+        }
+        #cccPreviewPanel .preview-panel-actions {
+            display: flex;
+            gap: 6px;
+            padding: 8px 12px;
+            border-top: 1px solid var(--border-color, #e2e8f0);
+            background: #f8fafc;
+            flex-wrap: wrap;
+        }
+        #cccPreviewPanel .preview-action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 14px;
+            border-radius: 7px;
+            border: 1.5px solid var(--border-color, #e2e8f0);
+            background: #fff;
+            color: var(--text-body, #334155);
+            font-size: 12.5px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.15s;
+            text-decoration: none;
+        }
+        #cccPreviewPanel .preview-action-btn:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+        #cccPreviewPanel .preview-action-btn.primary {
+            background: var(--brand-primary, #2563eb);
+            border-color: var(--brand-primary, #2563eb);
+            color: #fff;
+        }
+        #cccPreviewPanel .preview-action-btn.primary:hover {
+            background: #1d4ed8;
+        }
+        #cccPreviewPanel .preview-canvas-area {
+            flex: 1;
+            overflow-y: auto;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            gap: 12px;
+            min-height: 300px;
+        }
+        #cccPreviewPanel .preview-empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted, #94a3b8);
+            text-align: center;
+            padding: 40px 20px;
+        }
+        #cccPreviewPanel .preview-empty-state svg {
+            margin-bottom: 12px;
+            opacity: 0.45;
+        }
+        #cccPreviewPanel .preview-loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted, #94a3b8);
+            padding: 40px;
+            gap: 12px;
+        }
+        /* Bulk email button below generated section */
+        #cccBulkEmailBtn {
+            display: none;
+            width: 100%;
+            margin-top: 20px;
+            padding: 15px 28px;
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-lg, 12px);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(5,150,105,0.25);
+            transition: all 0.18s;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        #cccBulkEmailBtn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+            box-shadow: 0 6px 20px rgba(5,150,105,0.35);
+            transform: translateY(-1px);
+        }
+        #cccBulkEmailBtn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+        }
     </style>
 </head>
 <body>
@@ -189,7 +649,30 @@
         </div>
     </div>
 
-    <main class="ca-certificate-layout">
+    <!-- =====================================================
+         MODE SWITCHER: SINGLE vs BULK COURSE CERTIFICATE
+         ===================================================== -->
+    <div class="mode-switcher-container">
+        <div class="mode-switcher-pills">
+            <button type="button" id="tabSingleCert" class="mode-pill-btn active" onclick="switchCCCMode('single')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                </svg>
+                Single Certificate
+            </button>
+            <button type="button" id="tabBulkCert" class="mode-pill-btn" onclick="switchCCCMode('bulk')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                Bulk Generate Certificates
+            </button>
+        </div>
+    </div>
+
+
+    <main id="singleCertWorkspace" class="ca-certificate-layout">
         <section class="card form-card-animate">
             <div class="card-header">
                 <h2>
@@ -298,7 +781,377 @@
             </div>
         </section>
     </main>
-</div>
+
+    <!-- =====================================================
+         BULK COURSE CERTIFICATE WORKSPACE
+         ===================================================== -->
+    <main id="bulkCertWorkspace" class="ca-bulk-main" style="display: none !important;" hidden>
+        <div class="ca-bulk-container">
+
+            <!-- Upload bar -->
+            <div class="ca-bulk-form-card">
+                <div class="bulk-upload-compact-bar">
+                    <label for="cccFileInput" class="bulk-upload-btn" style="cursor:pointer;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        Upload Excel / CSV
+                    </label>
+                    <input type="file" id="cccFileInput" accept=".csv,.xlsx,.xls" style="display:none;">
+                    <span class="bulk-upload-formats-hint">Supported: .csv · .xlsx · .xls</span>
+                    <div style="display:flex;gap:8px;margin-left:auto;align-items:center;flex-wrap:wrap;">
+                        <a href="/api/course-certificate/bulk/template?format=csv" class="bulk-upload-info-tag" download>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Sample CSV
+                        </a>
+                        <a href="/api/course-certificate/bulk/template?format=excel" class="bulk-upload-info-tag" download>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Sample Excel
+                        </a>
+                        <span id="cccBulkUploadInfo" class="bulk-upload-info-tag" style="display:none;gap:6px;color:#059669;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Three-column textarea grid -->
+            <div class="ca-bulk-form-card">
+                <div class="bulk-textareas-grid">
+                    <!-- Student Names -->
+                    <div class="bulk-field-wrapper">
+                        <div class="bulk-field-header">
+                            <span class="bulk-field-label">Student Names</span>
+                            <span class="bulk-counter-badge" id="cccNamesCount">0</span>
+                        </div>
+                        <textarea
+                            id="cccStudentNames"
+                            class="bulk-textarea"
+                            placeholder="One student name per line&#10;&#10;Rahul Kumar&#10;Priya Sharma&#10;Arjun Reddy"
+                            rows="12"
+                            spellcheck="false"></textarea>
+                        <p class="bulk-field-hint">Paste or type one name per line. Each line must correspond to the same line in Emails and Domains.</p>
+                    </div>
+
+                    <!-- Email Addresses -->
+                    <div class="bulk-field-wrapper">
+                        <div class="bulk-field-header">
+                            <span class="bulk-field-label">Email Addresses</span>
+                            <span class="bulk-counter-badge" id="cccEmailsCount">0</span>
+                        </div>
+                        <textarea
+                            id="cccEmailAddresses"
+                            class="bulk-textarea"
+                            placeholder="One email address per line&#10;&#10;rahul@gmail.com&#10;priya@gmail.com&#10;arjun@gmail.com"
+                            rows="12"
+                            spellcheck="false"></textarea>
+                        <p class="bulk-field-hint">Must match Names line-for-line. Duplicates within the batch will be flagged.</p>
+                    </div>
+
+                    <!-- Domains -->
+                    <div class="bulk-field-wrapper">
+                        <div class="bulk-field-header">
+                            <span class="bulk-field-label">Domains / Courses</span>
+                            <span class="bulk-counter-badge" id="cccDomainsCount">0</span>
+                        </div>
+                        <textarea
+                            id="cccDomains"
+                            class="bulk-textarea"
+                            placeholder="One course/domain per line&#10;&#10;Python Full Stack&#10;Data Science&#10;Web Development"
+                            rows="12"
+                            spellcheck="false"></textarea>
+                        <p class="bulk-field-hint">Used as the course name on each certificate. Must match Names line-for-line.</p>
+                    </div>
+                </div>
+
+                <!-- Shared Issue Date -->
+                <div class="bulk-date-group" style="margin-top:18px;">
+                    <label for="cccIssueDate" style="font-size:13.5px;font-weight:600;color:var(--text-main);">
+                        Issue Date for All <span style="color:#dc2626;">*</span>
+                    </label>
+                    <input type="date" id="cccIssueDate" class="form-input" style="width:200px;margin-top:6px;" required>
+                    <p class="bulk-field-hint" style="margin-top:4px;">This date applies to every certificate in this batch.</p>
+                </div>
+
+                <!-- Live matching summary -->
+                <div class="bulk-matching-summary" style="margin-top:16px;">
+                    <div class="bulk-matching-stats">
+                        <div class="matching-stat-item">
+                            <span class="matching-stat-label">Names</span>
+                            <span class="matching-stat-val" id="cccSummaryNamesCount">0</span>
+                        </div>
+                        <span class="matching-stat-divider">/</span>
+                        <div class="matching-stat-item">
+                            <span class="matching-stat-label">Emails</span>
+                            <span class="matching-stat-val" id="cccSummaryEmailsCount">0</span>
+                        </div>
+                        <span class="matching-stat-divider">/</span>
+                        <div class="matching-stat-item">
+                            <span class="matching-stat-label">Domains</span>
+                            <span class="matching-stat-val" id="cccSummaryDomainsCount">0</span>
+                        </div>
+                        <span class="matching-stat-divider">&bull;</span>
+                        <div class="matching-stat-item">
+                            <span class="matching-stat-label">Matched</span>
+                            <span class="matching-stat-val" id="cccSummaryMatchedCount">0</span>
+                        </div>
+                    </div>
+                    <span class="bulk-match-status-badge" id="cccMatchStatusBadge">Enter names, emails, and domains to begin</span>
+                </div>
+
+                <!-- Error banner -->
+                <div id="cccBulkErrorBanner" class="bulk-error-alert" style="display:none;margin-top:12px;">
+                    <svg class="bulk-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    <span class="bulk-alert-text" id="cccBulkErrorMessage"></span>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="bulk-form-actions" style="margin-top:18px;">
+                    <button type="button" id="cccEvaluateBtn" class="bulk-action-btn evaluate-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Evaluate Students
+                    </button>
+                    <button type="button" id="cccGenerateBtn" class="bulk-action-btn generate-btn" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+                        Generate Certificates
+                    </button>
+                    <button type="button" id="cccSendBtn" class="bulk-action-btn send-btn" disabled style="display:none;" aria-hidden="true">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        <span id="cccSendBtnText">Send Certificates</span>
+                    </button>
+                    <button type="button" id="cccClearListsBtn" class="bulk-action-btn secondary" onclick="cccClearBulkInputs()">
+                        Clear Lists
+                    </button>
+                </div>
+            </div>
+
+            <!-- Evaluation card -->
+            <div id="cccEvaluationSection" class="bulk-eval-card" style="display:none;">
+                <div class="eval-card-header">
+                    <h3 class="eval-header-title">Preview &amp; Validate</h3>
+                    <span class="eval-status-badge" id="cccEvalStatusBadge">Pending</span>
+                </div>
+                <div class="eval-metrics-grid">
+                    <div class="eval-metric-box">
+                        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);">Total Rows</span>
+                        <span style="font-size:26px;font-weight:800;color:var(--text-main);" id="cccEvalTotalRows">0</span>
+                    </div>
+                    <div class="eval-metric-box eval-box-valid">
+                        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#065f46;">Valid Records</span>
+                        <span style="font-size:26px;font-weight:800;color:#059669;" id="cccEvalValidStudents">0</span>
+                    </div>
+                    <div class="eval-metric-box eval-box-duplicate">
+                        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#92400e;">Duplicates</span>
+                        <span style="font-size:26px;font-weight:800;color:#d97706;" id="cccEvalDuplicateRows">0</span>
+                    </div>
+                    <div class="eval-metric-box eval-box-invalid">
+                        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#991b1b;">Invalid Records</span>
+                        <span style="font-size:26px;font-weight:800;color:#dc2626;" id="cccEvalInvalidRows">0</span>
+                    </div>
+                    <div class="eval-metric-box eval-box-matched">
+                        <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#1e40af;">Matched / Will Generate</span>
+                        <span style="font-size:26px;font-weight:800;color:#2563eb;" id="cccEvalMatched">0</span>
+                    </div>
+                </div>
+                <div id="cccEvalDuplicateBanner" class="eval-duplicate-banner" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <span id="cccEvalDuplicateText"></span>
+                </div>
+                <div id="cccEvalInvalidSection" style="display:none;margin-top:16px;">
+                    <div class="eval-invalid-table-wrap">
+                        <table class="eval-invalid-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Student Name</th>
+                                    <th>Email</th>
+                                    <th>Domain</th>
+                                    <th>Issue / Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cccEvalInvalidTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress section -->
+            <div id="cccBulkProgressSection" class="ca-bulk-progress-card" style="display:none;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <h3 style="font-size:16px;font-weight:700;margin:0;color:var(--text-main);">Processing</h3>
+                        <span class="eval-status-badge" id="cccProgressStatusTag">Running</span>
+                    </div>
+                    <div class="bulk-progress-controls" style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" class="progress-ctrl-btn pause-btn" id="cccPauseGenBtn" style="display:none;" onclick="cccPauseGeneration()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+                            Pause Generation
+                        </button>
+                        <button type="button" class="progress-ctrl-btn resume-btn" id="cccResumeGenBtn" style="display:none;" onclick="cccResumeGeneration()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            Resume Generation
+                        </button>
+                        <button type="button" class="progress-ctrl-btn pause-btn" id="cccPauseEmailBtn" style="display:none;" onclick="cccPauseEmailSending()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
+                            Pause Email Sending
+                        </button>
+                        <button type="button" class="progress-ctrl-btn resume-btn" id="cccResumeEmailBtn" style="display:none;" onclick="cccResumeEmailSending()">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            Resume Email Sending
+                        </button>
+                    </div>
+                </div>
+                <div class="bulk-stats-grid">
+                    <div class="bulk-stat-box stat-total">
+                        <span class="stat-box-title">Total</span>
+                        <span class="stat-box-num" id="cccStatTotal">0</span>
+                    </div>
+                    <div class="bulk-stat-box stat-completed">
+                        <span class="stat-box-title" id="cccStatCompletedLabel">Processed</span>
+                        <span class="stat-box-num" id="cccStatCompleted">0</span>
+                    </div>
+                    <div class="bulk-stat-box stat-sent">
+                        <span class="stat-box-title" id="cccStatSuccessLabel">Success</span>
+                        <span class="stat-box-num" id="cccStatSent">0</span>
+                    </div>
+                    <div class="bulk-stat-box stat-skipped" id="cccStatSkippedBox" style="display:none;">
+                        <span class="stat-box-title">Skipped</span>
+                        <span class="stat-box-num" id="cccStatSkipped">0</span>
+                    </div>
+                    <div class="bulk-stat-box stat-failed">
+                        <span class="stat-box-title">Failed</span>
+                        <span class="stat-box-num" id="cccStatFailed">0</span>
+                    </div>
+                    <div class="bulk-stat-box stat-remaining">
+                        <span class="stat-box-title">Remaining</span>
+                        <span class="stat-box-num" id="cccStatRemaining">0</span>
+                    </div>
+                </div>
+                <div class="bulk-progress-bar-container" style="margin-top:12px;">
+                    <div class="bulk-progress-bar-track">
+                        <div class="bulk-progress-bar-fill" id="cccProgressBarFill" style="width:0%;"></div>
+                    </div>
+                    <div class="bulk-progress-bar-labels">
+                        <span id="cccProgressPercentageLabel">0%</span>
+                        <span id="cccProgressCountLabel">0 / 0 processed</span>
+                    </div>
+                </div>
+                <div class="bulk-current-candidate-card" id="cccCurrentStudentBox" style="display:none;">
+                    <div class="current-candidate-spinner">
+                        <div class="spinner-ring"></div>
+                    </div>
+                    <div class="current-candidate-info">
+                        <span class="current-candidate-label">Now processing</span>
+                        <span class="current-candidate-name" id="cccCurrentStudentName"></span>
+                        <span class="current-candidate-email" id="cccCurrentStudentEmail"></span>
+                    </div>
+                    <span id="cccCurrentStudentStep" class="eval-status-badge" style="margin-left:auto;font-size:11px;"></span>
+                </div>
+                <!-- Completion banner -->
+                <div id="cccBulkCompletionCard" class="bulk-completion-card" style="display:none;">
+                    <div class="completion-icon-wrapper"></div>
+                    <div class="completion-text-block">
+                        <p class="completion-title" id="cccCompletionTitle"></p>
+                        <p class="completion-message" id="cccCompletionMessage"></p>
+                    </div>
+                </div>
+                <!-- Failed records -->
+                <div id="cccBulkFailedSection" class="bulk-failed-list-card" style="display:none;margin-top:16px;">
+                    <div class="failed-list-header">
+                        <span class="failed-list-title">Failed Records &mdash; <span id="cccFailedListCount">0</span></span>
+                        <button type="button" class="retry-failed-btn" id="cccRetryFailedBtn" style="display: none;" onclick="cccRetryFailedRecords()" disabled>
+                            Retry <span id="cccRetryBtnCount">0</span> Failed
+                        </button>
+                    </div>
+                    <div style="overflow-x:auto;margin-top:10px;">
+                        <table class="eval-invalid-table">
+                            <thead>
+                                <tr><th>#</th><th>Name</th><th>Email</th><th>Domain</th><th>Error</th><th>Action</th></tr>
+                            </thead>
+                            <tbody id="cccFailedTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+                <!-- ── Generated Certificate Previews ── -->
+                <div id="cccGeneratedSection" style="display:none;">
+                    <div class="gen-section-header">
+                        <h3 class="gen-section-title">Generated Certificate Previews</h3>
+                        <span class="gen-section-count" id="cccGenSectionCount">0 certificates</span>
+                    </div>
+                    <div class="gen-layout">
+                        <!-- Table -->
+                        <div class="gen-table-wrap">
+                            <table class="gen-table" id="cccGenTable">
+                                <thead>
+                                    <tr>
+                                        <th class="gen-row-num">#</th>
+                                        <th>Student Name</th>
+                                        <th>Email</th>
+                                        <th>Domain / Course</th>
+                                        <th>Issue Date</th>
+                                        <th>Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cccGenTableBody"></tbody>
+                            </table>
+                        </div>
+                        <!-- Preview panel -->
+                        <div id="cccPreviewPanel">
+                            <div class="preview-panel-header">
+                                <p class="preview-panel-title" id="cccPreviewPanelTitle">No certificate selected</p>
+                                <div class="preview-panel-nav">
+                                    <button type="button" class="preview-nav-btn" id="cccPrevBtn" title="Previous certificate" disabled>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                                    </button>
+                                    <span class="preview-nav-label" id="cccPreviewNavLabel">—</span>
+                                    <button type="button" class="preview-nav-btn" id="cccNextBtn" title="Next certificate" disabled>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Empty state -->
+                            <div class="preview-empty-state" id="cccPreviewEmpty">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <p style="font-size:13px;margin:0;font-weight:600;">Click an eye icon to preview a certificate</p>
+                                <p style="font-size:12px;margin:4px 0 0;opacity:.7;">The PDF will appear here</p>
+                            </div>
+                            <!-- Loading state -->
+                            <div class="preview-loading" id="cccPreviewLoading">
+                                <div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+                                <span style="font-size:13px;">Loading certificate…</span>
+                            </div>
+                            <!-- Canvas area -->
+                            <div class="preview-canvas-area" id="cccPreviewCanvasArea" style="display:none;"></div>
+                            <!-- Action buttons -->
+                            <div class="preview-panel-actions" id="cccPreviewActions" style="display:none;">
+                                <button type="button" class="preview-action-btn primary" id="cccPreviewDownloadBtn" onclick="cccDownloadSelectedCert()">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                    Download PDF
+                                </button>
+                                <button type="button" class="preview-action-btn" id="cccPreviewNewTabBtn" onclick="cccOpenCertInNewTab()">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                                    Open in New Tab
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Bulk Email Button ── -->
+                <button type="button" id="cccBulkEmailBtn" disabled>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    <span id="cccBulkEmailBtnText">Send Certificates by Email (All Valid Records)</span>
+                </button>
+
+        </div><!-- /.ca-bulk-container -->
+    </main>
 
 <!-- =========================================================
      RESEND CONFIRMATION MODAL
@@ -364,6 +1217,165 @@
         </div>
     </div>
 </div>
+
+<!-- =========================================================
+     BULK COURSE CERTIFICATE DUPLICATE CONFIRMATION MODAL
+     ========================================================= -->
+<div
+    id="cccExistingModal"
+    class="modal-overlay"
+    style="display: none;"
+    onclick="handleCCCBulkDuplicateBackdropClick(event)"
+>
+    <div
+        class="modal-card resend-modal-box"
+        style="max-width: 520px;"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cccExistingModalTitle"
+    >
+        <button type="button" class="modal-close-btn" onclick="closeCCCExistingModal()" aria-label="Close modal">✕</button>
+
+        <div class="modal-icon-header warning-icon-bg">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+        </div>
+
+        <h3 id="cccExistingModalTitle" style="font-size: 19px; font-weight: 800; color: var(--brand-dark, #0f172a); margin: 0 0 10px;">
+            Some certificates have already been sent
+        </h3>
+
+        <p style="color: var(--text-muted, #64748b); font-size: 13.5px; line-height: 1.5; margin: 0 0 12px;">
+            <strong id="cccExistingDuplicateCountText" style="color: #d97706;">0</strong> recipients in this batch have previously received a course certificate.
+        </p>
+
+        <div id="cccExistingDuplicateList" style="max-height: 120px; overflow-y: auto; background: #f8fafc; border: 1px solid var(--border-color, #e2e8f0); border-radius: var(--radius-md, 8px); padding: 8px 12px; margin: 0 auto 16px; font-size: 12.5px; text-align: left; color: var(--text-body, #334155);">
+        </div>
+
+        <p style="color: var(--text-body, #334155); font-size: 13.5px; font-weight: 500; line-height: 1.5; margin: 0 0 20px;">
+            Choose how you would like to proceed with email dispatch:
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+            <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                <button
+                    type="button"
+                    class="modal-cancel-btn"
+                    onclick="closeCCCExistingModal()"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="button"
+                    class="modal-confirm-btn"
+                    style="background: #059669; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.3);"
+                    onclick="cccHandleBulkSendOnlyNew()"
+                >
+                    <span>Send Only to New (<span id="cccBulkNewCount">0</span>)</span>
+                </button>
+
+                <button
+                    type="button"
+                    class="modal-confirm-btn"
+                    style="background: var(--brand-primary, #2563eb);"
+                    onclick="cccHandleBulkSendAgainAll()"
+                >
+                    <span>Send Again to All (<span id="cccBulkTotalCount">0</span>)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- =========================================================
+     CCC BULK: HISTORICAL-DUPLICATE RESEND MODAL
+     ========================================================= -->
+<div id="cccBulkResendModal" class="modal-overlay" style="display: none;" hidden
+     onclick="cccHandleResendBackdropClick(event)">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cccBulkResendModalTitle"
+         style="max-width:520px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="cccBulkResendModalTitle">Some students already have a certificate</h3>
+            <button type="button" class="modal-close-btn" onclick="cccCloseResendModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p id="cccResendDuplicateSummary" style="font-size:13.5px;color:var(--text-body);margin:0 0 10px;"></p>
+            <ul id="cccResendDuplicateList"
+                style="max-height:120px;overflow-y:auto;font-size:12.5px;color:var(--brand-primary);padding-left:18px;margin:0 0 16px;"></ul>
+            <p style="font-size:13px;color:var(--text-muted);margin:0;">Choose how to handle these students:</p>
+        </div>
+        <div class="modal-actions" style="gap:10px;">
+            <button type="button" class="modal-cancel-btn" onclick="cccCloseResendModal()">Cancel</button>
+            <button type="button" class="modal-confirm-btn"
+                    style="background:#059669;"
+                    onclick="cccHandleSendOnlyNew()">
+                Skip Existing — Send Only New
+            </button>
+            <button type="button" class="modal-confirm-btn"
+                    onclick="cccHandleSendAgainAll()">
+                Regenerate &amp; Resend All
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     CCC BULK: SEND CONFIRMATION MODAL
+     ========================================================= -->
+<div id="cccBulkSendModal" class="modal-overlay" style="display: none;" hidden
+     onclick="cccHandleSendBackdropClick(event)">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cccBulkSendModalTitle"
+         style="max-width:440px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="cccBulkSendModalTitle">Send Course Certificates?</h3>
+            <button type="button" class="modal-close-btn" onclick="cccCloseSendModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13.5px;color:var(--text-body);margin:0;">
+                Ready to email certificates to <strong id="cccSendModalCount">0</strong> student(s).
+                This action cannot be undone.
+            </p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="modal-cancel-btn" onclick="cccCloseSendModal()">Cancel</button>
+            <button type="button" class="modal-confirm-btn" onclick="cccHandleSendConfirm()">
+                <span id="cccSendModalBtnText">Send Certificates</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- =========================================================
+     CCC BULK: RETRY MODAL
+     ========================================================= -->
+<div id="cccBulkRetryModal" class="modal-overlay" style="display: none;" hidden
+     onclick="cccHandleRetryBackdropClick(event)">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cccBulkRetryModalTitle"
+         style="max-width:440px;">
+        <div class="modal-header">
+            <h3 class="modal-title" id="cccBulkRetryModalTitle">Retry Failed Records?</h3>
+            <button type="button" class="modal-close-btn" onclick="cccCloseRetryModal()">&#x2715;</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13.5px;color:var(--text-body);margin:0;">
+                Retry <strong id="cccRetryModalCount">0</strong> failed record(s)?
+                Only the failed operations will be retried.
+            </p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="modal-cancel-btn" onclick="cccCloseRetryModal()">Cancel</button>
+            <button type="button" class="modal-confirm-btn" onclick="cccHandleRetryConfirm()">
+                <span id="cccRetryBtnText">Retry Records</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 
 <script>
 let currentCertificateData = null;
@@ -724,6 +1736,1529 @@ async function updateStats() {
         // Silently tolerate background stats poll failures
     }
 }
+
+
+// ============================================================
+// BULK COURSE CERTIFICATE — 3-Textarea UI (Names / Emails / Domains)
+// Mirrors campus_ambassador_bulk.html interaction model.
+// ============================================================
+
+document.addEventListener("DOMContentLoaded", () => {
+    // ── Inputs
+    const fileInput          = document.getElementById("cccFileInput");
+    const uploadInfo         = document.getElementById("cccBulkUploadInfo");
+    const namesInput         = document.getElementById("cccStudentNames");
+    const emailsInput        = document.getElementById("cccEmailAddresses");
+    const domainsInput       = document.getElementById("cccDomains");
+    const dateInput          = document.getElementById("cccIssueDate");
+
+    // ── Buttons
+    const evaluateBtn        = document.getElementById("cccEvaluateBtn");
+    const generateBtn        = document.getElementById("cccGenerateBtn");
+    const sendBtn            = document.getElementById("cccSendBtn");
+    const clearBtn           = document.getElementById("cccClearListsBtn");
+    const sendBtnText        = document.getElementById("cccSendBtnText");
+
+    // ── Live counters
+    const namesCount         = document.getElementById("cccNamesCount");
+    const emailsCount        = document.getElementById("cccEmailsCount");
+    const domainsCount       = document.getElementById("cccDomainsCount");
+    const sumNames           = document.getElementById("cccSummaryNamesCount");
+    const sumEmails          = document.getElementById("cccSummaryEmailsCount");
+    const sumDomains         = document.getElementById("cccSummaryDomainsCount");
+    const sumMatched         = document.getElementById("cccSummaryMatchedCount");
+    const matchBadge         = document.getElementById("cccMatchStatusBadge");
+    const errorBanner        = document.getElementById("cccBulkErrorBanner");
+    const errorMsg           = document.getElementById("cccBulkErrorMessage");
+
+    // ── Evaluation card
+    const evalSection        = document.getElementById("cccEvaluationSection");
+    const evalStatus         = document.getElementById("cccEvalStatusBadge");
+    const evalTotal          = document.getElementById("cccEvalTotalRows");
+    const evalValid          = document.getElementById("cccEvalValidStudents");
+    const evalDup            = document.getElementById("cccEvalDuplicateRows");
+    const evalInvalid        = document.getElementById("cccEvalInvalidRows");
+    const evalMatched        = document.getElementById("cccEvalMatched");
+    const evalDupBanner      = document.getElementById("cccEvalDuplicateBanner");
+    const evalDupText        = document.getElementById("cccEvalDuplicateText");
+    const evalInvalidSection = document.getElementById("cccEvalInvalidSection");
+    const evalInvalidBody    = document.getElementById("cccEvalInvalidTableBody");
+
+    // ── Progress section
+    const progressSection    = document.getElementById("cccBulkProgressSection");
+    const progressStatusTag  = document.getElementById("cccProgressStatusTag");
+    const statTotalEl        = document.getElementById("cccStatTotal");
+    const statCompLabel      = document.getElementById("cccStatCompletedLabel");
+    const statCompEl         = document.getElementById("cccStatCompleted");
+    const statSuccLabel      = document.getElementById("cccStatSuccessLabel");
+    const statSentEl         = document.getElementById("cccStatSent");
+    const statSkippedBox     = document.getElementById("cccStatSkippedBox");
+    const statSkippedEl      = document.getElementById("cccStatSkipped");
+    const statFailedEl       = document.getElementById("cccStatFailed");
+    const statRemainingEl    = document.getElementById("cccStatRemaining");
+    const barFill            = document.getElementById("cccProgressBarFill");
+    const pctLabel           = document.getElementById("cccProgressPercentageLabel");
+    const countLabel         = document.getElementById("cccProgressCountLabel");
+    const currentBox         = document.getElementById("cccCurrentStudentBox");
+    const currentName        = document.getElementById("cccCurrentStudentName");
+    const currentEmail       = document.getElementById("cccCurrentStudentEmail");
+    const currentStep        = document.getElementById("cccCurrentStudentStep");
+
+    // ── Completion
+    const completionCard     = document.getElementById("cccBulkCompletionCard");
+    const completionTitle    = document.getElementById("cccCompletionTitle");
+    const completionMsg      = document.getElementById("cccCompletionMessage");
+
+    // ── Failed section
+    const failedSection      = document.getElementById("cccBulkFailedSection");
+    const failedBody         = document.getElementById("cccFailedTableBody");
+    const failedCount        = document.getElementById("cccFailedListCount");
+    const retryBtnCount      = document.getElementById("cccRetryBtnCount");
+    const retryFailedBtn     = document.getElementById("cccRetryFailedBtn");
+
+    // ── State
+    let isProcessing         = false;
+    let isEvaluated          = false;
+    let validStudentsList    = [];
+    let generatedItems       = [];
+    let failedRecordsList    = [];
+    let failedPhase          = "generation";
+    let batchMetrics         = { totalRows: 0, duplicateRows: 0, uniqueStudents: 0 };
+    let duplicateData        = { emails: [], map: {} };
+
+    // ── Utilities ─────────────────────────────────────────────────────────
+    function parseLines(raw) {
+        if (!raw) return [];
+        return raw.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    }
+
+    function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    function escapeHtml(str) {
+        return String(str || "")
+            .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function showToast(text, type = "success") {
+        const container = document.getElementById("toastContainer");
+        if (!container) return;
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+            <svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                ${type === "success"
+                    ? '<polyline points="20 6 9 17 4 12"></polyline>'
+                    : '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line>'}
+            </svg>
+            <div class="toast-text">${text}</div>
+            <button type="button" class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add("fade-out");
+            setTimeout(() => toast.remove(), 400);
+        }, 5000);
+    }
+
+    // ── Live summary bar update ────────────────────────────────────────────
+    function updateLiveSummary() {
+        if (isProcessing) return;
+
+        const names   = parseLines(namesInput ? namesInput.value : "");
+        const emails  = parseLines(emailsInput ? emailsInput.value : "");
+        const domains = parseLines(domainsInput ? domainsInput.value : "");
+
+        const nc = names.length, ec = emails.length, dc = domains.length;
+
+        if (namesCount)  namesCount.textContent  = nc;
+        if (emailsCount) emailsCount.textContent = ec;
+        if (domainsCount) domainsCount.textContent = dc;
+        if (sumNames)   sumNames.textContent   = nc;
+        if (sumEmails)  sumEmails.textContent  = ec;
+        if (sumDomains) sumDomains.textContent = dc;
+
+        if (isEvaluated) {
+            isEvaluated = false;
+            if (generateBtn) generateBtn.disabled = true;
+            if (sendBtn)     sendBtn.disabled     = true;
+            if (evalSection) evalSection.style.display = "none";
+        }
+
+        if (nc === 0 && ec === 0 && dc === 0) {
+            if (sumMatched) sumMatched.textContent = "0";
+            if (matchBadge) { matchBadge.className = "bulk-match-status-badge"; matchBadge.textContent = "Enter names, emails, and domains to begin"; }
+            if (errorBanner) errorBanner.style.display = "none";
+            return;
+        }
+
+        if (nc !== ec || ec !== dc) {
+            if (sumMatched) sumMatched.textContent = "0";
+            if (matchBadge) {
+                matchBadge.className = "bulk-match-status-badge badge-mismatch";
+                matchBadge.textContent = `Mismatch: ${nc} names / ${ec} emails / ${dc} domains`;
+            }
+            if (errorMsg) errorMsg.textContent = `Names (${nc}), Emails (${ec}), and Domains (${dc}) must have the same number of lines. Please check your lists.`;
+            if (errorBanner) errorBanner.style.display = "flex";
+            return;
+        }
+
+        if (sumMatched) sumMatched.textContent = nc;
+        if (matchBadge) {
+            matchBadge.className = "bulk-match-status-badge badge-matched";
+            matchBadge.textContent = `${nc} / ${nc} / ${nc} records aligned`;
+        }
+        if (errorBanner) errorBanner.style.display = "none";
+    }
+
+    if (namesInput)   namesInput.addEventListener("input", updateLiveSummary);
+    if (emailsInput)  emailsInput.addEventListener("input", updateLiveSummary);
+    if (domainsInput) domainsInput.addEventListener("input", updateLiveSummary);
+
+    // ── File upload ────────────────────────────────────────────────────────
+    if (fileInput) {
+        fileInput.addEventListener("change", async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split(".").pop().toLowerCase();
+            if (!["csv", "xlsx", "xls"].includes(ext)) {
+                showToast("Please upload a CSV or Excel file (.csv, .xlsx, .xls).", "error");
+                fileInput.value = "";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                showToast(`Uploading and reading ${file.name}...`, "info");
+                const resp = await fetch("/api/course-certificate/bulk/parse-upload", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await resp.json();
+
+                if (!resp.ok || !data.success) {
+                    const msg = data.error || "Failed to read file.";
+                    if (errorMsg) errorMsg.textContent = msg;
+                    if (errorBanner) errorBanner.style.display = "flex";
+                    showToast(msg, "error");
+                    if (uploadInfo) uploadInfo.style.display = "none";
+                    fileInput.value = "";
+                    return;
+                }
+
+                if (namesInput)   namesInput.value   = data.names_text   || "";
+                if (emailsInput)  emailsInput.value  = data.emails_text  || "";
+                if (domainsInput) domainsInput.value = data.domains_text || "";
+
+                if (uploadInfo) {
+                    uploadInfo.innerHTML = `
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span><strong>${escapeHtml(data.filename)}</strong> &bull; ${data.total_rows} rows &bull; ${data.valid_count} valid${data.duplicate_count > 0 ? ` (${data.duplicate_count} dup)` : ""}${data.invalid_count > 0 ? ` &bull; ${data.invalid_count} invalid` : ""}</span>
+                    `;
+                    uploadInfo.style.display = "inline-flex";
+                }
+                if (errorBanner) errorBanner.style.display = "none";
+
+                updateLiveSummary();
+
+                // Auto-show evaluation results from server parse
+                displayEvaluationResults({
+                    total_rows:      data.total_rows,
+                    valid_count:     data.valid_count,
+                    invalid_count:   data.invalid_count,
+                    duplicate_count: data.duplicate_count,
+                    candidates:      data.candidates || [],
+                    invalid_rows:    data.invalid_rows || []
+                });
+
+                showToast(`Loaded ${data.valid_count} student records from ${file.name}!`, "success");
+
+            } catch (err) {
+                showToast("Network error uploading file: " + err.message, "error");
+            } finally {
+                fileInput.value = "";
+            }
+        });
+    }
+
+    // ── Client-side evaluation ─────────────────────────────────────────────
+    function runClientEvaluation() {
+        const names   = parseLines(namesInput ? namesInput.value : "");
+        const emails  = parseLines(emailsInput ? emailsInput.value : "");
+        const domains = parseLines(domainsInput ? domainsInput.value : "");
+
+        if (names.length === 0 || emails.length === 0 || domains.length === 0) {
+            showToast("Please provide student names, email addresses, and domains first.", "error");
+            if (evalSection) evalSection.style.display = "none";
+            if (generateBtn) generateBtn.disabled = true;
+            return;
+        }
+
+        if (names.length !== emails.length || emails.length !== domains.length) {
+            const maxLen = Math.max(names.length, emails.length, domains.length);
+            if (errorMsg) errorMsg.textContent = `Line count mismatch: Names (${names.length}), Emails (${emails.length}), Domains (${domains.length}) must all have equal number of lines.`;
+            if (errorBanner) errorBanner.style.display = "flex";
+            showToast("Line count mismatch!", "error");
+
+            displayEvaluationResults({
+                total_rows: maxLen, valid_count: 0, invalid_count: maxLen,
+                duplicate_count: 0, candidates: [],
+                invalid_rows: [{
+                    row_num: "—",
+                    name: `${names.length} names`,
+                    email: `${emails.length} emails`,
+                    domain: `${domains.length} domains`,
+                    reason: "Count mismatch: All three columns must have the same number of lines."
+                }],
+                forceFail: true
+            });
+            return;
+        }
+
+        const validCandidates = [];
+        const invalidRows     = [];
+        const seenEmails      = new Set();
+        let duplicateCount    = 0;
+
+        for (let i = 0; i < names.length; i++) {
+            const rowNum    = i + 1;
+            const rawName   = names[i].trim();
+            const rawEmail  = emails[i].trim();
+            const rawDomain = domains[i].trim();
+
+            const isNameOk   = rawName.length > 0;
+            const isEmailOk  = isValidEmail(rawEmail);
+            const isDomainOk = rawDomain.length > 0;
+
+            if (isNameOk && isEmailOk && isDomainOk) {
+                const normEmail = rawEmail.toLowerCase();
+                if (seenEmails.has(normEmail)) {
+                    duplicateCount++;
+                } else {
+                    seenEmails.add(normEmail);
+                    validCandidates.push({ row_num: rowNum, name: rawName, email: normEmail, domain: rawDomain });
+                }
+            } else {
+                const reasons = [];
+                if (!isNameOk)   reasons.push("Student Name is missing");
+                if (!rawEmail)   reasons.push("Email is missing");
+                else if (!isEmailOk) reasons.push(`Invalid email: '${rawEmail}'`);
+                if (!isDomainOk) reasons.push("Domain is missing");
+
+                invalidRows.push({
+                    row_num: rowNum,
+                    name:    rawName   || "—",
+                    email:   rawEmail  || "—",
+                    domain:  rawDomain || "—",
+                    reason:  reasons.join(" & ")
+                });
+            }
+        }
+
+        displayEvaluationResults({
+            total_rows:      names.length,
+            valid_count:     validCandidates.length,
+            invalid_count:   invalidRows.length,
+            duplicate_count: duplicateCount,
+            candidates:      validCandidates,
+            invalid_rows:    invalidRows
+        });
+    }
+
+    function displayEvaluationResults(results) {
+        const isHardFail  = !!results.forceFail;
+        const canGenerate = !isHardFail && results.valid_count > 0;
+        const isClean     = canGenerate && results.invalid_count === 0;
+
+        isEvaluated = canGenerate;
+
+        batchMetrics = {
+            totalRows:      results.total_rows || 0,
+            duplicateRows:  results.duplicate_count || 0,
+            uniqueStudents: results.valid_count || 0
+        };
+
+        if (evalTotal)   evalTotal.textContent   = results.total_rows;
+        if (evalValid)   evalValid.textContent   = results.valid_count;
+        if (evalDup)     evalDup.textContent     = results.duplicate_count || 0;
+        if (evalInvalid) evalInvalid.textContent = results.invalid_count;
+        if (evalMatched) evalMatched.textContent = results.valid_count;
+
+        if (isClean) {
+            if (evalStatus) { evalStatus.className = "eval-status-badge"; evalStatus.textContent = `Evaluation Passed (${results.valid_count} Unique Student${results.valid_count === 1 ? "" : "s"})`; }
+            if (evalInvalidSection) evalInvalidSection.style.display = "none";
+            if (generateBtn) generateBtn.disabled = false;
+            if (sendBtn)     sendBtn.disabled     = true;
+            validStudentsList = results.candidates;
+        } else if (canGenerate) {
+            const inv = results.invalid_count;
+            if (evalStatus) { evalStatus.className = "eval-status-badge eval-badge-partial"; evalStatus.textContent = `Evaluation Complete — ${inv} Invalid Row${inv === 1 ? "" : "s"} Skipped`; }
+            if (generateBtn) generateBtn.disabled = false;
+            if (sendBtn)     sendBtn.disabled     = true;
+            validStudentsList = results.candidates;
+            renderInvalidTable(results.invalid_rows || []);
+            if (evalInvalidSection) evalInvalidSection.style.display = "block";
+        } else {
+            if (evalStatus) { evalStatus.className = "eval-status-badge eval-badge-failed"; evalStatus.textContent = isHardFail ? `Evaluation Failed (${results.invalid_count} Invalid)` : "Evaluation Failed — No Valid Records"; }
+            if (generateBtn) generateBtn.disabled = true;
+            if (sendBtn)     sendBtn.disabled     = true;
+            validStudentsList = [];
+            renderInvalidTable(results.invalid_rows || []);
+            if (evalInvalidSection) evalInvalidSection.style.display = (results.invalid_rows || []).length > 0 ? "block" : "none";
+        }
+
+        if (results.duplicate_count > 0) {
+            if (evalDupText) evalDupText.textContent = `Notice: ${results.duplicate_count} duplicate email row(s) detected. Only the first occurrence of each unique email will be processed.`;
+            if (evalDupBanner) evalDupBanner.style.display = "flex";
+        } else {
+            if (evalDupBanner) evalDupBanner.style.display = "none";
+        }
+
+        if (evalSection) evalSection.style.display = "block";
+        if (evalSection) evalSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    function renderInvalidTable(invalidRows) {
+        if (!evalInvalidBody) return;
+        evalInvalidBody.innerHTML = "";
+        invalidRows.forEach(inv => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td style="font-weight: 700; color: #dc2626;">${inv.row_num}</td>
+                <td style="font-weight: 600;">${escapeHtml(inv.name)}</td>
+                <td style="color: var(--brand-primary);">${escapeHtml(inv.email)}</td>
+                <td>${escapeHtml(inv.domain || "—")}</td>
+                <td style="color: #991b1b;"><span class="failed-reason-badge">${escapeHtml(inv.reason)}</span></td>
+            `;
+            evalInvalidBody.appendChild(tr);
+        });
+    }
+
+    if (evaluateBtn) evaluateBtn.addEventListener("click", () => { if (!isProcessing) runClientEvaluation(); });
+
+    // ── Pause & Resume State (Independent for Gen and Email) ───────────
+    let _isGenRunning     = false;
+    let _isGenPaused      = false;
+    let _genCandidates    = [];
+    let _genIssueDate     = "";
+    let _genNextIndex     = 0;
+    let _genJobId         = null;
+    let _genSuccessCount  = 0;
+    let _genFailCount     = 0;
+    let _genFailItems     = [];
+    const failItems = _genFailItems;
+
+    let _isEmailRunning   = false;
+    let _isEmailPaused    = false;
+    let _emailRecords     = [];
+    let _emailOptions     = {};
+    let _emailNextIndex   = 0;
+    let _emailSentCount   = 0;
+    let _emailFailCount   = 0;
+    let _emailFailedList  = [];
+    let _emailSkippedCount= 0;
+    let _emailJobId       = null;
+
+    const pauseGenBtn     = document.getElementById("cccPauseGenBtn");
+    const resumeGenBtn    = document.getElementById("cccResumeGenBtn");
+    const pauseEmailBtn   = document.getElementById("cccPauseEmailBtn");
+    const resumeEmailBtn  = document.getElementById("cccResumeEmailBtn");
+
+    // ── Generation Pause / Resume ──────────────────────────────────────────
+    window.cccPauseGeneration = function() {
+        if (!_isGenRunning || _isGenPaused) return;
+        _isGenPaused = true;
+        if (pauseGenBtn)  pauseGenBtn.style.display  = "none";
+        if (resumeGenBtn) resumeGenBtn.style.display = "inline-flex";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Paused";
+            progressStatusTag.className = "eval-status-badge badge-dup";
+        }
+        showToast("Generation paused. Click 'Resume Generation' to continue.", "info");
+    };
+
+    window.cccResumeGeneration = async function() {
+        if (_isGenRunning || !_isGenPaused) return;
+        _isGenPaused  = false;
+        _isGenRunning = true;
+        isProcessing  = true;
+        setInputsDisabled(true);
+
+        if (pauseGenBtn)  pauseGenBtn.style.display  = "inline-flex";
+        if (resumeGenBtn) resumeGenBtn.style.display = "none";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Generating PDFs...";
+            progressStatusTag.className = "eval-status-badge";
+        }
+        if (currentBox) currentBox.style.display = "flex";
+
+        await executeGenerationLoop();
+    };
+
+    async function executeGenerationLoop() {
+        const total = _genCandidates.length;
+
+        while (_genNextIndex < total) {
+            if (_isGenPaused) {
+                _isGenRunning = false;
+                isProcessing  = false;
+                if (currentBox) currentBox.style.display = "none";
+                if (pauseGenBtn)  pauseGenBtn.style.display  = "none";
+                if (resumeGenBtn) resumeGenBtn.style.display = "inline-flex";
+                if (progressStatusTag) {
+                    progressStatusTag.textContent = "Paused";
+                    progressStatusTag.className = "eval-status-badge badge-dup";
+                }
+                return; // Safely exited loop without starting next item
+            }
+
+            const i = _genNextIndex;
+            const item = _genCandidates[i];
+
+            if (currentStep)  { currentStep.textContent = "Generating..."; currentStep.style.background = "rgba(124, 58, 237, 0.1)"; currentStep.style.color = "#7c3aed"; }
+            if (currentName)  currentName.textContent = `${item.name} [${i+1}/${total}]`;
+            if (currentEmail) currentEmail.textContent = item.email;
+
+            try {
+                const resp = await fetch("/api/course-certificate/bulk/generate", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        rows: [{
+                            student_name:  item.name,
+                            student_email: item.email,
+                            course_name:   item.domain,
+                            issued_date:   _genIssueDate,
+                            row_index:     item.row_num || (i + 1)
+                        }],
+                        job_id: _genJobId
+                    })
+                });
+                const result = await resp.json();
+
+                if (resp.status === 409 && result.cancelled) { showToast("Generation cancelled.", "info"); break; }
+
+                if (resp.ok && result.success && (result.results || []).length > 0) {
+                    for (const r of result.results) {
+                        if (r.success !== false && !r.error) {
+                            _genSuccessCount++;
+                            const newCert = {
+                                index: r.row_index || item.row_num || (i + 1),
+                                name: r.student_name || item.name,
+                                email: r.student_email || item.email,
+                                domain: r.course_name || item.domain,
+                                issueDate: r.issued_date || _genIssueDate,
+                                filename: r.filename,
+                                certificate_id: r.certificate_id,
+                                issued_date: r.issued_date || _genIssueDate,
+                                url: r.url || (r.filename ? `/generated/${r.filename}` : "")
+                            };
+                            generatedItems.push(newCert);
+                            addGeneratedRecord(newCert);
+                        } else {
+                            _genFailCount++;
+                            failItems.push({
+                                index: r.row_index || item.row_num || (i + 1),
+                                name: r.student_name || item.name,
+                                email: r.student_email || item.email,
+                                domain: r.course_name || item.domain,
+                                issueDate: _genIssueDate,
+                                error: r.error || "Generation failed"
+                            });
+                        }
+                    }
+                } else {
+                    _genFailCount++;
+                    failItems.push({
+                        index: item.row_num || (i + 1),
+                        name: item.name,
+                        email: item.email,
+                        domain: item.domain,
+                        issueDate: _genIssueDate,
+                        error: (result.results || [])[0]?.error || result.error || `HTTP ${resp.status}`
+                    });
+                }
+            } catch (err) {
+                _genFailCount++;
+                failItems.push({
+                    index: item.row_num || (i + 1),
+                    name: item.name,
+                    email: item.email,
+                    domain: item.domain,
+                    issueDate: _genIssueDate,
+                    error: err.message || "Network Error"
+                });
+            }
+
+            _genNextIndex++;
+            const completed = _genNextIndex;
+            updateProgressBar(completed, total, _genSuccessCount, _genFailCount);
+        }
+
+        if (_isGenPaused) {
+            _isGenRunning = false;
+            isProcessing  = false;
+            if (currentBox) currentBox.style.display = "none";
+            if (pauseGenBtn)  pauseGenBtn.style.display  = "none";
+            if (resumeGenBtn) resumeGenBtn.style.display = "inline-flex";
+            if (progressStatusTag) {
+                progressStatusTag.textContent = "Paused";
+                progressStatusTag.className = "eval-status-badge badge-dup";
+            }
+            return;
+        }
+
+        // Completed all records
+        if (_genJobId) { try { await fetch("/api/bulk/complete-job", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: _genJobId }) }); } catch (_) {} }
+
+        _isGenRunning = false;
+        _isGenPaused  = false;
+        isProcessing  = false;
+        setInputsDisabled(false);
+        if (currentBox) currentBox.style.display = "none";
+        if (pauseGenBtn)  pauseGenBtn.style.display  = "none";
+        if (resumeGenBtn) resumeGenBtn.style.display = "none";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Generation Complete";
+            progressStatusTag.className = "eval-status-badge";
+        }
+
+        failedRecordsList = _genFailItems;
+        const genItems = generatedItems;
+        renderGeneratedTable(genItems);
+
+        if (genSection && generatedItems.length > 0) {
+            genSection.style.display = "block";
+            if (bulkEmailBtn) {
+                bulkEmailBtn.style.display = "inline-flex";
+                bulkEmailBtn.disabled = false;
+                if (bulkEmailBtnText) {
+                    bulkEmailBtnText.textContent = `Send Certificates by Email (${generatedItems.length} Valid Record${generatedItems.length === 1 ? "" : "s"})`;
+                }
+            }
+        }
+
+        renderFailedTable(failedRecordsList, "generation");
+        renderCompletionBanner(_genSuccessCount, _genFailCount, total, "generation", _genIssueDate);
+    }
+
+    // ── Generation Trigger ──────────────────────────────────────────────────
+    if (generateBtn) generateBtn.addEventListener("click", async () => {
+        if (isProcessing || !isEvaluated || validStudentsList.length === 0) return;
+        const issueDate = dateInput ? dateInput.value.trim() : "";
+        if (!issueDate) { showToast("Please select an Issue Date.", "error"); return; }
+        await runGenerationProcessing(validStudentsList, issueDate);
+    });
+
+    async function runGenerationProcessing(candidates, issueDate, options = {}) {
+        if (_isGenRunning) return; // Prevent concurrent generation loops
+        const isRetry = options && options.isRetry;
+
+        _isGenRunning    = true;
+        _isGenPaused     = false;
+        _genCandidates   = candidates;
+        _genIssueDate    = issueDate;
+        _genNextIndex    = 0;
+        _genSuccessCount = isRetry ? generatedItems.length : 0;
+        _genFailCount    = 0;
+        _genFailItems    = [];
+
+        isProcessing = true;
+        failedPhase  = "generation";
+        setInputsDisabled(true);
+
+        if (!isRetry) {
+            generatedItems = [];
+            _previewIndex = -1;
+            if (_previewPdfUrl) { URL.revokeObjectURL(_previewPdfUrl); _previewPdfUrl = null; }
+            if (genTableBody) genTableBody.innerHTML = "";
+            if (genSection) genSection.style.display = "none";
+            if (previewEmpty) previewEmpty.style.display = "flex";
+            if (previewCanvas) { previewCanvas.style.display = "none"; previewCanvas.innerHTML = ""; }
+            if (previewActions) previewActions.style.display = "none";
+            if (previewLoading) previewLoading.style.display = "none";
+            if (previewTitle) previewTitle.textContent = "No certificate selected";
+            if (bulkEmailBtn) { bulkEmailBtn.style.display = "none"; bulkEmailBtn.disabled = true; }
+        }
+
+        if (progressSection) progressSection.style.display = "block";
+        // Fixed Dashboard: do NOT call scrollIntoView to keep layout stable!
+        if (completionCard) completionCard.style.display = "none";
+        if (failedSection)  failedSection.style.display  = "none";
+
+        if (statCompLabel)  statCompLabel.textContent = "Generated";
+        if (statSuccLabel)  statSuccLabel.textContent = "PDFs Ready";
+        if (statSkippedBox) statSkippedBox.style.display = "none";
+
+        if (pauseGenBtn)  pauseGenBtn.style.display  = "inline-flex";
+        if (resumeGenBtn) resumeGenBtn.style.display = "none";
+        if (pauseEmailBtn) pauseEmailBtn.style.display = "none";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "none";
+
+        const total = candidates.length;
+        resetProgressBar(total, "Generating PDFs...");
+        if (isRetry && _genSuccessCount > 0) {
+            updateProgressBar(0, total, _genSuccessCount, 0);
+        }
+
+        _genJobId = null;
+        try {
+            const jr = await fetch("/api/bulk/start-job", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workflow_type: "course_certificate", operation_type: "generation", total, title: "Generating Course Certificate PDFs" })
+            });
+            if (jr.ok) { const jd = await jr.json(); _genJobId = jd.job_id || null; }
+        } catch (_) {}
+
+        await executeGenerationLoop();
+    }
+
+    // ── Email Sending Pause / Resume ────────────────────────────────────────
+    window.cccPauseEmailSending = function() {
+        if (!_isEmailRunning || _isEmailPaused) return;
+        _isEmailPaused = true;
+        if (pauseEmailBtn)  pauseEmailBtn.style.display  = "none";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "inline-flex";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Paused";
+            progressStatusTag.className = "eval-status-badge badge-dup";
+        }
+        showToast("Email sending paused. Click 'Resume Email Sending' to continue.", "info");
+    };
+
+    window.cccResumeEmailSending = async function() {
+        if (_isEmailRunning || !_isEmailPaused) return;
+        _isEmailPaused  = false;
+        _isEmailRunning = true;
+        isProcessing    = true;
+        setInputsDisabled(true);
+
+        if (pauseEmailBtn)  pauseEmailBtn.style.display  = "inline-flex";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "none";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Sending Emails...";
+            progressStatusTag.className = "eval-status-badge";
+        }
+        if (currentBox) currentBox.style.display = "flex";
+
+        await executeEmailLoop();
+    };
+
+    async function executeEmailLoop() {
+        const total = _emailRecords.length;
+        const totalBatch = _emailOptions.totalBatchCount || total;
+
+        while (_emailNextIndex < total) {
+            if (_isEmailPaused) {
+                _isEmailRunning = false;
+                isProcessing    = false;
+                if (currentBox) currentBox.style.display = "none";
+                if (pauseEmailBtn)  pauseEmailBtn.style.display  = "none";
+                if (resumeEmailBtn) resumeEmailBtn.style.display = "inline-flex";
+                if (progressStatusTag) {
+                    progressStatusTag.textContent = "Paused";
+                    progressStatusTag.className = "eval-status-badge badge-dup";
+                }
+                return; // Safely exited loop without starting next email
+            }
+
+            const i = _emailNextIndex;
+            const item = _emailRecords[i];
+
+            if (currentStep)  { currentStep.textContent = "Sending..."; currentStep.style.background = "rgba(5, 150, 105, 0.1)"; currentStep.style.color = "#059669"; }
+            if (currentName)  currentName.textContent = `${item.name} [${i+1}/${total}]`;
+            if (currentEmail) currentEmail.textContent = item.email;
+
+            try {
+                const resp = await fetch("/api/course-certificate/bulk/send-email", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        items: [{
+                            certificate_id: item.certificate_id || "",
+                            student_name:   item.name,
+                            student_email:  item.email,
+                            course_name:    item.domain,
+                            issued_date:    item.issued_date || item.issueDate,
+                            filename:       item.filename,
+                            send_again:     Boolean(item.send_again),
+                        }],
+                        job_id: _emailJobId
+                    })
+                });
+                const result = await resp.json();
+
+                if (resp.status === 409 && result.cancelled) { showToast("Bulk email dispatch cancelled.", "info"); break; }
+
+                if (resp.ok && result.success && (result.successful_count || 0) > 0) {
+                    _emailSentCount++;
+                    item._emailSent = true;
+                    const scEl = document.getElementById("successCount");
+                    if (scEl) { scEl.textContent = (parseInt(scEl.textContent, 10) || 0) + 1; scEl.classList.remove("count-pulse"); void scEl.offsetWidth; scEl.classList.add("count-pulse"); }
+                } else {
+                    _emailFailCount++;
+                    const errMsg = (result.results || [])[0]?.error || result.error || `HTTP ${resp.status}`;
+                    _emailFailedList.push({ ...item, error: errMsg });
+                    const fcEl = document.getElementById("failedCount");
+                    if (fcEl) { fcEl.textContent = (parseInt(fcEl.textContent, 10) || 0) + 1; fcEl.classList.remove("count-pulse"); void fcEl.offsetWidth; fcEl.classList.add("count-pulse"); }
+                }
+            } catch (err) {
+                _emailFailCount++;
+                _emailFailedList.push({ ...item, error: err.message || "Network Error" });
+            }
+
+            _emailNextIndex++;
+            const completed = _emailNextIndex;
+            updateProgressBar(completed, total, _emailSentCount, _emailFailCount, `${completed} / ${total} sent${_emailSkippedCount > 0 ? ` (${_emailSkippedCount} skipped)` : ""}`);
+        }
+
+        if (_isEmailPaused) {
+            _isEmailRunning = false;
+            isProcessing    = false;
+            if (currentBox) currentBox.style.display = "none";
+            if (pauseEmailBtn)  pauseEmailBtn.style.display  = "none";
+            if (resumeEmailBtn) resumeEmailBtn.style.display = "inline-flex";
+            if (progressStatusTag) {
+                progressStatusTag.textContent = "Paused";
+                progressStatusTag.className = "eval-status-badge badge-dup";
+            }
+            return;
+        }
+
+        // Completed all emails
+        if (_emailJobId) { try { await fetch("/api/bulk/complete-job", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: _emailJobId }) }); } catch (_) {} }
+        if (_emailSentCount > 0) { try { localStorage.setItem("persevex_stats_updated", Date.now().toString()); localStorage.setItem("persevex_history_updated", Date.now().toString()); } catch (_) {} }
+
+        _isEmailRunning = false;
+        _isEmailPaused  = false;
+        isProcessing    = false;
+        setInputsDisabled(false);
+        if (currentBox) currentBox.style.display = "none";
+        if (pauseEmailBtn)  pauseEmailBtn.style.display  = "none";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "none";
+        if (progressStatusTag) {
+            progressStatusTag.textContent = "Delivery Finished";
+            progressStatusTag.className = "eval-status-badge";
+        }
+
+        failedRecordsList = _emailFailedList;
+        renderFailedTable(failedRecordsList, "send");
+        renderCompletionBanner(_emailSentCount, _emailFailCount, totalBatch, "send", null, _emailSkippedCount);
+    }
+
+    // ── Email sending Trigger ──────────────────────────────────────────────
+    if (sendBtn) sendBtn.addEventListener("click", async () => {
+        if (isProcessing || generatedItems.length === 0) return;
+
+        sendBtn.disabled = true;
+        const origHTML = sendBtn.innerHTML;
+        sendBtn.innerHTML = `<span class="spinner" style="display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:6px;"></span><span>Checking duplicates...</span>`;
+
+        try {
+            const resp = await fetch("/api/course-certificate/bulk/check-duplicates", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ records: generatedItems.map(r => ({ student_email: r.email, student_name: r.name })) })
+            });
+            const result = await resp.json();
+
+            sendBtn.innerHTML = origHTML;
+            sendBtn.disabled  = false;
+
+            if (!resp.ok || !result.success) { showToast("Failed to verify duplicates: " + (result.error || "Unknown error"), "error"); return; }
+
+            if ((result.duplicate_count || 0) > 0) {
+                window.cccOpenResendModal(result.duplicates || [], result.duplicate_map || {});
+            } else {
+                window.cccOpenSendModal();
+            }
+        } catch (err) {
+            sendBtn.innerHTML = origHTML;
+            sendBtn.disabled  = false;
+            showToast("Error checking duplicates: " + err.message, "error");
+        }
+    });
+
+    async function runEmailSending(recordsToSend, options = {}) {
+        if (_isEmailRunning) return; // Prevent concurrent email loops
+        const isRetry = Boolean(options.isRetry);
+
+        _isEmailRunning    = true;
+        _isEmailPaused     = false;
+        _emailRecords      = recordsToSend;
+        _emailOptions      = options;
+        _emailNextIndex    = 0;
+        _emailSentCount    = 0;
+        _emailFailCount    = 0;
+        _emailFailedList   = [];
+        _emailSkippedCount = options.skippedCount || 0;
+
+        isProcessing = true;
+        failedPhase  = "send";
+        setInputsDisabled(true);
+        if (retryFailedBtn) retryFailedBtn.disabled = true;
+
+        if (progressSection) progressSection.style.display = "block";
+        // Fixed Dashboard: do NOT call scrollIntoView to keep layout stable!
+        if (completionCard) completionCard.style.display = "none";
+
+        if (statCompLabel)  statCompLabel.textContent = "Processed";
+        if (statSuccLabel)  statSuccLabel.textContent = "Sent";
+
+        if (!isRetry) {
+            failedRecordsList = [];
+            if (failedBody) failedBody.innerHTML = "";
+            if (failedSection) failedSection.style.display = "none";
+        }
+
+        if (statSkippedBox && statSkippedEl) {
+            if (_emailSkippedCount > 0) { statSkippedEl.textContent = _emailSkippedCount; statSkippedBox.style.display = "block"; }
+            else { statSkippedBox.style.display = "none"; }
+        }
+
+        const total = recordsToSend.length;
+        const totalBatch = options.totalBatchCount || total;
+        resetProgressBar(total, isRetry ? "Retrying Emails..." : "Sending Emails...");
+        if (statTotalEl) statTotalEl.textContent = totalBatch;
+
+        if (pauseEmailBtn)  pauseEmailBtn.style.display  = "inline-flex";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "none";
+        if (pauseGenBtn)    pauseGenBtn.style.display    = "none";
+        if (resumeGenBtn)   resumeGenBtn.style.display   = "none";
+
+        _emailJobId = null;
+        try {
+            const jr = await fetch("/api/bulk/start-job", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ workflow_type: "course_certificate", operation_type: "sending", total, title: "Sending Course Certificate Emails" })
+            });
+            if (jr.ok) { const jd = await jr.json(); _emailJobId = jd.job_id || null; }
+        } catch (_) {}
+
+        await executeEmailLoop();
+    }
+
+
+    // ── Modals ─────────────────────────────────────────────────────────────
+    window.cccOpenResendModal = function(dupEmails, dupMap) {
+        duplicateData = { emails: dupEmails || [], map: dupMap || {} };
+        const list = document.getElementById("cccResendDuplicateList");
+        if (list) { list.innerHTML = ""; dupEmails.forEach(em => { const li = document.createElement("li"); li.textContent = em; list.appendChild(li); }); }
+        const summary = document.getElementById("cccResendDuplicateSummary");
+        const count = dupEmails.length;
+        if (summary) summary.textContent = `${count} student${count === 1 ? "" : "s"} ${count === 1 ? "has" : "have"} already received a Course Certificate.`;
+        const modal = document.getElementById("cccBulkResendModal");
+        if (modal) { modal.classList.remove("modal-closing"); modal.style.display = "flex"; document.body.style.overflow = "hidden"; }
+    };
+
+    window.cccCloseResendModal = function() {
+        const modal = document.getElementById("cccBulkResendModal");
+        if (modal) { modal.classList.add("modal-closing"); setTimeout(() => { modal.style.display = "none"; modal.classList.remove("modal-closing"); document.body.style.overflow = ""; }, 200); }
+    };
+
+    window.cccHandleResendBackdropClick = function(e) { if (e.target === document.getElementById("cccBulkResendModal")) window.cccCloseResendModal(); };
+
+    window.cccHandleSendOnlyNew = async function() {
+        window.cccCloseResendModal();
+        const dupSet = new Set(duplicateData.emails.map(e => String(e).trim().toLowerCase()));
+        let skipped = 0;
+        const toSend = [];
+        generatedItems.forEach(r => {
+            if (dupSet.has(r.email.toLowerCase())) { skipped++; }
+            else { toSend.push({ ...r, send_again: false }); }
+        });
+        if (toSend.length === 0) { showToast("All students already received their certificate. 0 new emails to send.", "info"); return; }
+        await runEmailSending(toSend, { mode: "only_new", totalBatchCount: generatedItems.length, skippedCount: skipped, duplicateMap: duplicateData.map });
+    };
+
+    window.cccHandleSendAgainAll = async function() {
+        window.cccCloseResendModal();
+        const dupSet = new Set(duplicateData.emails.map(e => String(e).trim().toLowerCase()));
+        const toSend = generatedItems.map(r => {
+            const isDup = dupSet.has(r.email.toLowerCase());
+            const prev  = isDup ? duplicateData.map[r.email.toLowerCase()] : null;
+            return { ...r, send_again: isDup, previous_send_count: prev ? (prev.send_count || 1) : 0, existing_id: prev ? prev.id : null };
+        });
+        await runEmailSending(toSend, { mode: "send_all", totalBatchCount: generatedItems.length, skippedCount: 0, duplicateMap: duplicateData.map });
+    };
+
+    window.cccOpenSendModal = function() {
+        const count = generatedItems.length;
+        const el = document.getElementById("cccSendModalCount");
+        if (el) el.textContent = count;
+        const btn = document.getElementById("cccSendModalBtnText");
+        if (btn) btn.textContent = `Send ${count} Certificate${count === 1 ? "" : "s"}`;
+        const modal = document.getElementById("cccBulkSendModal");
+        if (modal) { modal.classList.remove("modal-closing"); modal.style.display = "flex"; document.body.style.overflow = "hidden"; }
+    };
+
+    window.cccCloseSendModal = function() {
+        const modal = document.getElementById("cccBulkSendModal");
+        if (modal) { modal.classList.add("modal-closing"); setTimeout(() => { modal.style.display = "none"; modal.classList.remove("modal-closing"); document.body.style.overflow = ""; }, 200); }
+    };
+
+    window.cccHandleSendBackdropClick = function(e) { if (e.target === document.getElementById("cccBulkSendModal")) window.cccCloseSendModal(); };
+
+    window.cccHandleSendConfirm = async function() {
+        if (isProcessing || generatedItems.length === 0) return;
+        window.cccCloseSendModal();
+        const toSend = generatedItems.map(r => ({ ...r, send_again: false, previous_send_count: 0 }));
+        await runEmailSending(toSend, { mode: "all", totalBatchCount: generatedItems.length, skippedCount: 0, duplicateMap: {} });
+    };
+
+    window.cccOpenRetryModal = function() {
+        if (isProcessing) return;
+        if (!failedRecordsList || failedRecordsList.length === 0) {
+            window.cccCloseRetryModal();
+            showToast("No failed records to retry.", "info");
+            return;
+        }
+        const count = failedRecordsList.length;
+        const el = document.getElementById("cccRetryModalCount");
+        if (el) el.textContent = count;
+        const btn = document.getElementById("cccRetryBtnText");
+        if (btn) btn.textContent = `Retry ${count} Record${count === 1 ? "" : "s"}`;
+        const modal = document.getElementById("cccBulkRetryModal");
+        if (modal) {
+            modal.removeAttribute("hidden");
+            modal.classList.remove("modal-closing");
+            modal.style.display = "flex";
+            document.body.style.overflow = "hidden";
+        }
+    };
+
+    window.cccCloseRetryModal = function() {
+        const modal = document.getElementById("cccBulkRetryModal");
+        if (modal) {
+            modal.classList.add("modal-closing");
+            modal.setAttribute("hidden", "");
+            modal.style.display = "none";
+            document.body.style.overflow = "";
+            setTimeout(() => {
+                modal.classList.remove("modal-closing");
+            }, 200);
+        }
+    };
+
+    window.cccHandleRetryBackdropClick = function(e) { if (e.target === document.getElementById("cccBulkRetryModal")) window.cccCloseRetryModal(); };
+
+    window.cccHandleRetryConfirm = async function() {
+        if (isProcessing) return;
+        if (!failedRecordsList || failedRecordsList.length === 0) {
+            window.cccCloseRetryModal();
+            showToast("No failed records to retry.", "info");
+            return;
+        }
+        window.cccCloseRetryModal();
+        const toRetry = [...failedRecordsList];
+        if (failedPhase === "generation") {
+            const issueDate = dateInput ? dateInput.value.trim() : "";
+            const candidates = toRetry.map(r => ({ row_num: r.index || 0, name: r.name, email: r.email, domain: r.domain }));
+            await runGenerationProcessing(candidates, issueDate, { isRetry: true });
+        } else {
+            await runEmailSending(toRetry, { isRetry: true });
+        }
+    };
+
+    window.cccRetryFailedRecords = function() {
+        if (isProcessing) return;
+        if (!failedRecordsList || failedRecordsList.length === 0) {
+            window.cccCloseRetryModal();
+            showToast("No failed records to retry.", "info");
+            return;
+        }
+        window.cccOpenRetryModal();
+    };
+
+    document.addEventListener("keydown", e => {
+        if (e.key === "Escape") {
+            ["cccBulkResendModal", "cccBulkSendModal", "cccBulkRetryModal"].forEach(id => {
+                const m = document.getElementById(id);
+                if (m && m.style.display !== "none") {
+                    if (id === "cccBulkResendModal") window.cccCloseResendModal();
+                    if (id === "cccBulkSendModal")   window.cccCloseSendModal();
+                    if (id === "cccBulkRetryModal")  window.cccCloseRetryModal();
+                }
+            });
+        }
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function setInputsDisabled(disabled) {
+        [evaluateBtn, generateBtn, sendBtn, clearBtn, namesInput, emailsInput, domainsInput, dateInput].forEach(el => { if (el) el.disabled = disabled; });
+        if (currentBox) currentBox.style.display = disabled ? "flex" : "none";
+    }
+
+    function resetProgressBar(total, statusText) {
+        if (statTotalEl)      statTotalEl.textContent     = total;
+        if (statCompEl)       statCompEl.textContent      = "0";
+        if (statSentEl)       statSentEl.textContent      = "0";
+        if (statFailedEl)     statFailedEl.textContent    = "0";
+        if (statRemainingEl)  statRemainingEl.textContent = total;
+        if (barFill)          barFill.style.width         = "0%";
+        if (pctLabel)         pctLabel.textContent        = "0%";
+        if (countLabel)       countLabel.textContent      = `0 / ${total} processed`;
+        if (progressStatusTag) progressStatusTag.textContent = statusText;
+        if (currentBox)       currentBox.style.display    = "flex";
+    }
+
+    function updateProgressBar(completed, total, success, failed, customCount) {
+        const remaining = total - completed;
+        const pct = Math.round((completed / total) * 100);
+        if (statCompEl)      statCompEl.textContent      = completed;
+        if (statSentEl)      statSentEl.textContent      = success;
+        if (statFailedEl)    statFailedEl.textContent    = failed;
+        if (statRemainingEl) statRemainingEl.textContent = remaining;
+        if (barFill)         barFill.style.width         = `${pct}%`;
+        if (pctLabel)        pctLabel.textContent        = `${pct}%`;
+        if (countLabel)      countLabel.textContent      = customCount || `${completed} / ${total} processed`;
+    }
+
+    function renderFailedTable(records, phase) {
+        failedRecordsList = Array.isArray(records) ? records : [];
+        const count = failedRecordsList.length;
+
+        if (count === 0) {
+            if (failedSection) failedSection.style.display = "none";
+            if (failedBody) failedBody.innerHTML = "";
+            if (failedCount) failedCount.textContent = "0";
+            if (retryBtnCount) retryBtnCount.textContent = "0";
+            if (retryFailedBtn) {
+                retryFailedBtn.style.display = "none";
+                retryFailedBtn.disabled = true;
+            }
+            window.cccCloseRetryModal();
+            return;
+        }
+
+        if (failedBody) {
+            failedBody.innerHTML = "";
+            failedRecordsList.forEach((r, idx) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td style="font-weight:600;color:var(--text-muted);">${idx+1}</td>
+                    <td style="font-weight:700;">${escapeHtml(r.name)}</td>
+                    <td style="color:var(--brand-primary);">${escapeHtml(r.email)}</td>
+                    <td>${escapeHtml(r.domain || "")}</td>
+                    <td><span class="failed-reason-badge">${escapeHtml(r.error)}</span></td>
+                `;
+                failedBody.appendChild(tr);
+            });
+        }
+        if (failedCount)  failedCount.textContent  = count;
+        if (retryBtnCount) retryBtnCount.textContent = count;
+        if (retryFailedBtn) {
+            retryFailedBtn.style.display = "inline-flex";
+            retryFailedBtn.disabled = false;
+        }
+        if (failedSection) failedSection.style.display = "block";
+    }
+
+    function renderCompletionBanner(successN, failedN, totalN, phase, issueDate, skippedN = 0) {
+        if (!completionCard) return;
+        completionCard.style.display = "flex";
+        const dupInput = batchMetrics.duplicateRows || 0;
+
+        if (failedN === 0) {
+            completionCard.className = "bulk-completion-card success-completion";
+            completionTitle.textContent = phase === "generation" ? "Generation Complete" : "Course Certificates Delivered Successfully!";
+            const parts = [`Total Rows: ${batchMetrics.totalRows || totalN}`, `Unique Students: ${totalN}`, `${phase === "generation" ? "Generated" : "Sent"}: ${successN}`];
+            if (skippedN > 0) parts.push(`Skipped (Already Sent): ${skippedN}`);
+            if (dupInput > 0) parts.push(`Duplicate Rows Skipped: ${dupInput}`);
+            parts.push("Failed: 0");
+            completionMsg.textContent = parts.join(" • ");
+            if (phase === "generation") {
+                showToast(`All ${successN} Course Certificates generated! Click 'Send Certificates' to dispatch.`, "success");
+                if (sendBtn) sendBtn.disabled = false;
+            } else {
+                showToast(`Course Certificates sent successfully!${skippedN > 0 ? ` (${skippedN} already sent skipped)` : ""}`, "success");
+            }
+        } else {
+            completionCard.className = "bulk-completion-card warning-completion";
+            completionTitle.textContent = phase === "generation" ? "Generation Complete with Failures" : "Delivery Complete with Failures";
+            completionMsg.textContent = `Total Rows: ${batchMetrics.totalRows || totalN} • ${phase === "generation" ? "Generated" : "Sent"}: ${successN} • Failed: ${failedN}. You can retry failed records${phase === "generation" ? " or send generated certificates" : ""}.`;
+            showToast(`${successN} succeeded, ${failedN} failed.`, "error");
+            if (phase === "generation" && successN > 0 && sendBtn) sendBtn.disabled = false;
+            if (phase === "generation" && successN > 0 && bulkEmailBtn) { bulkEmailBtn.disabled = false; bulkEmailBtn.style.display = "inline-flex"; }
+        }
+    }
+
+    window.cccClearBulkInputs = function() {
+        if (isProcessing) return;
+        isEvaluated = false;
+        validStudentsList = [];
+        generatedItems    = [];
+        failedRecordsList = [];
+
+        if (namesInput)   namesInput.value   = "";
+        if (emailsInput)  emailsInput.value  = "";
+        if (domainsInput) domainsInput.value = "";
+        if (fileInput)    fileInput.value    = "";
+        if (uploadInfo)   uploadInfo.style.display  = "none";
+        if (evalSection)  evalSection.style.display  = "none";
+        if (errorBanner)  errorBanner.style.display  = "none";
+        if (progressSection) progressSection.style.display = "none";
+        if (failedSection) failedSection.style.display = "none";
+        if (failedBody) failedBody.innerHTML = "";
+        if (failedCount) failedCount.textContent = "0";
+        if (retryBtnCount) retryBtnCount.textContent = "0";
+        if (retryFailedBtn) {
+            retryFailedBtn.style.display = "none";
+            retryFailedBtn.disabled = true;
+        }
+        _isGenRunning = false;
+        _isGenPaused  = false;
+        _genNextIndex = 0;
+        _isEmailRunning = false;
+        _isEmailPaused  = false;
+        _emailNextIndex = 0;
+        if (pauseGenBtn)  pauseGenBtn.style.display  = "none";
+        if (resumeGenBtn) resumeGenBtn.style.display = "none";
+        if (pauseEmailBtn)  pauseEmailBtn.style.display  = "none";
+        if (resumeEmailBtn) resumeEmailBtn.style.display = "none";
+        window.cccCloseRetryModal();
+        window.cccCloseResendModal();
+        window.cccCloseSendModal();
+        if (generateBtn)  generateBtn.disabled = true;
+        if (sendBtn)      sendBtn.disabled     = true;
+        if (bulkEmailBtn) { bulkEmailBtn.style.display = "none"; bulkEmailBtn.disabled = true; }
+        if (genSection)   genSection.style.display = "none";
+        if (genTableBody) genTableBody.innerHTML = "";
+        if (previewEmpty) { previewEmpty.style.display = "flex"; }
+        if (previewCanvas) { previewCanvas.style.display = "none"; previewCanvas.innerHTML = ""; }
+        if (previewActions) previewActions.style.display = "none";
+        if (previewLoading) previewLoading.style.display = "none";
+        if (previewTitle) previewTitle.textContent = "No certificate selected";
+        _previewIndex = -1;
+        if (_previewPdfUrl) { URL.revokeObjectURL(_previewPdfUrl); _previewPdfUrl = null; }
+        updateLiveSummary();
+    };
+
+
+    // ── Generated Certificate Preview Table ──────────────────────────────────
+
+    let _previewIndex   = -1;   // currently previewed row index in generatedItems
+    let _previewPdfUrl  = null; // current blob URL
+
+    const genSection     = document.getElementById("cccGeneratedSection");
+    const genTableBody   = document.getElementById("cccGenTableBody");
+    const genSectionCount= document.getElementById("cccGenSectionCount");
+    const previewPanel   = document.getElementById("cccPreviewPanel");
+    const previewEmpty   = document.getElementById("cccPreviewEmpty");
+    const previewLoading = document.getElementById("cccPreviewLoading");
+    const previewCanvas  = document.getElementById("cccPreviewCanvasArea");
+    const previewActions = document.getElementById("cccPreviewActions");
+    const previewTitle   = document.getElementById("cccPreviewPanelTitle");
+    const previewNavLabel= document.getElementById("cccPreviewNavLabel");
+    const prevBtn        = document.getElementById("cccPrevBtn");
+    const nextBtn        = document.getElementById("cccNextBtn");
+    const bulkEmailBtn   = document.getElementById("cccBulkEmailBtn");
+    const bulkEmailBtnText = document.getElementById("cccBulkEmailBtnText");
+
+    function addGeneratedRecord(item) {
+        if (!genSection || !genTableBody) return;
+
+        const idx = generatedItems.indexOf(item);
+        const trIndex = idx >= 0 ? idx : generatedItems.length - 1;
+
+        if (genSectionCount) {
+            genSectionCount.textContent = `${generatedItems.length} certificate${generatedItems.length === 1 ? "" : "s"}`;
+        }
+
+        const isSelected = trIndex === _previewIndex;
+        const tr = document.createElement("tr");
+        tr.id = `cccGenRow-${trIndex}`;
+        if (isSelected) tr.classList.add("gen-row-selected");
+        tr.innerHTML = `
+            <td class="gen-row-num">${item.index || (trIndex + 1)}</td>
+            <td class="gen-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+            <td class="gen-email" title="${escapeHtml(item.email)}">${escapeHtml(item.email)}</td>
+            <td class="gen-domain" title="${escapeHtml(item.domain)}">${escapeHtml(item.domain)}</td>
+            <td class="gen-date">${escapeHtml(item.issued_date || item.issueDate || "")}</td>
+            <td>
+                <button type="button" class="eye-btn ${isSelected ? 'active' : ''}" id="cccEyeBtn-${trIndex}"
+                        title="Preview certificate for ${escapeHtml(item.name)}"
+                        onclick="openCertPreview(${trIndex})">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+            </td>
+        `;
+        genTableBody.appendChild(tr);
+
+        // Immediately reveal preview section on first record
+        genSection.style.display = "block";
+
+        // Display bulk email button; keep disabled while generation is processing
+        if (bulkEmailBtn) {
+            bulkEmailBtn.style.display = "inline-flex";
+            bulkEmailBtn.disabled = isProcessing;
+            if (bulkEmailBtnText) {
+                bulkEmailBtnText.textContent = `Send Certificates by Email (${generatedItems.length} Valid Record${generatedItems.length === 1 ? "" : "s"})`;
+            }
+        }
+
+        updatePreviewNav();
+
+        // If this is the first certificate generated, immediately preview it!
+        if (generatedItems.length === 1 && _previewIndex === -1) {
+            openCertPreview(0);
+        }
+    }
+    window.addGeneratedRecord = addGeneratedRecord;
+
+    function renderGeneratedTable(items) {
+        if (!genSection || !genTableBody) return;
+
+        if (!items || items.length === 0) {
+            genSection.style.display = "none";
+            if (bulkEmailBtn) { bulkEmailBtn.style.display = "none"; bulkEmailBtn.disabled = true; }
+            return;
+        }
+
+        if (genSectionCount) genSectionCount.textContent = `${items.length} certificate${items.length === 1 ? "" : "s"}`;
+
+        genTableBody.innerHTML = "";
+        items.forEach((item, idx) => {
+            const tr = document.createElement("tr");
+            tr.id = `cccGenRow-${idx}`;
+            if (idx === _previewIndex) tr.classList.add("gen-row-selected");
+            const isSelected = idx === _previewIndex;
+            tr.innerHTML = `
+                <td class="gen-row-num">${item.index || (idx + 1)}</td>
+                <td class="gen-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+                <td class="gen-email" title="${escapeHtml(item.email)}">${escapeHtml(item.email)}</td>
+                <td class="gen-domain" title="${escapeHtml(item.domain)}">${escapeHtml(item.domain)}</td>
+                <td class="gen-date">${escapeHtml(item.issued_date || item.issueDate || "")}</td>
+                <td>
+                    <button type="button" class="eye-btn ${isSelected ? 'active' : ''}" id="cccEyeBtn-${idx}"
+                            title="Preview certificate for ${escapeHtml(item.name)}"
+                            onclick="openCertPreview(${idx})">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </td>
+            `;
+            genTableBody.appendChild(tr);
+        });
+
+        genSection.style.display = "block";
+
+        if (bulkEmailBtn) {
+            bulkEmailBtn.style.display = "inline-flex";
+            bulkEmailBtn.disabled = isProcessing;
+            if (bulkEmailBtnText) bulkEmailBtnText.textContent = `Send Certificates by Email (${items.length} Valid Record${items.length === 1 ? "" : "s"})`;
+        }
+
+        updatePreviewNav();
+    }
+    window.renderGeneratedTable = renderGeneratedTable;
+
+    function updatePreviewNav() {
+        const total = generatedItems.length;
+        if (prevBtn)  prevBtn.disabled  = _previewIndex <= 0;
+        if (nextBtn)  nextBtn.disabled  = _previewIndex < 0 || _previewIndex >= total - 1;
+        if (previewNavLabel) {
+            if (_previewIndex >= 0 && total > 0) {
+                previewNavLabel.textContent = `${_previewIndex + 1} / ${total}`;
+            } else {
+                previewNavLabel.textContent = total > 0 ? `0 / ${total}` : "—";
+            }
+        }
+    }
+
+    window.openCertPreview = async function(idx) {
+        if (idx < 0 || idx >= generatedItems.length) return;
+
+        // Deselect previous row
+        if (_previewIndex >= 0) {
+            const prevRow = document.getElementById(`cccGenRow-${_previewIndex}`);
+            const prevEye = document.getElementById(`cccEyeBtn-${_previewIndex}`);
+            if (prevRow) prevRow.classList.remove("gen-row-selected");
+            if (prevEye) prevEye.classList.remove("active");
+        }
+
+        _previewIndex = idx;
+        const item = generatedItems[idx];
+
+        // Select new row
+        const row = document.getElementById(`cccGenRow-${idx}`);
+        const eye = document.getElementById(`cccEyeBtn-${idx}`);
+        if (row) row.classList.add("gen-row-selected");
+        if (eye) eye.classList.add("active");
+
+        // Update panel title
+        if (previewTitle) previewTitle.textContent = item.name;
+
+        // Show loading, hide others
+        if (previewEmpty)   previewEmpty.style.display   = "none";
+        if (previewLoading) { previewLoading.style.display = "flex"; }
+        if (previewCanvas)  previewCanvas.style.display  = "none";
+        if (previewActions) previewActions.style.display = "none";
+
+        updatePreviewNav();
+
+        // Revoke old blob URL
+        if (_previewPdfUrl) { URL.revokeObjectURL(_previewPdfUrl); _previewPdfUrl = null; }
+
+        try {
+            const resp = await fetch("/api/course-certificate/bulk/preview-pdf", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_name:   item.name,
+                    course_name:    item.domain,
+                    issued_date:    item.issued_date || item.issueDate || "",
+                    certificate_id: item.certificate_id || "",
+                    filename:       item.filename || "",
+                })
+            });
+
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            _previewPdfUrl = URL.createObjectURL(blob);
+
+            // Render PDF using pdf.js
+            if (previewCanvas) {
+                previewCanvas.innerHTML = "";
+                previewCanvas.style.display = "flex";
+            }
+
+            const pdf = await pdfjsLib.getDocument(_previewPdfUrl).promise;
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 1.4 });
+            const canvas = document.createElement("canvas");
+            canvas.width  = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.maxWidth = "100%";
+            canvas.style.height   = "auto";
+            canvas.style.display  = "block";
+            canvas.style.borderRadius = "4px";
+            canvas.style.boxShadow = "0 4px 14px rgba(15,23,42,0.08)";
+            if (previewCanvas) previewCanvas.appendChild(canvas);
+            await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+
+            if (previewLoading) previewLoading.style.display = "none";
+            if (previewActions) previewActions.style.display = "flex";
+        } catch (err) {
+            if (previewLoading) previewLoading.style.display = "none";
+            if (previewEmpty) {
+                previewEmpty.style.display = "flex";
+                const p = previewEmpty.querySelector("p");
+                if (p) p.textContent = "Failed to load preview: " + (err.message || "Unknown error");
+            }
+            showToast("Could not load certificate preview: " + (err.message || "error"), "error");
+        }
+    };
+
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+        if (_previewIndex > 0) openCertPreview(_previewIndex - 1);
+    });
+    if (nextBtn) nextBtn.addEventListener("click", () => {
+        if (_previewIndex < generatedItems.length - 1) openCertPreview(_previewIndex + 1);
+    });
+
+    window.cccDownloadSelectedCert = async function() {
+        if (_previewIndex < 0 || !generatedItems[_previewIndex]) return;
+        const item = generatedItems[_previewIndex];
+        try {
+            const resp = await fetch("/api/course-certificate/bulk/preview-pdf", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_name:   item.name,
+                    course_name:    item.domain,
+                    issued_date:    item.issued_date || item.issueDate || "",
+                    certificate_id: item.certificate_id || "",
+                    download:       true,
+                })
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement("a");
+            a.href     = url;
+            a.download = `${item.name.replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_")}_Course_Certificate.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+        } catch (err) {
+            showToast("Download failed: " + (err.message || "error"), "error");
+        }
+    };
+
+    window.cccOpenCertInNewTab = function() {
+        if (_previewPdfUrl) {
+            window.open(_previewPdfUrl, "_blank");
+        }
+    };
+
+    // ── Wire up the prominent Bulk Email Button ──────────────────────────────
+
+    if (bulkEmailBtn) {
+        bulkEmailBtn.addEventListener("click", () => {
+            // Delegate to the hidden cccSendBtn's click handler logic
+            // by triggering the same flow as clicking the send button
+            if (sendBtn && !sendBtn.disabled) {
+                sendBtn.click();
+            } else if (isProcessing || generatedItems.length === 0) {
+                showToast("No generated certificates to send.", "info");
+            } else {
+                // Directly invoke the duplicate check + send flow
+                sendBtn && sendBtn.click();
+            }
+        });
+    }
+
+    // ── Patch renderCompletionBanner to also show generated table ───────────
+
+    const _origRenderCompletionBanner = renderCompletionBanner;
+    // Override after function is defined — handled in generation flow below
+
+
+    updateLiveSummary();
+    switchCCCMode('single');
+});
+
+function switchCCCMode(mode) {
+    const isBulk = mode === 'bulk';
+    const single = document.getElementById('singleCertWorkspace');
+    const bulk   = document.getElementById('bulkCertWorkspace');
+    const tabS   = document.getElementById('tabSingleCert');
+    const tabB   = document.getElementById('tabBulkCert');
+
+    if (single) {
+        if (isBulk) {
+            single.style.setProperty('display', 'none', 'important');
+            single.setAttribute('hidden', '');
+        } else {
+            single.removeAttribute('hidden');
+            single.style.setProperty('display', 'grid', 'important');
+        }
+    }
+
+    if (bulk) {
+        if (isBulk) {
+            bulk.removeAttribute('hidden');
+            bulk.style.setProperty('display', 'block', 'important');
+        } else {
+            bulk.style.setProperty('display', 'none', 'important');
+            bulk.setAttribute('hidden', '');
+        }
+    }
+
+    if (tabS) tabS.classList.toggle('active', !isBulk);
+    if (tabB) tabB.classList.toggle('active', isBulk);
+}
+window.switchCCCMode = switchCCCMode;
 </script>
 
 </body>

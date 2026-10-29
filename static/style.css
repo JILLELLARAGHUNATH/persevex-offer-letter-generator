@@ -7000,6 +7000,12 @@ button:active:not(:disabled) {
     box-sizing: border-box !important;
 }
 
+.ca-bulk-main[style*="display: none"],
+.ca-bulk-main[style*="display:none"],
+.ca-bulk-main[hidden] {
+    display: none !important;
+}
+
 .ca-bulk-container {
     width: 100%;
     display: flex;
