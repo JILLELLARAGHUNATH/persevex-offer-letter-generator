@@ -1,11 +1,12 @@
 """
 email_utils.py — Shared email header helpers for Persevex.
 
-All outbound email 'To' headers must contain the full, validated
-recipient email address (including domain). This module provides a
-single utility that every service must use when constructing
-message["To"] so that no future change can accidentally obscure the
-domain (e.g. by setting the display name to the email username prefix).
+Policy: the outgoing ``To`` header must contain *only* the recipient's
+complete, validated email address (including domain).  Display names are
+never included so that email clients always show the full address, e.g.
+
+    To: 9922005112@klu.ac.in          ✓ correct
+    To: DEMO <9922005112@klu.ac.in>   ✗ rejected – hides domain in some clients
 """
 
 import re
@@ -22,43 +23,41 @@ def is_valid_email(email: str) -> bool:
 
 def format_to_header(name: Optional[str], email: str) -> str:
     """
-    Build a safe RFC-5322 ``To`` header value.
+    Return the validated recipient email address for use as a ``To`` header.
 
-    Rules
-    -----
-    * *email* must be a non-empty, fully-qualified address (``user@domain.tld``).
-      A ``ValueError`` is raised if it is missing or invalid.
-    * If *name* is absent, empty, identical to *email*, or identical to the
-      username prefix (the part before ``@``), the header is set to the bare
-      address so email clients never display a truncated ``username`` label
-      instead of the full address.
-    * If *name* is a genuine human name that differs from the email/prefix,
-      the header is formatted as ``"Name <email@domain.tld>"`` (RFC 5322).
-    * The returned string always includes the full ``@domain.tld`` portion.
+    The *name* / display-name argument is accepted for call-site compatibility
+    but is intentionally ignored — the ``To`` header will always be the plain
+    email address so no email client can hide the domain behind a display name.
+
+    Parameters
+    ----------
+    name : str or None
+        Candidate display name.  **Ignored.**
+    email : str
+        Recipient email address.  Must be non-empty and syntactically valid.
+
+    Returns
+    -------
+    str
+        The bare, lower-cased email address, e.g. ``"student@gmail.com"``.
+
+    Raises
+    ------
+    ValueError
+        If *email* is missing or not a valid address.
 
     Examples
     --------
-    >>> format_to_header("Rahul Kumar", "rahul.kumar@example.com")
-    'Rahul Kumar <rahul.kumar@example.com>'
-    >>> format_to_header("rahul.kumar", "rahul.kumar@example.com")
+    >>> format_to_header("Rahul Kumar", "Rahul.Kumar@Example.COM")
     'rahul.kumar@example.com'
-    >>> format_to_header("", "rahul.kumar@example.com")
-    'rahul.kumar@example.com'
-    >>> format_to_header(None, "student@gmail.com")
+    >>> format_to_header("", "student@gmail.com")
     'student@gmail.com'
+    >>> format_to_header(None, "9922005112@klu.ac.in")
+    '9922005112@klu.ac.in'
     """
     email = str(email or "").strip().lower()
     if not email or not is_valid_email(email):
         raise ValueError(
             f"A valid recipient email address is required; got: {email!r}"
         )
-
-    name = str(name or "").strip()
-    prefix = email.split("@")[0]
-
-    # Treat the name as absent when it is empty, equal to the full email,
-    # or equal to the username prefix — any of these would hide the domain.
-    if not name or name.lower() in (email, prefix):
-        return email
-
-    return f"{name} <{email}>"
+    return email

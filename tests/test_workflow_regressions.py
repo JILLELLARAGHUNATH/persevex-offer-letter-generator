@@ -4971,10 +4971,7 @@ class InternshipCertificateEmailTemplateTests(unittest.TestCase):
         self.assertEqual(sent_msg["Subject"], "Congratulations on Successfully Completing Your Internship!")
 
         # 2. Recipient and sender address verification
-        # format_to_header("Aarav Sharma", "aarav.sharma@example.com") produces
-        # "Aarav Sharma <aarav.sharma@example.com>" â full address always present.
-        self.assertIn("aarav.sharma@example.com", sent_msg["To"])
-        self.assertIn("@example.com", sent_msg["To"])
+        self.assertEqual(sent_msg["To"], "aarav.sharma@example.com")
         self.assertEqual(sent_msg["From"], "Persevex LLP <support@persevex.com>")
 
         # 3. Exact wording and placeholder substitution verification
@@ -5049,9 +5046,9 @@ class InternshipCertificateEmailTemplateTests(unittest.TestCase):
 
 class EmailToHeaderTests(unittest.TestCase):
     """
-    Regression tests ensuring outbound email To headers always contain the
-    full recipient email address (including @domain.tld) and are never
-    accidentally reduced to just a username prefix like "student123".
+    Regression tests ensuring outbound email To headers always contain ONLY the
+    full recipient email address (e.g. "9922005112@klu.ac.in") and NEVER include
+    the candidate's name or display name.
 
     Covers: format_to_header() utility, Internship Certificate, Course
     Certificate, Offer Letter, Campus Ambassador Offer Letter, CA Certificate.
@@ -5065,31 +5062,37 @@ class EmailToHeaderTests(unittest.TestCase):
         from email_utils import format_to_header
         result = format_to_header("", "student@gmail.com")
         self.assertEqual(result, "student@gmail.com")
-        self.assertIn("@gmail.com", result)
 
     def test_format_to_header_bare_email_when_name_is_none(self):
         from email_utils import format_to_header
         result = format_to_header(None, "student@gmail.com")
         self.assertEqual(result, "student@gmail.com")
-        self.assertIn("@gmail.com", result)
 
     def test_format_to_header_bare_email_when_name_equals_prefix(self):
-        """If name == email username part, To must still be the bare address."""
         from email_utils import format_to_header
         result = format_to_header("student123", "student123@gmail.com")
         self.assertEqual(result, "student123@gmail.com")
-        self.assertIn("@gmail.com", result)
 
     def test_format_to_header_bare_email_when_name_equals_full_email(self):
         from email_utils import format_to_header
         result = format_to_header("priya@example.com", "priya@example.com")
         self.assertEqual(result, "priya@example.com")
 
-    def test_format_to_header_formatted_when_name_is_human_name(self):
+    def test_format_to_header_ignores_human_name_and_returns_only_email(self):
+        """Even when a human display name is provided, To header must only contain the email."""
         from email_utils import format_to_header
         result = format_to_header("Rahul Kumar", "rahul.kumar@example.com")
-        self.assertEqual(result, "Rahul Kumar <rahul.kumar@example.com>")
-        self.assertIn("@example.com", result)
+        self.assertEqual(result, "rahul.kumar@example.com")
+        self.assertNotIn("Rahul", result)
+        self.assertNotIn("<", result)
+        self.assertNotIn(">", result)
+
+    def test_format_to_header_demo_klu_example(self):
+        """Specifically verifies the user example: DEMO <9922005112@klu.ac.in> -> 9922005112@klu.ac.in"""
+        from email_utils import format_to_header
+        result = format_to_header("DEMO", "9922005112@klu.ac.in")
+        self.assertEqual(result, "9922005112@klu.ac.in")
+        self.assertNotIn("DEMO", result)
 
     def test_format_to_header_raises_for_missing_email(self):
         from email_utils import format_to_header
@@ -5101,25 +5104,22 @@ class EmailToHeaderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             format_to_header("Rahul", "not-an-email")
 
-    def test_format_to_header_always_includes_domain(self):
-        """The domain part must appear in the To header in every code path."""
+    def test_format_to_header_always_exact_email_lowercase(self):
         from email_utils import format_to_header
-        for name, email in [
-            ("", "a@b.com"),
-            ("a", "a@b.com"),
-            ("Alice Smith", "alice@example.org"),
-            (None, "no-name@persevex.com"),
+        for name, email, expected in [
+            ("", "a@b.com", "a@b.com"),
+            ("a", "a@b.com", "a@b.com"),
+            ("Alice Smith", "Alice@Example.ORG", "alice@example.org"),
+            (None, "no-name@persevex.com", "no-name@persevex.com"),
         ]:
             result = format_to_header(name, email)
-            domain = email.split("@")[1]
-            self.assertIn(domain, result,
-                          f"Domain missing from To header: name={name!r}, email={email!r}, result={result!r}")
+            self.assertEqual(result, expected)
 
     # ------------------------------------------------------------------ #
     # Internship Completion Certificate (certificate_service.py)          #
     # ------------------------------------------------------------------ #
 
-    def test_internship_certificate_to_header_contains_full_email(self):
+    def test_internship_certificate_to_header_contains_only_email(self):
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
         imap = MagicMock()
@@ -5140,14 +5140,12 @@ class EmailToHeaderTests(unittest.TestCase):
 
         sent_msg = smtp.send_message.call_args[0][0]
         to_value = sent_msg["To"]
-        # Must contain the full address, including domain
-        self.assertIn("@example.com", to_value)
-        self.assertIn("priya.patel", to_value)
-        # Must NOT be just the bare username prefix
-        self.assertNotEqual(to_value, "priya.patel")
+        # Must be ONLY the validated email address
+        self.assertEqual(to_value, "priya.patel@example.com")
+        self.assertNotIn("Priya", to_value)
 
     def test_internship_certificate_to_header_with_generic_name_is_bare_email(self):
-        """When student_name is 'Student' (default), To must still be the full email."""
+        """When student_name matches email prefix, To header must still contain ONLY the bare email."""
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
         imap = MagicMock()
@@ -5168,15 +5166,15 @@ class EmailToHeaderTests(unittest.TestCase):
 
         sent_msg = smtp.send_message.call_args[0][0]
         to_value = sent_msg["To"]
-        # When name == prefix the header must be bare email (never just "student123")
         self.assertEqual(to_value, "student123@gmail.com")
-        self.assertIn("@gmail.com", to_value)
+        self.assertNotIn("<", to_value)
+        self.assertNotIn(">", to_value)
 
     # ------------------------------------------------------------------ #
     # Course Completion Certificate (course_certificate_service.py)       #
     # ------------------------------------------------------------------ #
 
-    def test_course_certificate_to_header_contains_full_email(self):
+    def test_course_certificate_to_header_contains_only_email(self):
         import services.course_certificate_service as ccs
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
@@ -5199,12 +5197,11 @@ class EmailToHeaderTests(unittest.TestCase):
 
         sent_msg = smtp.send_message.call_args[0][0]
         to_value = sent_msg["To"]
-        self.assertIn("@example.com", to_value)
-        self.assertIn("aarav.sharma", to_value)
-        self.assertNotEqual(to_value, "aarav.sharma")
+        self.assertEqual(to_value, "aarav.sharma@example.com")
+        self.assertNotIn("Aarav", to_value)
 
     def test_course_certificate_to_header_prefix_name_gives_bare_email(self):
-        """When student name equals email prefix, To must be the bare email."""
+        """When student name equals email prefix, To header must still contain ONLY the bare email."""
         import services.course_certificate_service as ccs
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
@@ -5228,24 +5225,19 @@ class EmailToHeaderTests(unittest.TestCase):
         sent_msg = smtp.send_message.call_args[0][0]
         to_value = sent_msg["To"]
         self.assertEqual(to_value, "rahul99@gmail.com")
+        self.assertNotIn("<", to_value)
+        self.assertNotIn(">", to_value)
 
     # ------------------------------------------------------------------ #
     # Internship Acceptance Letter (app.py – /api/send-email)            #
     # ------------------------------------------------------------------ #
 
-    def test_offer_letter_to_header_contains_full_email(self):
-        """
-        Verify the Internship Acceptance Letter To header contains the full
-        email address.  The single /api/send-email route calls the module-level
-        get_previous_email_record() in app.py and writes history directly to
-        Supabase — so we patch app.get_previous_email_record and app.supabase.
-        """
+    def test_offer_letter_to_header_contains_only_email(self):
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
         imap = MagicMock()
         imap.__enter__.return_value = imap
 
-        # Supabase mock: chain .table().insert()/.update()/.execute() all succeed
         supabase_mock = MagicMock()
         supabase_mock.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[])
         supabase_mock.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
@@ -5256,7 +5248,6 @@ class EmailToHeaderTests(unittest.TestCase):
         with app_client.session_transaction() as sess:
             sess["authenticated"] = True
 
-        # Pre-create a fake PDF so the route can find it
         from app import GENERATED_DIR
         fake_filename = "Ananya_Test_OfferLetter.pdf"
         fake_pdf_path = GENERATED_DIR / fake_filename
@@ -5283,37 +5274,36 @@ class EmailToHeaderTests(unittest.TestCase):
             if smtp.send_message.called:
                 sent_msg = smtp.send_message.call_args[0][0]
                 to_value = sent_msg["To"]
-                self.assertIn("@example.com", to_value)
-                self.assertNotEqual(to_value, "ananya.test")
+                self.assertEqual(to_value, "ananya.test@example.com")
+                self.assertNotIn("Ananya", to_value)
         finally:
             fake_pdf_path.unlink(missing_ok=True)
 
     # ------------------------------------------------------------------ #
-    # All workflows: To header must contain @ in every send path          #
+    # Cross-workflow test: complete email address and domain always present#
     # ------------------------------------------------------------------ #
 
-    def test_format_to_header_output_always_contains_at_sign(self):
-        """Smoke-test: no matter what name is passed, @ must appear in To."""
+    def test_cross_workflow_complete_email_and_domain_always_present_without_display_name(self):
+        """Cross-workflow verification: To header must strictly match the complete email alone across all variants."""
         from email_utils import format_to_header
-        emails = [
-            "student@gmail.com",
-            "alice.smith@university.edu",
-            "no-name@persevex.com",
-            "x@y.io",
+        test_cases = [
+            ("student123", "student123@gmail.com", "student123@gmail.com"),
+            ("DEMO", "9922005112@klu.ac.in", "9922005112@klu.ac.in"),
+            ("Alice Smith", "alice.smith@university.edu", "alice.smith@university.edu"),
+            ("", "no-name@persevex.com", "no-name@persevex.com"),
+            (None, "candidate@domain.org", "candidate@domain.org"),
+            ("x", "x@y.io", "x@y.io"),
         ]
-        names = ["", None, "Alice Smith", "x", "alice.smith"]
-        for email in emails:
-            for name in names:
-                try:
-                    result = format_to_header(name, email)
-                    self.assertIn("@", result,
-                                  f"@ missing: name={name!r}, email={email!r}, result={result!r}")
-                    # The full domain must be present
-                    domain = email.split("@")[1]
-                    self.assertIn(domain, result)
-                except ValueError:
-                    pass  # only raised for invalid email; not expected here
-
+        for name, raw_email, expected_header in test_cases:
+            result = format_to_header(name, raw_email)
+            self.assertEqual(result, expected_header)
+            self.assertIn("@", result)
+            domain = raw_email.split("@")[1]
+            self.assertIn(domain, result)
+            self.assertNotIn("<", result)
+            self.assertNotIn(">", result)
+            if name:
+                self.assertNotIn(f"{name} <", result)
 
 
 class CourseCertificateBulkWorkflowTests(unittest.TestCase):
