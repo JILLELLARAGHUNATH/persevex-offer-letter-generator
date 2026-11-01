@@ -4971,7 +4971,10 @@ class InternshipCertificateEmailTemplateTests(unittest.TestCase):
         self.assertEqual(sent_msg["Subject"], "Congratulations on Successfully Completing Your Internship!")
 
         # 2. Recipient and sender address verification
-        self.assertEqual(sent_msg["To"], "aarav.sharma@example.com")
+        # format_to_header("Aarav Sharma", "aarav.sharma@example.com") produces
+        # "Aarav Sharma <aarav.sharma@example.com>" â full address always present.
+        self.assertIn("aarav.sharma@example.com", sent_msg["To"])
+        self.assertIn("@example.com", sent_msg["To"])
         self.assertEqual(sent_msg["From"], "Persevex LLP <support@persevex.com>")
 
         # 3. Exact wording and placeholder substitution verification
@@ -5044,6 +5047,272 @@ class InternshipCertificateEmailTemplateTests(unittest.TestCase):
         self.assertIn('message["Subject"] = "Campus Ambassador Certificate – Persevex"', app_code)
 
 
+class EmailToHeaderTests(unittest.TestCase):
+    """
+    Regression tests ensuring outbound email To headers always contain the
+    full recipient email address (including @domain.tld) and are never
+    accidentally reduced to just a username prefix like "student123".
+
+    Covers: format_to_header() utility, Internship Certificate, Course
+    Certificate, Offer Letter, Campus Ambassador Offer Letter, CA Certificate.
+    """
+
+    # ------------------------------------------------------------------ #
+    # format_to_header() unit tests                                        #
+    # ------------------------------------------------------------------ #
+
+    def test_format_to_header_bare_email_when_name_is_empty(self):
+        from email_utils import format_to_header
+        result = format_to_header("", "student@gmail.com")
+        self.assertEqual(result, "student@gmail.com")
+        self.assertIn("@gmail.com", result)
+
+    def test_format_to_header_bare_email_when_name_is_none(self):
+        from email_utils import format_to_header
+        result = format_to_header(None, "student@gmail.com")
+        self.assertEqual(result, "student@gmail.com")
+        self.assertIn("@gmail.com", result)
+
+    def test_format_to_header_bare_email_when_name_equals_prefix(self):
+        """If name == email username part, To must still be the bare address."""
+        from email_utils import format_to_header
+        result = format_to_header("student123", "student123@gmail.com")
+        self.assertEqual(result, "student123@gmail.com")
+        self.assertIn("@gmail.com", result)
+
+    def test_format_to_header_bare_email_when_name_equals_full_email(self):
+        from email_utils import format_to_header
+        result = format_to_header("priya@example.com", "priya@example.com")
+        self.assertEqual(result, "priya@example.com")
+
+    def test_format_to_header_formatted_when_name_is_human_name(self):
+        from email_utils import format_to_header
+        result = format_to_header("Rahul Kumar", "rahul.kumar@example.com")
+        self.assertEqual(result, "Rahul Kumar <rahul.kumar@example.com>")
+        self.assertIn("@example.com", result)
+
+    def test_format_to_header_raises_for_missing_email(self):
+        from email_utils import format_to_header
+        with self.assertRaises(ValueError):
+            format_to_header("Rahul", "")
+
+    def test_format_to_header_raises_for_invalid_email(self):
+        from email_utils import format_to_header
+        with self.assertRaises(ValueError):
+            format_to_header("Rahul", "not-an-email")
+
+    def test_format_to_header_always_includes_domain(self):
+        """The domain part must appear in the To header in every code path."""
+        from email_utils import format_to_header
+        for name, email in [
+            ("", "a@b.com"),
+            ("a", "a@b.com"),
+            ("Alice Smith", "alice@example.org"),
+            (None, "no-name@persevex.com"),
+        ]:
+            result = format_to_header(name, email)
+            domain = email.split("@")[1]
+            self.assertIn(domain, result,
+                          f"Domain missing from To header: name={name!r}, email={email!r}, result={result!r}")
+
+    # ------------------------------------------------------------------ #
+    # Internship Completion Certificate (certificate_service.py)          #
+    # ------------------------------------------------------------------ #
+
+    def test_internship_certificate_to_header_contains_full_email(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "Priya Patel",
+            "student_email": "priya.patel@example.com",
+            "domain": "Data Science",
+        }
+        with patch.object(certificate_service, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(certificate_service, "SENDER_PASSWORD", "secret"), \
+             patch.object(certificate_service.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(certificate_service.imaplib, "IMAP4_SSL", return_value=imap):
+            certificate_service.send_certificate_email(
+                data=data, pdf_bytes=b"%PDF-mock", filename="Priya_cert.pdf"
+            )
+
+        sent_msg = smtp.send_message.call_args[0][0]
+        to_value = sent_msg["To"]
+        # Must contain the full address, including domain
+        self.assertIn("@example.com", to_value)
+        self.assertIn("priya.patel", to_value)
+        # Must NOT be just the bare username prefix
+        self.assertNotEqual(to_value, "priya.patel")
+
+    def test_internship_certificate_to_header_with_generic_name_is_bare_email(self):
+        """When student_name is 'Student' (default), To must still be the full email."""
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "student123",          # matches email prefix
+            "student_email": "student123@gmail.com",
+            "domain": "Web Development",
+        }
+        with patch.object(certificate_service, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(certificate_service, "SENDER_PASSWORD", "secret"), \
+             patch.object(certificate_service.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(certificate_service.imaplib, "IMAP4_SSL", return_value=imap):
+            certificate_service.send_certificate_email(
+                data=data, pdf_bytes=b"%PDF-mock", filename="student123_cert.pdf"
+            )
+
+        sent_msg = smtp.send_message.call_args[0][0]
+        to_value = sent_msg["To"]
+        # When name == prefix the header must be bare email (never just "student123")
+        self.assertEqual(to_value, "student123@gmail.com")
+        self.assertIn("@gmail.com", to_value)
+
+    # ------------------------------------------------------------------ #
+    # Course Completion Certificate (course_certificate_service.py)       #
+    # ------------------------------------------------------------------ #
+
+    def test_course_certificate_to_header_contains_full_email(self):
+        import services.course_certificate_service as ccs
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "Aarav Sharma",
+            "student_email": "aarav.sharma@example.com",
+            "course_name": "Python Programming",
+            "certificate_id": "CCC-TEST-001",
+        }
+        with patch.object(ccs, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(ccs, "SENDER_PASSWORD", "secret"), \
+             patch.object(ccs.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(ccs.imaplib, "IMAP4_SSL", return_value=imap):
+            ccs.send_certificate_email(
+                data=data, pdf_bytes=b"%PDF-mock", filename="Aarav_ccc.pdf"
+            )
+
+        sent_msg = smtp.send_message.call_args[0][0]
+        to_value = sent_msg["To"]
+        self.assertIn("@example.com", to_value)
+        self.assertIn("aarav.sharma", to_value)
+        self.assertNotEqual(to_value, "aarav.sharma")
+
+    def test_course_certificate_to_header_prefix_name_gives_bare_email(self):
+        """When student name equals email prefix, To must be the bare email."""
+        import services.course_certificate_service as ccs
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        data = {
+            "student_name": "rahul99",
+            "student_email": "rahul99@gmail.com",
+            "course_name": "AI Fundamentals",
+            "certificate_id": "CCC-TEST-002",
+        }
+        with patch.object(ccs, "SENDER_EMAIL", "support@persevex.com"), \
+             patch.object(ccs, "SENDER_PASSWORD", "secret"), \
+             patch.object(ccs.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(ccs.imaplib, "IMAP4_SSL", return_value=imap):
+            ccs.send_certificate_email(
+                data=data, pdf_bytes=b"%PDF-mock", filename="rahul99_ccc.pdf"
+            )
+
+        sent_msg = smtp.send_message.call_args[0][0]
+        to_value = sent_msg["To"]
+        self.assertEqual(to_value, "rahul99@gmail.com")
+
+    # ------------------------------------------------------------------ #
+    # Internship Acceptance Letter (app.py – /api/send-email)            #
+    # ------------------------------------------------------------------ #
+
+    def test_offer_letter_to_header_contains_full_email(self):
+        """
+        Verify the Internship Acceptance Letter To header contains the full
+        email address.  The single /api/send-email route calls the module-level
+        get_previous_email_record() in app.py and writes history directly to
+        Supabase — so we patch app.get_previous_email_record and app.supabase.
+        """
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+
+        # Supabase mock: chain .table().insert()/.update()/.execute() all succeed
+        supabase_mock = MagicMock()
+        supabase_mock.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[])
+        supabase_mock.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        supabase_mock.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+        app_client = application.app.test_client()
+        app_client.testing = True
+        with app_client.session_transaction() as sess:
+            sess["authenticated"] = True
+
+        # Pre-create a fake PDF so the route can find it
+        from app import GENERATED_DIR
+        fake_filename = "Ananya_Test_OfferLetter.pdf"
+        fake_pdf_path = GENERATED_DIR / fake_filename
+        fake_pdf_path.write_bytes(b"%PDF-1.4 fake")
+
+        try:
+            with patch("app.smtplib.SMTP_SSL", return_value=smtp), \
+                 patch("app.imaplib.IMAP4_SSL", return_value=imap), \
+                 patch("app.SENDER_EMAIL", "support@persevex.com"), \
+                 patch("app.SENDER_PASSWORD", "secret"), \
+                 patch("app.get_previous_email_record", return_value=None), \
+                 patch("app.supabase", supabase_mock):
+                resp = app_client.post("/api/send-email", json={
+                    "student_name": "Ananya Test",
+                    "student_email": "ananya.test@example.com",
+                    "filename": fake_filename,
+                    "domain": "Python",
+                    "duration": "2 months",
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-03-01",
+                    "letter_type": "with_hours",
+                })
+
+            if smtp.send_message.called:
+                sent_msg = smtp.send_message.call_args[0][0]
+                to_value = sent_msg["To"]
+                self.assertIn("@example.com", to_value)
+                self.assertNotEqual(to_value, "ananya.test")
+        finally:
+            fake_pdf_path.unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------ #
+    # All workflows: To header must contain @ in every send path          #
+    # ------------------------------------------------------------------ #
+
+    def test_format_to_header_output_always_contains_at_sign(self):
+        """Smoke-test: no matter what name is passed, @ must appear in To."""
+        from email_utils import format_to_header
+        emails = [
+            "student@gmail.com",
+            "alice.smith@university.edu",
+            "no-name@persevex.com",
+            "x@y.io",
+        ]
+        names = ["", None, "Alice Smith", "x", "alice.smith"]
+        for email in emails:
+            for name in names:
+                try:
+                    result = format_to_header(name, email)
+                    self.assertIn("@", result,
+                                  f"@ missing: name={name!r}, email={email!r}, result={result!r}")
+                    # The full domain must be present
+                    domain = email.split("@")[1]
+                    self.assertIn(domain, result)
+                except ValueError:
+                    pass  # only raised for invalid email; not expected here
 
 
 

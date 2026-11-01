@@ -17,6 +17,8 @@ import pymupdf
 import qrcode
 from dotenv import load_dotenv
 
+from email_utils import format_to_header
+
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -631,7 +633,7 @@ def send_certificate_email(data, pdf_path=None, filename=None, pdf_bytes=None, b
     # Build Email Message
     message = EmailMessage()
     message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-    message["To"] = recipient
+    message["To"] = format_to_header(student_name, recipient)
     message["Subject"] = "Congratulations on Successfully Completing Your Internship!"
 
     message.set_content(

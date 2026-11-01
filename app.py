@@ -18,6 +18,7 @@ from datetime import timedelta
 
 from environment_config import load_application_environment, require_environment_variable, get_environment_info
 from supabase import create_client, Client
+from email_utils import format_to_header
 
 APP_ENV = load_application_environment(Path(__file__).resolve().parent)
 APP_LOCAL_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
@@ -3161,7 +3162,7 @@ def send_email():
 
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
 
-        message["To"] = recipient
+        message["To"] = format_to_header(student_name, recipient)
 
         message["Subject"] = "Internship Acceptance Letter"
 
@@ -3815,7 +3816,7 @@ def bulk_offer_letter_send_item():
         # Prepare Email Message
         message = EmailMessage()
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-        message["To"] = recipient
+        message["To"] = format_to_header(student_name, recipient)
         message["Subject"] = "Internship Acceptance Letter"
 
         message.set_content(
@@ -4238,7 +4239,7 @@ def campus_ambassador_send_email():
         message = EmailMessage()
         message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-        message["To"] = recipient
+        message["To"] = format_to_header(student_name, recipient)
 
         html_content = get_ca_email_html(student_name)
 
@@ -4498,7 +4499,7 @@ def campus_ambassador_bulk_send_item():
         message = EmailMessage()
         message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-        message["To"] = student_email
+        message["To"] = format_to_header(student_name, student_email)
 
         html_content = get_ca_email_html(student_name)
         plain_text = (
@@ -4653,7 +4654,7 @@ def campus_ambassador_bulk_process_item():
         message = EmailMessage()
         message["Subject"] = "Appointment Letter – Campus Ambassador at Persevex"
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-        message["To"] = student_email
+        message["To"] = format_to_header(student_name, student_email)
 
         html_content = get_ca_email_html(student_name)
 
@@ -5347,7 +5348,7 @@ def ca_certificate_send_email():
         message = EmailMessage()
         message["Subject"] = "Campus Ambassador Certificate – Persevex"
         message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-        message["To"] = email
+        message["To"] = format_to_header(name, email)
         message.set_content(
             f"Dear {name},\n\n"
             "Greetings from Persevex!\n\n"
@@ -5636,7 +5637,7 @@ def ca_certificate_bulk_send_job(job_id):
                 message = EmailMessage()
                 message["Subject"] = "Campus Ambassador Certificate \u2013 Persevex"
                 message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
-                message["To"] = item["participant_email"]
+                message["To"] = format_to_header(participant_name, item["participant_email"])
                 message.set_content(
                     f"Dear {participant_name},\n\n"
                     "Greetings from Persevex!\n\n"
