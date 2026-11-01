@@ -2996,12 +2996,59 @@ def save_bulk_job_record(job_data):
 # ============================================================
 # UNIFIED HISTORY ENGINE
 # ============================================================
+def _fetch_all_supabase_rows(sb, table_name, order_col="created_at", secondary_col="id"):
+    """
+    Fetch all rows from a Supabase table with range pagination.
+    Uses deterministic ordering (order_col DESC, secondary_col DESC) to ensure
+    reliable pagination across boundaries even when multiple records have identical timestamps.
+    Explicitly raises a RuntimeError if the 500-page safety limit is exceeded to prevent
+    silently returning partial results.
+    Safely handles mock clients, missing attributes, and non-list responses.
+    """
+    all_rows = []
+    page_size = 1000
+    start = 0
+    max_pages = 500
+    pages = 0
+
+    while True:
+        pages += 1
+        if pages > max_pages:
+            raise RuntimeError(
+                f"Pagination safety limit of {max_pages} pages ({max_pages * page_size} records) "
+                f"exceeded while fetching {table_name}. Query aborted to prevent runaway execution."
+            )
+
+        query = sb.table(table_name).select("*")
+        if order_col and hasattr(query, "order"):
+            try:
+                query = query.order(order_col, desc=True)
+                if secondary_col:
+                    query = query.order(secondary_col, desc=True)
+            except Exception:
+                pass
+
+        if hasattr(query, "range"):
+            res = query.range(start, start + page_size - 1).execute()
+        else:
+            res = query.execute()
+
+        data = res.data if res and hasattr(res, "data") and isinstance(res.data, list) else []
+        all_rows.extend(data)
+
+        if len(data) < page_size:
+            break
+        start += page_size
+
+    return all_rows
+
+
 def _fetch_all_raw_offer_letters():
     sb = get_supabase_client()
     if sb:
         try:
-            res = sb.table("email_history").select("*").order("created_at", desc=True).execute()
-            return [dict(r) for r in (res.data or [])]
+            rows = _fetch_all_supabase_rows(sb, "email_history", order_col="created_at", secondary_col="id")
+            return [dict(r) for r in rows]
         except Exception as exc:
             print("SUPABASE FETCH OFFER LETTERS ERROR:", repr(exc))
             raise RuntimeError(f"Failed to fetch offer letters from Supabase: {exc}") from exc
@@ -3010,7 +3057,7 @@ def _fetch_all_raw_offer_letters():
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM email_history ORDER BY id DESC")
+        cursor.execute("SELECT * FROM email_history ORDER BY created_at DESC, id DESC")
         rows = cursor.fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -3023,8 +3070,8 @@ def _fetch_all_raw_campus_ambassador():
     sb = get_supabase_client()
     if sb:
         try:
-            res = sb.table("campus_ambassador_history").select("*").order("created_at", desc=True).execute()
-            return [dict(r) for r in (res.data or [])]
+            rows = _fetch_all_supabase_rows(sb, "campus_ambassador_history", order_col="created_at", secondary_col="id")
+            return [dict(r) for r in rows]
         except Exception as exc:
             print("SUPABASE FETCH CA ERROR:", repr(exc))
             raise RuntimeError(f"Failed to fetch CA offer letters from Supabase: {exc}") from exc
@@ -3033,7 +3080,7 @@ def _fetch_all_raw_campus_ambassador():
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM campus_ambassador_history ORDER BY id DESC")
+        cursor.execute("SELECT * FROM campus_ambassador_history ORDER BY created_at DESC, id DESC")
         rows = cursor.fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -3046,8 +3093,8 @@ def _fetch_all_raw_certificates():
     sb = get_supabase_client()
     if sb:
         try:
-            res = sb.table("certificate_history").select("*").order("created_at", desc=True).execute()
-            return [dict(r) for r in (res.data or [])]
+            rows = _fetch_all_supabase_rows(sb, "certificate_history", order_col="created_at", secondary_col="id")
+            return [dict(r) for r in rows]
         except Exception as exc:
             print("SUPABASE FETCH CERTIFICATES ERROR:", repr(exc))
             raise RuntimeError(f"Failed to fetch certificates from Supabase: {exc}") from exc
@@ -3056,7 +3103,7 @@ def _fetch_all_raw_certificates():
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM certificate_history ORDER BY id DESC")
+        cursor.execute("SELECT * FROM certificate_history ORDER BY created_at DESC, id DESC")
         rows = cursor.fetchall()
         conn.close()
         return [dict(r) for r in rows]
@@ -3069,8 +3116,8 @@ def _fetch_all_raw_ca_certificates():
     sb = get_supabase_client()
     if sb:
         try:
-            result = sb.table("campus_ambassador_certificate_history").select("*").order("created_at", desc=True).execute()
-            return [dict(row) for row in (result.data or [])]
+            rows = _fetch_all_supabase_rows(sb, "campus_ambassador_certificate_history", order_col="created_at", secondary_col="id")
+            return [dict(row) for row in rows]
         except Exception as exc:
             print("SUPABASE FETCH CA CERTIFICATES ERROR:", repr(exc))
             raise RuntimeError(f"Failed to fetch CA certificates from Supabase: {exc}") from exc
@@ -3078,7 +3125,7 @@ def _fetch_all_raw_ca_certificates():
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row
-        rows = conn.execute("SELECT * FROM campus_ambassador_certificate_history ORDER BY id DESC").fetchall()
+        rows = conn.execute("SELECT * FROM campus_ambassador_certificate_history ORDER BY created_at DESC, id DESC").fetchall()
         conn.close()
         return [dict(row) for row in rows]
     except Exception as exc:
@@ -3090,21 +3137,20 @@ def _fetch_all_raw_course_certificates():
     sb = get_supabase_client()
     if sb:
         try:
-            result = sb.table("course_certificate_history").select("*").order("created_at", desc=True).execute()
-            return [dict(row) for row in (result.data or [])]
+            rows = _fetch_all_supabase_rows(sb, "course_certificate_history", order_col="created_at", secondary_col="id")
+            return [dict(row) for row in rows]
         except Exception as exc:
             pass
 
     try:
         conn = sqlite3.connect(SQLITE_DB_PATH)
         conn.row_factory = sqlite3.Row
-        rows = conn.execute("SELECT * FROM course_certificate_history ORDER BY id DESC").fetchall()
+        rows = conn.execute("SELECT * FROM course_certificate_history ORDER BY created_at DESC, id DESC").fetchall()
         conn.close()
         return [dict(row) for row in rows]
     except Exception as exc:
         print("LOCAL DB FETCH COURSE CERTIFICATES ERROR:", repr(exc))
         return []
-
 
 def get_course_certificate_by_id(cert_id, supabase_client=None, return_error_detail=False):
     if not cert_id:
@@ -3459,6 +3505,37 @@ def format_ist_timestamp(ts_str):
         return ts_clean[:19].replace("T", " ") if ts_clean else "—"
 
 
+def normalize_email_status(raw_status):
+    """
+    Normalize raw email delivery statuses into recognized categories:
+    'sent', 'failed', 'uncertain', 'pending', or 'unknown'.
+
+    Recognized categories:
+      - 'sent':      'sent', 'success', 'successful'
+      - 'failed':    'failed', 'failure', 'error'
+      - 'uncertain': 'uncertain' (preserved as-is on the record;
+                     statistics counters count it as failed explicitly)
+      - 'pending':   'pending', 'sending', 'in_transit', 'queued'
+      - 'unknown':   any unrecognized, invalid, or empty value
+
+    Rules:
+      - Never classifies an unrecognized raw value as 'pending'.
+      - Records with 'unknown' status are preserved in Unified History
+        and counted in total_unknown; they are excluded from
+        total_sent, total_failed, and total_pending.
+    """
+    s = str(raw_status or "").strip().lower()
+    if s in ("sent", "success", "successful"):
+        return "sent"
+    if s == "uncertain":
+        return "uncertain"
+    if s in ("failed", "failure", "error"):
+        return "failed"
+    if s in ("pending", "sending", "in_transit", "queued"):
+        return "pending"
+    return "unknown"
+
+
 def get_unified_history(
     search="",
     record_type="all",  # 'all', 'offer_letter', 'certificate'
@@ -3488,14 +3565,10 @@ def get_unified_history(
 
     # 1. Transform Offer Letters (from email_history)
     for r in raw_offers:
-        status_raw = str(r.get("email_status") or "").strip().lower()
-        if status_raw in ("sent", "success", "successful"):
-            status_clean = "sent"
-        elif status_raw in ("failed", "failure", "error"):
-            status_clean = "failed"
-        else:
-            # Generated-only / unsent records must NOT inflate counts or sent history
-            continue
+        status_clean = normalize_email_status(r.get("email_status"))
+        # All records are preserved in Unified History.
+        # Records with 'unknown' status appear in total_records/total_unknown
+        # but are not counted in total_sent, total_failed, or total_pending.
 
         created_ts = str(r.get("created_at") or r.get("sent_at") or "")
         sent_ts = str(r.get("sent_at") or "")
@@ -3537,13 +3610,10 @@ def get_unified_history(
 
     # 2. Transform Dedicated Campus Ambassador Letters (from campus_ambassador_history)
     for r in raw_cas:
-        status_raw = str(r.get("email_status") or "").strip().lower()
-        if status_raw in ("sent", "success", "successful"):
-            status_clean = "sent"
-        elif status_raw in ("failed", "failure", "error"):
-            status_clean = "failed"
-        else:
-            continue
+        status_clean = normalize_email_status(r.get("email_status"))
+        # All records are preserved in Unified History.
+        # Records with 'unknown' status appear in total_records/total_unknown
+        # but are not counted in total_sent, total_failed, or total_pending.
 
         created_ts = str(r.get("created_at") or r.get("sent_at") or "")
         sent_ts = str(r.get("sent_at") or "")
@@ -3577,13 +3647,7 @@ def get_unified_history(
 
     # 3. Transform Certificates (from certificate_history)
     for r in raw_certs:
-        status_raw = str(r.get("email_status") or "").strip().lower()
-        if status_raw in ("sent", "success", "successful"):
-            status_clean = "sent"
-        elif status_raw in ("failed", "failure", "error"):
-            status_clean = "failed"
-        else:
-            status_clean = "pending"
+        status_clean = normalize_email_status(r.get("email_status"))
 
         created_ts = str(r.get("created_at") or r.get("generated_date") or r.get("sent_at") or "")
         sent_ts = str(r.get("sent_at") or "")
@@ -3619,11 +3683,7 @@ def get_unified_history(
         })
 
     for r in raw_ca_certs:
-        status_raw = str(r.get("email_status") or "").strip().lower()
-        status_clean = "sent" if status_raw in ("sent", "success", "successful") else (
-            "uncertain" if status_raw == "uncertain"
-            else ("failed" if status_raw in ("failed", "failure", "error") else "pending")
-        )
+        status_clean = normalize_email_status(r.get("email_status"))
         created_ts = str(r.get("created_at") or r.get("sent_at") or "")
         sent_ts = str(r.get("sent_at") or "")
         document_id = r.get("document_id") or f"CA-CERT-{r.get('id')}"
@@ -3654,13 +3714,7 @@ def get_unified_history(
 
     # 5. Transform Course Certificates (from course_certificate_history)
     for r in raw_course_certs:
-        status_raw = str(r.get("email_status") or "").strip().lower()
-        if status_raw in ("sent", "success", "successful"):
-            status_clean = "sent"
-        elif status_raw in ("failed", "failure", "error"):
-            status_clean = "failed"
-        else:
-            status_clean = "pending"
+        status_clean = normalize_email_status(r.get("email_status"))
 
         created_ts = str(r.get("created_at") or r.get("generated_date") or r.get("sent_at") or "")
         sent_ts = str(r.get("sent_at") or "")
@@ -3816,6 +3870,7 @@ def get_unified_history(
         if r["email_status"] in {"failed", "uncertain"}
     )
     total_pending = sum(1 for r in records if r["email_status"] == "pending")
+    total_unknown = sum(1 for r in records if r["email_status"] == "unknown")
 
     # Pagination
     try:
@@ -3851,6 +3906,7 @@ def get_unified_history(
         "total_sent": total_sent,
         "total_failed": total_failed,
         "total_pending": total_pending,
+        "total_unknown": total_unknown,
         "page": page,
         "per_page": per_page,
         "total_pages": total_pages,
@@ -3870,17 +3926,21 @@ def get_all_workflow_stats():
     def _stats(rec_type):
         recs = [r for r in all_records if r.get("record_type") == rec_type]
         return {
-            "sent":   sum(1 for r in recs if r.get("email_status") == "sent"),
-            "failed": sum(1 for r in recs if r.get("email_status") in {"failed", "uncertain"}),
-            "total":  len(recs),
+            "sent":    sum(1 for r in recs if r.get("email_status") == "sent"),
+            "failed":  sum(1 for r in recs if r.get("email_status") in {"failed", "uncertain"}),
+            "pending": sum(1 for r in recs if r.get("email_status") == "pending"),
+            "unknown": sum(1 for r in recs if r.get("email_status") == "unknown"),
+            "total":   len(recs),
         }
 
     return {
         "success": True,
         "overall": {
-            "sent":   history_data.get("total_sent", 0),
-            "failed": history_data.get("total_failed", 0),
-            "total":  history_data.get("total_records", 0),
+            "sent":    history_data.get("total_sent", 0),
+            "failed":  history_data.get("total_failed", 0),
+            "pending": history_data.get("total_pending", 0),
+            "unknown": history_data.get("total_unknown", 0),
+            "total":   history_data.get("total_records", 0),
         },
         "offer_letter":       _stats("offer_letter"),
         "ca_letter":          _stats("ca_letter"),
