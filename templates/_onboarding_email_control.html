@@ -1,0 +1,26 @@
+<div class="onboarding-control-row">
+    <form id="onboardingEmailForm" class="onboarding-email-form">
+        <label class="sr-only" for="onboardingStudentEmail">Student email address</label>
+        <input
+            id="onboardingStudentEmail"
+            type="email"
+            autocomplete="email"
+            maxlength="254"
+            placeholder="Enter student's email address"
+            aria-describedby="onboardingEmailStatus"
+        >
+        <button
+            id="onboardingEmailSend"
+            type="submit"
+            title="Send Onboarding Email"
+            aria-label="Send Onboarding Email"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m22 2-7 20-4-9-9-4Z"></path>
+                <path d="M22 2 11 13"></path>
+            </svg>
+        </button>
+    </form>
+    <p id="onboardingEmailStatus" class="onboarding-email-status" aria-live="polite"></p>
+</div>
+<script src="{{ url_for('static', filename='onboarding_email.js') }}"></script>

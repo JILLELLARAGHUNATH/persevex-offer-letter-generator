@@ -18,7 +18,7 @@ from datetime import timedelta
 
 from environment_config import load_application_environment, require_environment_variable, get_environment_info
 from supabase import create_client, Client
-from email_utils import format_to_header
+from email_utils import format_to_header, is_valid_email
 
 APP_ENV = load_application_environment(Path(__file__).resolve().parent)
 APP_LOCAL_TIMEZONE = timezone(timedelta(hours=5, minutes=30))
@@ -129,6 +129,25 @@ SENDER_PASSWORD = os.getenv("SENDER_PASSWORD","").strip()
 
 SMTP_HOST = "smtpout.secureserver.net"
 SMTP_PORT = 465
+
+ONBOARDING_EMAIL_SUBJECT = "Onboarding Form Persevex"
+ONBOARDING_EMAIL_TEXT = """Dear Candidate,
+
+We are delighted to welcome you to Persevex Education Consultancy LLP and are excited to begin this journey with you.
+
+To initiate the onboarding process, please complete the following form with accurate and up-to-date information:
+
+🔗 Onboarding Form - https://forms.gle/M6JqPgDu6pfJvuwo8
+
+Your timely submission will enable us to process your details efficiently and ensure a smooth onboarding experience. Once we receive your completed form, our team will reach out with the next steps.
+
+Should you have any questions or require assistance, please feel free to contact us.
+
+We look forward to your valuable contribution and wish you every success in your role.
+
+Warm regards
+
+Persevex"""
 
 IMAP_HOST = "imap.secureserver.net"
 IMAP_PORT = 993
@@ -3012,6 +3031,111 @@ def get_previous_email_record(email):
 # ============================================================
 # SEND EMAIL
 # ============================================================
+
+@app.post("/api/onboarding-email")
+def send_onboarding_email():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+
+    recipient = str(data.get("student_email") or "").strip().lower()
+    if not recipient:
+        return jsonify({
+            "success": False,
+            "error": "Student email is required."
+        }), 400
+
+    if not is_valid_email(recipient):
+        return jsonify({
+            "success": False,
+            "error": "Please enter a valid email address."
+        }), 400
+
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        return jsonify({
+            "success": False,
+            "error": "Email is not configured."
+        }), 500
+
+    message = EmailMessage()
+    message["From"] = f"Persevex LLP <{SENDER_EMAIL}>"
+    message["To"] = format_to_header(None, recipient)
+    message["Subject"] = ONBOARDING_EMAIL_SUBJECT
+    message.set_content(ONBOARDING_EMAIL_TEXT)
+    message.add_alternative(
+        """<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, Helvetica, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
+<p>Dear Candidate,</p>
+<p>We are delighted to welcome you to Persevex Education Consultancy LLP and are excited to begin this journey with you.</p>
+<p>To initiate the onboarding process, please complete the following form with accurate and up-to-date information:</p>
+<p>🔗 Onboarding Form - <a href="https://forms.gle/M6JqPgDu6pfJvuwo8">https://forms.gle/M6JqPgDu6pfJvuwo8</a></p>
+<p>Your timely submission will enable us to process your details efficiently and ensure a smooth onboarding experience. Once we receive your completed form, our team will reach out with the next steps.</p>
+<p>Should you have any questions or require assistance, please feel free to contact us.</p>
+<p>We look forward to your valuable contribution and wish you every success in your role.</p>
+<p>Warm regards</p>
+<p>Persevex</p>
+</body>
+</html>""",
+        subtype="html",
+    )
+
+    try:
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+            smtp.login(SENDER_EMAIL, SENDER_PASSWORD)
+            smtp.send_message(message)
+    except Exception as exc:
+        print("ONBOARDING SMTP EMAIL FAILED:", type(exc).__name__)
+        if isinstance(exc, smtplib.SMTPAuthenticationError):
+            return jsonify({
+                "success": False,
+                "error": "Email authentication failed. Please check the sender credentials and try again."
+            }), 503
+        if isinstance(exc, smtplib.SMTPRecipientsRefused):
+            return jsonify({
+                "success": False,
+                "error": "The recipient email address was rejected by the mail server."
+            }), 422
+        if isinstance(exc, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, OSError, TimeoutError)):
+            return jsonify({
+                "success": False,
+                "error": "Could not connect to the email server. Please try again later."
+            }), 503
+        return jsonify({
+            "success": False,
+            "error": "Onboarding email delivery failed. Please try again later."
+        }), 500
+
+    try:
+        with imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT) as imap:
+            imap.login(SENDER_EMAIL, SENDER_PASSWORD)
+            append_status, _ = imap.append(
+                IMAP_SENT_FOLDER,
+                "\\Seen",
+                None,
+                message.as_bytes(),
+            )
+            if append_status != "OK":
+                raise imaplib.IMAP4.error("Sent-folder APPEND was not accepted")
+    except Exception as exc:
+        print("ONBOARDING IMAP SENT COPY FAILED:", type(exc).__name__)
+        return jsonify({
+            "success": False,
+            "email_sent": True,
+            "sent_copy_saved": False,
+            "error": (
+                "The email was sent successfully, but its copy could not be saved "
+                "to the Sent folder. The email was not sent again."
+            ),
+        }), 202
+
+    return jsonify({
+        "success": True,
+        "email_sent": True,
+        "sent_copy_saved": True,
+        "message": "Onboarding email sent successfully."
+    })
+
 
 @app.post("/send-email")
 def send_email():

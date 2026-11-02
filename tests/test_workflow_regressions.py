@@ -149,6 +149,159 @@ class DashboardRegressionTests(unittest.TestCase):
         self.assertTrue(response.get_json()["document_id"].startswith("CA-CERT-"))
 
 
+class OnboardingEmailTests(unittest.TestCase):
+    def setUp(self):
+        self.client = application.app.test_client()
+        with self.client.session_transaction() as session:
+            session["authenticated"] = True
+
+    def test_onboarding_email_sends_html_and_plain_text_without_offer_workflow(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+        imap.append.return_value = ("OK", [b"APPEND completed"])
+
+        with patch.object(application, "SENDER_EMAIL", "sender@example.invalid"), \
+             patch.object(application, "SENDER_PASSWORD", "test-password"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp) as smtp_factory, \
+             patch.object(application.imaplib, "IMAP4_SSL", return_value=imap) as imap_factory, \
+             patch.object(application, "generate_pdf") as generate_pdf, \
+             patch.object(application, "get_previous_email_record") as offer_email_lookup, \
+             patch.object(repository, "get_unified_history") as history_lookup:
+            response = self.client.post(
+                "/api/onboarding-email",
+                json={"student_email": "Candidate@Example.com"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["success"])
+        self.assertTrue(response.get_json()["email_sent"])
+        self.assertTrue(response.get_json()["sent_copy_saved"])
+        self.assertEqual(smtp_factory.call_args.args, (application.SMTP_HOST, application.SMTP_PORT))
+        self.assertEqual(smtp_factory.call_args.kwargs, {"timeout": 30})
+        smtp.login.assert_called_once_with("sender@example.invalid", "test-password")
+        smtp.send_message.assert_called_once()
+        message = smtp.send_message.call_args.args[0]
+        self.assertEqual(message["To"], "candidate@example.com")
+        self.assertEqual(message["Subject"], "Onboarding Form Persevex")
+        plain_body = message.get_body(preferencelist=("plain",)).get_content()
+        self.assertEqual(plain_body.strip(), application.ONBOARDING_EMAIL_TEXT)
+        html_body = message.get_body(preferencelist=("html",)).get_content()
+        self.assertIn(
+            '<a href="https://forms.gle/M6JqPgDu6pfJvuwo8">https://forms.gle/M6JqPgDu6pfJvuwo8</a>',
+            html_body,
+        )
+        self.assertIn("<p>Warm regards</p>\n<p>Persevex</p>", html_body)
+        imap_factory.assert_called_once_with(application.IMAP_HOST, application.IMAP_PORT)
+        imap.login.assert_called_once_with("sender@example.invalid", "test-password")
+        imap.append.assert_called_once()
+        folder, flags, internal_date, saved_message_bytes = imap.append.call_args.args
+        self.assertEqual(folder, application.IMAP_SENT_FOLDER)
+        self.assertEqual(flags, "\\Seen")
+        self.assertIsNone(internal_date)
+        from email import policy
+        from email.parser import BytesParser
+        saved_message = BytesParser(policy=policy.default).parsebytes(saved_message_bytes)
+        self.assertEqual(saved_message["To"], "candidate@example.com")
+        self.assertEqual(saved_message["From"], "Persevex LLP <sender@example.invalid>")
+        self.assertEqual(saved_message["Subject"], "Onboarding Form Persevex")
+        self.assertEqual(
+            saved_message.get_body(preferencelist=("plain",)).get_content().strip(),
+            application.ONBOARDING_EMAIL_TEXT,
+        )
+        generate_pdf.assert_not_called()
+        offer_email_lookup.assert_not_called()
+        history_lookup.assert_not_called()
+
+    def test_empty_and_invalid_emails_are_rejected_before_smtp(self):
+        with patch.object(application.smtplib, "SMTP_SSL") as smtp_factory:
+            empty = self.client.post("/api/onboarding-email", json={"student_email": ""})
+            invalid = self.client.post("/api/onboarding-email", json={"student_email": "not-an-email"})
+
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(empty.get_json()["error"], "Student email is required.")
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(invalid.get_json()["error"], "Please enter a valid email address.")
+        smtp_factory.assert_not_called()
+
+    def test_smtp_failure_returns_clear_error(self):
+        with patch.object(application, "SENDER_EMAIL", "sender@example.invalid"), \
+             patch.object(application, "SENDER_PASSWORD", "test-password"), \
+             patch.object(application.smtplib, "SMTP_SSL", side_effect=TimeoutError("synthetic SMTP timeout")):
+            response = self.client.post(
+                "/api/onboarding-email",
+                json={"student_email": "candidate@example.invalid"},
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.get_json()["error"],
+            "Could not connect to the email server. Please try again later.",
+        )
+        self.assertNotIn("synthetic SMTP timeout", response.get_json()["error"])
+
+    def test_imap_failure_reports_delivered_email_without_resending(self):
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        imap = MagicMock()
+        imap.__enter__.return_value = imap
+        imap.append.side_effect = application.imaplib.IMAP4.error("private IMAP response")
+
+        with patch.object(application, "SENDER_EMAIL", "sender@example.invalid"), \
+             patch.object(application, "SENDER_PASSWORD", "test-password"), \
+             patch.object(application.smtplib, "SMTP_SSL", return_value=smtp), \
+             patch.object(application.imaplib, "IMAP4_SSL", return_value=imap):
+            response = self.client.post(
+                "/api/onboarding-email",
+                json={"student_email": "candidate@example.invalid"},
+            )
+
+        self.assertEqual(response.status_code, 202)
+        result = response.get_json()
+        self.assertFalse(result["success"])
+        self.assertTrue(result["email_sent"])
+        self.assertFalse(result["sent_copy_saved"])
+        self.assertIn("email was sent successfully", result["error"])
+        self.assertIn("not sent again", result["error"])
+        self.assertNotIn("private IMAP response", response.get_data(as_text=True))
+        smtp.send_message.assert_called_once()
+        imap.append.assert_called_once()
+
+    def test_onboarding_control_is_shared_across_dashboard_sections(self):
+        paths = (
+            "/",
+            "/campus-ambassador",
+            "/campus-ambassador/single",
+            "/campus-ambassador/bulk",
+            "/certificate",
+            "/ca-certificate",
+            "/ca-certificate/bulk",
+            "/course-certificate",
+            "/history",
+        )
+        with patch.object(repository, "get_unified_history", return_value=history_result()), \
+             patch.object(repository, "get_course_certificate_stats", return_value={"success": 0, "failed": 0}):
+            for path in paths:
+                with self.subTest(path=path):
+                    response = self.client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    html = response.get_data(as_text=True)
+                    self.assertEqual(html.count('id="onboardingEmailForm"'), 1)
+                    self.assertIn('id="onboardingStudentEmail"', html)
+                    self.assertIn('title="Send Onboarding Email"', html)
+                    self.assertIn("static/onboarding_email.js", html)
+                    self.assertLess(html.index('id="onboardingEmailForm"'), html.index("</header>"))
+
+    def test_onboarding_endpoint_requires_existing_login(self):
+        response = application.app.test_client().post(
+            "/api/onboarding-email",
+            json={"student_email": "candidate@example.invalid"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+
 class SingleDeliverySafetyTests(unittest.TestCase):
     def setUp(self):
         self.client = application.app.test_client()
@@ -6093,4 +6246,3 @@ class CourseCertificateBulkWorkflowTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
