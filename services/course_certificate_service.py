@@ -322,7 +322,7 @@ def send_certificate_email(data: dict, pdf_bytes: bytes = None, filename: str = 
         "We wish you continued success in your academic and professional journey and look forward to seeing you achieve great things in the future.\n\n"
         "Warm regards,\n"
         "Team Persevex\n"
-        "Persevex Education Consultancy LLP\n"
+        "Persevex LLP\n"
     )
 
     # Attach Certificate PDF
