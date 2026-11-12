@@ -87,156 +87,170 @@ def generate_certificate_id(supabase_client=None):
     raise RuntimeError("Failed to generate a unique Course Completion Certificate ID after multiple attempts.")
 
 
+def _format_course_issue_date(value):
+    """Format an ISO or DD-MM-YYYY date to match the new certificate artwork."""
+    raw = str(value or "").strip()
+    if not raw:
+        return datetime.now().strftime("%d %B, %Y")
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%d %B, %Y")
+        except ValueError:
+            pass
+    return raw
+
+
+def _wrap_course_certificate_text(text, fontname, fontsize, max_width):
+    """Wrap certificate copy without changing its wording."""
+    words = text.split()
+    lines = []
+    current = []
+    for word in words:
+        candidate = " ".join(current + [word])
+        if pymupdf.get_text_length(candidate, fontname=fontname, fontsize=fontsize) <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines
+
+
 def generate_certificate_pdf_bytes(data, base_url=None):
     """
-    Generates a Course Completion Certificate PDF from the uploaded PDF template.
-    Preserves all original artwork, watermark, logo, ISO 9001 logo, and administrator signature.
-    Dynamically replaces only:
-      1. Student Name
-      2. Course Name in the paragraph
-      3. Issue Date
-      4. Unique QR Code placed immediately to the left of the ISO 9001 logo.
-    Returns: tuple (pdf_bytes, filename)
+    Generate a Course Completion Certificate using the approved original artwork.
+    Only the student name, course description, issue date and unique QR are dynamic.
+    All branding, logos, stamp and administrator signature remain from the PDF.
     """
     if not TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Course Completion Certificate template not found at {TEMPLATE_PATH}")
 
     student_name = str(data.get("student_name", "")).strip() or "Student Name"
     course_name = str(data.get("course_name") or data.get("domain") or "Course").strip()
-    issued_date = format_display_date(data.get("issued_date") or data.get("issue_date") or "")
-    if not issued_date:
-        issued_date = datetime.now().strftime("%d-%m-%Y")
+    issued_date = _format_course_issue_date(data.get("issued_date") or data.get("issue_date"))
 
     cert_id = str(data.get("certificate_id", "")).strip()
     if not cert_id:
         cert_id = generate_certificate_id()
 
     resolved_base_url = (base_url or get_public_base_url()).rstrip("/")
-
     doc = pymupdf.open(str(TEMPLATE_PATH))
     page = doc[0]
-    # Geometric center of the white content area (aligns with 'CERTIFICATE' and 'This certificate is proudly presented to')
-    content_center_x = 461.54
+    page_width = page.rect.width
+    content_center_x = page_width / 2
 
-    # 1. Redact static placeholders with transparent redactions (preserves vector drawings & watermark)
-    # Student name area
-    page.add_redact_annot(pymupdf.Rect(200, 298, 750, 352))
-    # Paragraph area
-    page.add_redact_annot(pymupdf.Rect(200, 355, 750, 424))
-    # Issued on area
-    page.add_redact_annot(pymupdf.Rect(545, 444, 700, 465))
-
+    # Remove only the sample text. Image and vector artwork are deliberately retained.
+    text_redactions = (
+        pymupdf.Rect(265, 375, 850, 487),  # sample candidate name
+        pymupdf.Rect(135, 505, 985, 575),  # sample course description
+        pymupdf.Rect(440, 610, 680, 645),  # sample issue date
+    )
+    for rect in text_redactions:
+        page.add_redact_annot(rect, fill=None)
     page.apply_redactions(
         images=pymupdf.PDF_REDACT_IMAGE_NONE,
         graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
         text=pymupdf.PDF_REDACT_TEXT_REMOVE,
     )
 
-    # 2. Insert Student Name (Centered within main white content area at baseline y=336.0)
-    # Primary font: Times-Bold (built-in 'tibo', matching TimesNRMTPro-Bold)
-    name_fontsize = 42.0
-    name_len = len(student_name)
-    if name_len > 32:
-        name_fontsize = 28.0
-    elif name_len > 24:
-        name_fontsize = 32.0
-    elif name_len > 18:
-        name_fontsize = 36.0
-
-    name_width = pymupdf.get_text_length(student_name, fontname="tibo", fontsize=name_fontsize)
-    if name_width > 540.0:
-        name_fontsize = round(name_fontsize * (540.0 / name_width), 1)
-        name_width = pymupdf.get_text_length(student_name, fontname="tibo", fontsize=name_fontsize)
-
-    name_x = content_center_x - (name_width / 2)
+    # Candidate name: centered at the original baseline and styled like the supplied artwork.
+    name_font = "tiro"
+    name_fontsize = 86.16
+    max_name_width = 850.0
+    name_width = pymupdf.get_text_length(student_name, fontname=name_font, fontsize=name_fontsize)
+    if name_width > max_name_width:
+        name_fontsize = max(40.0, name_fontsize * max_name_width / name_width)
+        name_width = pymupdf.get_text_length(student_name, fontname=name_font, fontsize=name_fontsize)
     page.insert_text(
-        pymupdf.Point(name_x, 336.0),
+        pymupdf.Point(content_center_x - name_width / 2, 459.75),
         student_name,
-        fontname="tibo",
+        fontname=name_font,
         fontsize=name_fontsize,
-        color=(0.0196, 0.0392, 0.1882),  # Deep navy #050a30 matching template
+        color=(0.0196, 0.0392, 0.1882),
     )
 
-    # 3. Insert Centered & Enlarged Completion Description
-    # Formats the sentence into centered lines with balanced line spacing
-    max_desc_width = 530.0
-    body_fontsize = 15.0
+    # Course description: preserve the original sentence and wrap long course names safely.
+    description = (
+        "This is to certify that the candidate has successfully completed the "
+        f"{course_name} course at Persevex, demonstrating strong commitment and "
+        "competence throughout the program."
+    )
+    body_font = "tiro"
+    body_fontsize = 19.815
+    max_body_width = 860.0
+    lines = _wrap_course_certificate_text(description, body_font, body_fontsize, max_body_width)
+    if len(lines) > 3:
+        body_fontsize = 17.0
+        lines = _wrap_course_certificate_text(description, body_font, body_fontsize, max_body_width)
+    if len(lines) > 4:
+        body_fontsize = 15.5
+        lines = _wrap_course_certificate_text(description, body_font, body_fontsize, max_body_width)
+    if len(lines) > 4:
+        raise ValueError("Course name is too long to fit on the certificate. Please shorten it.")
 
-    line1 = "This is to certify that the candidate has successfully completed the"
-    line2 = f"{course_name} course at Persevex, demonstrating strong"
-    line3 = "commitment and competence throughout the program."
-
-    w2 = pymupdf.get_text_length(line2, fontname="tibo", fontsize=body_fontsize)
-    if w2 > max_desc_width:
-        # Modestly adjust font size to keep the clean 3-line shape
-        body_fontsize = max(12.5, round(body_fontsize * (max_desc_width / w2), 1))
-        w2 = pymupdf.get_text_length(line2, fontname="tibo", fontsize=body_fontsize)
-
-    # If course name is exceptionally long, dynamically wrap full paragraph
-    if w2 > max_desc_width:
-        full_para = f"This is to certify that the candidate has successfully completed the {course_name} course at Persevex, demonstrating strong commitment and competence throughout the program."
-        words = full_para.split()
-        desc_lines = []
-        cur_line = []
-        body_fontsize = 13.0
-        for w in words:
-            candidate = " ".join(cur_line + [w])
-            if pymupdf.get_text_length(candidate, fontname="tibo", fontsize=body_fontsize) <= max_desc_width:
-                cur_line.append(w)
-            else:
-                desc_lines.append(" ".join(cur_line))
-                cur_line = [w]
-        if cur_line:
-            desc_lines.append(" ".join(cur_line))
-    else:
-        desc_lines = [line1, line2, line3]
-
-    if len(desc_lines) <= 3:
-        baselines = [371.0, 393.0, 415.0][:len(desc_lines)]
-    else:
-        baselines = [365.0, 383.0, 401.0, 419.0][:len(desc_lines)]
-
-    for line, baseline_y in zip(desc_lines, baselines):
-        line_w = pymupdf.get_text_length(line, fontname="tibo", fontsize=body_fontsize)
-        line_x = content_center_x - (line_w / 2)
+    baseline_sets = {
+        1: [546.0],
+        2: [532.5, 560.25],
+        3: [522.0, 546.0, 570.0],
+        4: [516.0, 536.0, 556.0, 576.0],
+    }
+    baselines = baseline_sets[len(lines)]
+    for line, baseline_y in zip(lines, baselines):
+        line_width = pymupdf.get_text_length(line, fontname=body_font, fontsize=body_fontsize)
         page.insert_text(
-            pymupdf.Point(line_x, baseline_y),
+            pymupdf.Point(content_center_x - line_width / 2, baseline_y),
             line,
-            fontname="tibo",
+            fontname=body_font,
             fontsize=body_fontsize,
             color=(0.0196, 0.0392, 0.1882),
         )
 
-    # 4. Insert Issued on Date at Point(549.58, 457.68)
-    issued_text = f"Issued on: {issued_date}"
+    # Issue date: retain the uppercase label and centered layout from the new artwork.
+    issued_text = f"ISSUED DATE: {issued_date}"
+    date_fontsize = 15.51
+    date_width = pymupdf.get_text_length(issued_text, fontname=body_font, fontsize=date_fontsize)
+    if date_width > 500:
+        date_fontsize = max(11.0, date_fontsize * 500 / date_width)
+        date_width = pymupdf.get_text_length(issued_text, fontname=body_font, fontsize=date_fontsize)
     page.insert_text(
-        pymupdf.Point(549.58, 457.68),
+        pymupdf.Point(content_center_x - date_width / 2, 633.0),
         issued_text,
-        fontname="tibo",
-        fontsize=12.08,
+        fontname=body_font,
+        fontsize=date_fontsize,
         color=(0.0196, 0.0392, 0.1882),
     )
 
-    # 5. Insert Unique QR Code to the left of the ISO 9001 logo
-    # ISO 9001 logo bounding box is Rect(417.02, 499.18, 505.71, 575.12)
-    # We place the QR code at Rect(275, 497, 355, 577) - size 80x80 pt, 62 pt spacing to ISO logo
-    verify_url = get_verification_url(cert_id, base_url=resolved_base_url)
+    # Replace the sample QR only; preserve the adjacent seal, signature and other artwork.
+    cert_url = get_verification_url(cert_id, base_url=resolved_base_url)
     qr = qrcode.QRCode(
         version=1,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
         box_size=10,
         border=1,
     )
-    qr.add_data(verify_url)
+    qr.add_data(cert_url)
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white")
-
     qr_buffer = io.BytesIO()
     qr_img.save(qr_buffer, format="PNG")
     qr_bytes = qr_buffer.getvalue()
 
-    qr_rect = pymupdf.Rect(225, 497, 305, 577)
-    page.insert_image(qr_rect, stream=qr_bytes)
+    qr_rect = pymupdf.Rect(60.0, 613.5, 176.25, 729.75)
+    # Remove the embedded sample QR image resource before inserting the new unique QR.
+    for image_info in page.get_images(full=True):
+        image_xref = image_info[0]
+        if any(
+            abs(image_rect.x0 - qr_rect.x0) < 1
+            and abs(image_rect.y0 - qr_rect.y0) < 1
+            and abs(image_rect.x1 - qr_rect.x1) < 1
+            and abs(image_rect.y1 - qr_rect.y1) < 1
+            for image_rect in page.get_image_rects(image_xref)
+        ):
+            page.delete_image(image_xref)
+            break
+    page.insert_image(qr_rect, stream=qr_bytes, overlay=True)
 
     pdf_bytes = doc.tobytes(garbage=4, deflate=True)
     doc.close()
