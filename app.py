@@ -3845,6 +3845,8 @@ def bulk_offer_letter_send_item():
     """
     Send a single offer letter email and update history using existing offer letter persistence rules.
     """
+    job_id = None
+    student_name = ""
     try:
         data = request.get_json(force=True) or {}
         filename = (data.get("filename") or "").strip()
@@ -4527,6 +4529,7 @@ def campus_ambassador_bulk_check_duplicates():
 @app.post("/api/campus-ambassador/bulk-send-item")
 def campus_ambassador_bulk_send_item():
     """Dispatch email for a generated CA Offer Letter PDF."""
+    job_id = None
     student_name = ""
     student_email = ""
     try:

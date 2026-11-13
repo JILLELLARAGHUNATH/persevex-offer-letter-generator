@@ -234,6 +234,7 @@ def parse_ca_file(file_bytes, filename, preserve_blank_rows=False):
                     "email": norm_email,
                     "valid": True
                 })
+            result_rows.append(row_data)
         else:
             reason_parts = []
             if not is_name_ok:
@@ -259,9 +260,6 @@ def parse_ca_file(file_bytes, filename, preserve_blank_rows=False):
                 "duplicate": False,
                 "reason": reason
             })
-
-        if is_name_ok and is_email_ok:
-            result_rows.append(row_data)
 
     if total_data_rows == 0:
         return {
